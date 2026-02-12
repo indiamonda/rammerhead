@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rammerhead</title>
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/png" href="/rammerhead/favicon.png" />
+    <link rel="manifest" href="/rammerhead/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -367,6 +368,18 @@
 
     <script>
         (function() {
+            // Detect base path from current location
+            function getBasePath() {
+                const path = window.location.pathname;
+                // If we're at /rammerhead/ or /rammerhead, use /rammerhead as base
+                if (path.startsWith('/rammerhead')) {
+                    return '/rammerhead';
+                }
+                return '';
+            }
+            
+            const basePath = getBasePath();
+            
             const urlInput = document.getElementById('url-input');
             const goButton = document.getElementById('go-button');
             const generateLinkButton = document.getElementById('generate-link-button');
@@ -407,8 +420,8 @@
                 loading.classList.add('active');
                 goButton.disabled = true;
 
-                // Open in new tab using the auto-session route
-                const proxiedUrl = '/?url=' + encodeURIComponent(url);
+                // Open in new tab using the auto-session route with base path
+                const proxiedUrl = basePath + '/?url=' + encodeURIComponent(url);
                 window.open(proxiedUrl, '_blank');
                 
                 // Reset UI after a short delay
@@ -432,7 +445,7 @@
                 generateLinkButton.disabled = true;
                 linkResult.classList.remove('active');
 
-                fetch('/generatelink?url=' + encodeURIComponent(url))
+                fetch(basePath + '/generatelink?url=' + encodeURIComponent(url))
                     .then(response => {
                         if (!response.ok) {
                             return response.json().then(data => {

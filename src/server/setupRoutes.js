@@ -98,9 +98,19 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         res.end((serverInfo.port || '').toString());
     });
     
-    // Auto-create session route for browser-like experience
-    proxyServer.GET('/', (req, res) => {
+    // Helper function to get base path from request
+    const getBasePath = (req) => {
+        const path = req.url.split('?')[0]; // Get path without query params
+        if (path.startsWith('/rammerhead')) {
+            return '/rammerhead';
+        }
+        return '';
+    };
+    
+    // Auto-create session route for browser-like experience - handle both / and /rammerhead/
+    const handleRoot = (req, res) => {
         const { url: targetUrl } = new URLPath(req.url).getParams();
+        const basePath = getBasePath(req);
         
         // If URL parameter is provided, auto-create session and redirect
         if (targetUrl) {
@@ -113,10 +123,10 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             
             sessionStore.addSerializedSession(id, session.serializeSession());
             
-            // Redirect to proxied URL
+            // Redirect to proxied URL with base path
             const shuffler = new StrShuffler(session.shuffleDict);
             const shuffledUrl = shuffler.shuffle(targetUrl);
-            res.writeHead(302, { Location: `/${id}/${shuffledUrl}` });
+            res.writeHead(302, { Location: `${basePath}/${id}/${shuffledUrl}` });
             res.end();
             return;
         }
@@ -130,10 +140,13 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 return;
             }
         }
-    });
+    };
     
-    // Generate never-expire link route
-    proxyServer.GET('/generatelink', (req, res) => {
+    proxyServer.GET('/', handleRoot);
+    proxyServer.GET('/rammerhead/', handleRoot);
+    
+    // Generate never-expire link route - handle both /generatelink and /rammerhead/generatelink
+    const handleGenerateLink = (req, res) => {
         try {
             const { url: targetUrl } = new URLPath(req.url).getParams();
             
@@ -162,7 +175,8 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             const hostname = serverInfo.hostname || 'localhost';
             const port = serverInfo.port || 8080;
             const portSuffix = (protocol === 'https:' && port === 443) || (protocol === 'http:' && port === 80) ? '' : `:${port}`;
-            const proxiedUrl = `${protocol}//${hostname}${portSuffix}/${id}/${shuffledUrl}`;
+            const basePath = getBasePath(req);
+            const proxiedUrl = `${protocol}//${hostname}${portSuffix}${basePath}/${id}/${shuffledUrl}`;
             
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ url: proxiedUrl, sessionId: id }));
@@ -171,5 +185,8 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message || 'Internal server error' }));
         }
-    });
+    };
+    
+    proxyServer.GET('/generatelink', handleGenerateLink);
+    proxyServer.GET('/rammerhead/generatelink', handleGenerateLink);
 };
