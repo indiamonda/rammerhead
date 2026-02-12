@@ -1,83 +1,569 @@
 <!DOCTYPE html>
-
-<html>
-
+<html lang="en">
 <head>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
-        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rammerhead</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="stylesheet" href="style.css">
-    <script src="script.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-tertiary: #1a1a25;
+            --bg-elevated: #22222f;
+            --accent: #00d4aa;
+            --accent-dim: #00b894;
+            --accent-glow: rgba(0, 212, 170, 0.15);
+            --text-primary: #f0f0f5;
+            --text-secondary: #8888a0;
+            --text-muted: #55556a;
+            --border: #2a2a3a;
+            --danger: #ff6b6b;
+            --danger-dim: #ee5a5a;
+            --warning: #ffd93d;
+        }
 
-    <title>Rammerhead Proxy</title>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse 80% 50% at 20% -20%, rgba(0, 212, 170, 0.08), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 100%, rgba(0, 180, 148, 0.06), transparent),
+                radial-gradient(ellipse 40% 30% at 50% 50%, rgba(0, 212, 170, 0.03), transparent);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 60px 24px;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 48px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .logo {
+            width: 64px;
+            height: 64px;
+            filter: drop-shadow(0 0 24px var(--accent-glow));
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+        }
+
+        .tagline {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin-top: 8px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 20px;
+            animation: fadeInUp 0.6s ease-out;
+            animation-fill-mode: both;
+        }
+
+        .card:nth-child(2) { animation-delay: 0.1s; }
+        .card:nth-child(3) { animation-delay: 0.2s; }
+        .card:nth-child(4) { animation-delay: 0.3s; }
+
+        /* Notices */
+        .notices {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            border-left: 3px solid var(--accent);
+        }
+
+        .notice.warning {
+            border-left-color: var(--warning);
+        }
+
+        .notice-icon {
+            flex-shrink: 0;
+            width: 18px;
+            height: 18px;
+            opacity: 0.7;
+        }
+
+        /* Error */
+        #error-text {
+            display: none;
+            padding: 14px 16px;
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid rgba(255, 107, 107, 0.3);
+            border-radius: 10px;
+            color: var(--danger);
+            font-size: 0.875rem;
+            margin-bottom: 20px;
+        }
+
+        /* Form Groups */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 8px;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            flex: 1;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            transition: all 0.2s ease;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        input[type="text"]::placeholder,
+        input[type="password"]::placeholder {
+            color: var(--text-muted);
+        }
+
+        input[type="text"][readonly] {
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            cursor: default;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 10px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+            color: var(--bg-primary);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 28px rgba(0, 212, 170, 0.25);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-elevated);
+            border-color: var(--text-muted);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            padding: 10px 16px;
+        }
+
+        .btn-ghost:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .btn-danger {
+            background: rgba(255, 107, 107, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(255, 107, 107, 0.2);
+        }
+
+        .btn-danger:hover {
+            background: rgba(255, 107, 107, 0.2);
+            border-color: rgba(255, 107, 107, 0.4);
+        }
+
+        .btn-sm {
+            padding: 10px 16px;
+            font-size: 0.8rem;
+        }
+
+        /* Advanced Options */
+        .advanced-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        #session-advanced-container {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+        }
+
+        /* Checkbox */
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .checkbox-wrapper input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .checkbox-wrapper label {
+            margin: 0;
+            text-transform: none;
+            letter-spacing: 0;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        /* Sessions Table */
+        .sessions-card {
+            animation-delay: 0.4s;
+        }
+
+        .sessions-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .sessions-header h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .sessions-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        .sessions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .session-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 16px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            transition: all 0.2s ease;
+        }
+
+        .session-item:hover {
+            background: var(--bg-elevated);
+        }
+
+        .session-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .session-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--accent);
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .session-date {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .session-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        /* Discord Link */
+        .discord-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s ease;
+        }
+
+        .discord-link:hover {
+            color: #5865F2;
+        }
+
+        /* Password wrapper */
+        #password-wrapper {
+            display: none;
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .container {
+                padding: 40px 16px;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .input-wrapper {
+                flex-direction: column;
+            }
+
+            .session-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .session-actions {
+                width: 100%;
+                margin-top: 12px;
+            }
+
+            .session-actions .btn {
+                flex: 1;
+            }
+        }
+    </style>
 </head>
-
 <body>
+    <div class="bg-gradient"></div>
+    
+    <div class="container">
     <header>
-        <img src="logo.png" />
-        <h1>Rammerhead Proxy</h1>
+            <div class="logo-container">
+                <img src="logo.png" alt="Rammerhead" class="logo" />
+                <h1>Rammerhead</h1>
+            </div>
+            <p class="tagline">Fast, secure web proxy powered by Hammerhead</p>
     </header>
-    <div class="container mb-5">
-        <p class="mt-3 mb-3 font-weight">Join the <a href="https://discord.gg/VNT4E7gN5Y">Discord server</a> for updates
-            or just chat about life</p>
-        <p class="mb-0 font-weight-bold">Notice: inactive sessions will be deleted after 3 days.</p>
-        <p class="mb-3 font-weight-bold">Notice 2: Treat every session id like an isolated incognito browser that
-            belongs only to you. DO NOT SHARE THE SESSION ID. All logins that you make with the session id will be saved
-            in that session. Anyone that has your session id or session url CAN ACCESS your logged in sites.</p>
-        <p class="mb-3 font-weight-bold text-danger" id="error-text" style="display: none">Error: some text</p>
-        <div class="input-group mb-2" id="password-wrapper" style="display: none">
-            <div class="input-group-prepend">
-                <span class="input-group-text">Enter password</span>
-            </div>
-            <input type="password" class="form-control" id="session-password"
-                placeholder="Password is given by host of this site.">
-        </div>
-        <div class="input-group mb-2">
-            <div class="input-group-prepend">
-                <span class="input-group-text">Enter URL</span>
-            </div>
-            <input type="text" class="form-control" id="session-url" placeholder="https://www.google.com/">
-            <div class="input-group-append">
-                <button class="btn btn-success" id="session-go">Go!</button>
-            </div>
-        </div>
-        <div class="input-group mb-4">
-            <div class="input-group-prepend">
-                <span class="input-group-text">Session ID</span>
-            </div>
-            <input readonly type="text" class="form-control disable-text" id="session-id"
-                placeholder="click onn 'Create new session ID' or 'Fill in existing session ID' from below">
-            <div class="input-group-append">
-                <button class="btn btn-secondary" id="session-create-btn" type="button">Create new session ID</button>
-            </div>
-        </div>
-        <button class="btn btn-outline-secondary" id="session-advanced-toggle">Show advanced options</button>
-        <div class="mt-2 mb-4" id="session-advanced-container" style="display: none">
-            <div class="form-check mb-1">
-                <input class="form-check-input" type="checkbox" value="" id="session-shuffling" checked>
-                <label class="form-check-label" for="session-shuffling">Enable URL Shuffling</label>
-            </div>
-            <div class="input-group mb-3">
-                <div class="input-group-prepend">
-                    <span class="input-group-text">HTTP Proxy</span>
-                </div>
-                <input type="text" class="form-control" id="session-httpproxy"
-                    placeholder="http://username:password@proxyipaddress:proxyport">
-            </div>
-        </div>
-    </div>
-    <div class="row justify-content-center m-0">
-        <table class="table w-75 table-striped table-bordered">
-            <thead>
-                <tr>
-                    <th>Session ID</th>
-                    <th>Created on</th>
-                </tr>
-            </thead>
-            <tbody>
-            </tbody>
-        </table>
-    </div>
-</body>
 
+        <div class="notices">
+            <div class="notice">
+                <svg class="notice-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4M12 8h.01"/>
+                </svg>
+                <span>Inactive sessions will be automatically deleted after 3 days.</span>
+            </div>
+            <div class="notice warning">
+                <svg class="notice-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                    <path d="M12 9v4M12 17h.01"/>
+                </svg>
+                <span><strong>Security:</strong> Your session ID is like a private browser. Never share it — anyone with your ID can access your logged-in sites.</span>
+            </div>
+        </div>
+
+        <p id="error-text"></p>
+
+        <div class="card" id="password-wrapper">
+            <div class="form-group">
+                <label>Password Required</label>
+                <input type="password" id="session-password" placeholder="Enter the password provided by the host">
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="form-group">
+                <label>Enter URL</label>
+                <div class="input-wrapper">
+                    <input type="text" id="session-url" placeholder="https://www.google.com/">
+                    <button class="btn btn-primary" id="session-go">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                        Go
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Session ID</label>
+                <div class="input-wrapper">
+                    <input type="text" id="session-id" readonly placeholder="Create a new session or select existing">
+                    <button class="btn btn-secondary" id="session-create-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                        New Session
+                    </button>
+                </div>
+            </div>
+
+            <div class="advanced-toggle">
+                <button class="btn btn-ghost" id="session-advanced-toggle">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                    </svg>
+                    Advanced Options
+                </button>
+            </div>
+
+            <div id="session-advanced-container">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="session-shuffling" checked>
+                    <label for="session-shuffling">Enable URL Shuffling</label>
+                </div>
+                <div class="form-group">
+                    <label>HTTP Proxy</label>
+                    <input type="text" id="session-httpproxy" placeholder="http://username:password@proxy:port">
+                </div>
+            </div>
+        </div>
+
+        <div class="card sessions-card">
+            <div class="sessions-header">
+                <h2>Your Sessions</h2>
+                <a href="https://discord.gg/VNT4E7gN5Y" target="_blank" class="discord-link">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                    </svg>
+                    Join Discord
+                </a>
+            </div>
+            <div class="sessions-list">
+                <!-- Sessions will be rendered here by JavaScript -->
+                </div>
+            <div class="sessions-empty">
+                <p>No sessions yet. Create one to get started!</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
 </html>

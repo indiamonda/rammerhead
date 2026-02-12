@@ -1,3 +1,6 @@
+// Expose functions globally for the new UI
+var setError, api, sessionIdsStore, loadSettings, renderSessionTable;
+
 (function () {
     const mod = (n, m) => ((n % m) + m) % m;
     const baseDictionary = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
@@ -59,7 +62,7 @@
         }
     }
 
-    function setError(err) {
+    setError = function(err) {
         var element = document.getElementById('error-text');
         if (err) {
             element.style.display = 'block';
@@ -103,7 +106,7 @@
         };
     }
 
-    var api = {
+    api = {
         needpassword(callback) {
             get('/needpassword', value => callback(value === 'true'));
         },
@@ -151,7 +154,7 @@
 
     var localStorageKey = 'rammerhead_sessionids';
     var localStorageKeyDefault = 'rammerhead_default_sessionid';
-    var sessionIdsStore = {
+    sessionIdsStore = {
         get() {
             var rawData = localStorage.getItem(localStorageKey);
             if (!rawData) return [];
@@ -183,53 +186,102 @@
         }
     };
 
-    function renderSessionTable(data) {
+    renderSessionTable = function(data) {
+        // Support both old table-based UI and new card-based UI
+        var list = document.querySelector('.sessions-list');
+        var empty = document.querySelector('.sessions-empty');
         var tbody = document.querySelector('tbody');
-        while (tbody.firstChild && !tbody.firstChild.remove());
-        for (var i = 0; i < data.length; i++) {
-            var tr = document.createElement('tr');
-            appendIntoTr(data[i].id);
-            appendIntoTr(data[i].createdOn);
-
-            var fillInBtn = document.createElement('button');
-            fillInBtn.textContent = 'Fill in existing session ID';
-            fillInBtn.className = 'btn btn-outline-primary';
-            fillInBtn.onclick = index(i, function (idx) {
-                setError();
-                sessionIdsStore.setDefault(data[idx].id);
-                loadSettings(data[idx]);
-            });
-            appendIntoTr(fillInBtn);
-
-            var deleteBtn = document.createElement('button');
-            deleteBtn.textContent = 'Delete';
-            deleteBtn.className = 'btn btn-outline-danger';
-            deleteBtn.onclick = index(i, function (idx) {
-                setError();
-                api.deletesession(data[idx].id, function () {
-                    data.splice(idx, 1)[0];
-                    sessionIdsStore.set(data);
-                    renderSessionTable(data);
-                });
-            });
-            appendIntoTr(deleteBtn);
-
-            tbody.appendChild(tr);
-        }
-        function appendIntoTr(stuff) {
-            var td = document.createElement('td');
-            if (typeof stuff === 'object') {
-                td.appendChild(stuff);
-            } else {
-                td.textContent = stuff;
+        
+        // New card-based UI
+        if (list) {
+            list.innerHTML = '';
+            
+            if (empty) {
+                empty.style.display = data.length === 0 ? 'block' : 'none';
             }
-            tr.appendChild(td);
+            
+            for (var i = 0; i < data.length; i++) {
+                (function(idx) {
+                    var item = document.createElement('div');
+                    item.className = 'session-item';
+                    item.innerHTML = 
+                        '<div class="session-info">' +
+                            '<div class="session-id">' + data[idx].id + '</div>' +
+                            '<div class="session-date">' + data[idx].createdOn + '</div>' +
+                        '</div>' +
+                        '<div class="session-actions">' +
+                            '<button class="btn btn-secondary btn-sm fill-btn">Use</button>' +
+                            '<button class="btn btn-danger btn-sm delete-btn">Delete</button>' +
+                        '</div>';
+                    
+                    item.querySelector('.fill-btn').onclick = function() {
+                        setError();
+                        sessionIdsStore.setDefault(data[idx].id);
+                        loadSettings(data[idx]);
+                    };
+                    
+                    item.querySelector('.delete-btn').onclick = function() {
+                        setError();
+                        api.deletesession(data[idx].id, function() {
+                            data.splice(idx, 1);
+                            sessionIdsStore.set(data);
+                            renderSessionTable(data);
+                        });
+                    };
+                    
+                    list.appendChild(item);
+                })(i);
+            }
         }
-        function index(i, func) {
-            return func.bind(null, i);
+        
+        // Old table-based UI (fallback)
+        if (tbody) {
+            while (tbody.firstChild && !tbody.firstChild.remove());
+            for (var j = 0; j < data.length; j++) {
+                var tr = document.createElement('tr');
+                appendIntoTr(data[j].id);
+                appendIntoTr(data[j].createdOn);
+
+                var fillInBtn = document.createElement('button');
+                fillInBtn.textContent = 'Fill in existing session ID';
+                fillInBtn.className = 'btn btn-outline-primary';
+                fillInBtn.onclick = index(j, function (idx) {
+                    setError();
+                    sessionIdsStore.setDefault(data[idx].id);
+                    loadSettings(data[idx]);
+                });
+                appendIntoTr(fillInBtn);
+
+                var deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.className = 'btn btn-outline-danger';
+                deleteBtn.onclick = index(j, function (idx) {
+                    setError();
+                    api.deletesession(data[idx].id, function () {
+                        data.splice(idx, 1)[0];
+                        sessionIdsStore.set(data);
+                        renderSessionTable(data);
+                    });
+                });
+                appendIntoTr(deleteBtn);
+
+                tbody.appendChild(tr);
+            }
+            function appendIntoTr(stuff) {
+                var td = document.createElement('td');
+                if (typeof stuff === 'object') {
+                    td.appendChild(stuff);
+                } else {
+                    td.textContent = stuff;
+                }
+                tr.appendChild(td);
+            }
+            function index(i, func) {
+                return func.bind(null, i);
+            }
         }
     }
-    function loadSettings(session) {
+    loadSettings = function(session) {
         document.getElementById('session-id').value = session.id;
         document.getElementById('session-httpproxy').value = session.httpproxy || '';
         document.getElementById('session-shuffling').checked = typeof session.enableShuffling === 'boolean' ? session.enableShuffling : true;
@@ -268,7 +320,7 @@
 
     api.needpassword(doNeed => {
         if (doNeed) {
-            document.getElementById('password-wrapper').style.display = '';
+            document.getElementById('password-wrapper').style.display = 'block';
         }
     });
     window.addEventListener('load', function () {
