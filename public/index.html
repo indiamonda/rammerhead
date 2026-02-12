@@ -407,8 +407,15 @@
                 loading.classList.add('active');
                 goButton.disabled = true;
 
-                // Navigate using the auto-session route
-                window.location.href = '/?url=' + encodeURIComponent(url);
+                // Open in new tab using the auto-session route
+                const proxiedUrl = '/?url=' + encodeURIComponent(url);
+                window.open(proxiedUrl, '_blank');
+                
+                // Reset UI after a short delay
+                setTimeout(() => {
+                    loading.classList.remove('active');
+                    goButton.disabled = false;
+                }, 500);
             }
 
             function generateLink() {
@@ -426,8 +433,20 @@
                 linkResult.classList.remove('active');
 
                 fetch('/generatelink?url=' + encodeURIComponent(url))
-                    .then(response => response.json())
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(data => {
+                                throw new Error(data.error || 'Failed to generate link');
+                            }).catch(() => {
+                                throw new Error('Server error: ' + response.status);
+                            });
+                        }
+                        return response.json();
+                    })
                     .then(data => {
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
                         linkUrl.textContent = data.url;
                         linkResult.classList.add('active');
                         loading.classList.remove('active');
@@ -438,6 +457,7 @@
                     })
                     .catch(error => {
                         showError('Failed to generate link: ' + error.message);
+                        loading.classList.remove('active');
                         generateLinkButton.disabled = false;
                     });
             }

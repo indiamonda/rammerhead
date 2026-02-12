@@ -134,33 +134,42 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     
     // Generate never-expire link route
     proxyServer.GET('/generatelink', (req, res) => {
-        const { url: targetUrl } = new URLPath(req.url).getParams();
-        
-        if (!targetUrl) {
-            return httpResponse.badRequest(logger, req, res, config.getIP(req), 'Must provide url parameter');
+        try {
+            const { url: targetUrl } = new URLPath(req.url).getParams();
+            
+            if (!targetUrl) {
+                logger.error(`(generatelink) ${config.getIP(req)} ${req.url} Must provide url parameter`);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Must provide url parameter' }));
+                return;
+            }
+            
+            const id = generateId();
+            const session = new RammerheadSession();
+            session.data.restrictIP = config.getIP(req);
+            session.data.neverExpire = true; // Mark as never-expiring
+            
+            // Enable shuffling by default for better compatibility
+            session.shuffleDict = StrShuffler.generateDictionary();
+            
+            sessionStore.addSerializedSession(id, session.serializeSession());
+            
+            // Generate the proxied URL
+            const shuffler = new StrShuffler(session.shuffleDict);
+            const shuffledUrl = shuffler.shuffle(targetUrl);
+            const serverInfo = config.getServerInfo(req);
+            const protocol = serverInfo.protocol || 'http:';
+            const hostname = serverInfo.hostname || 'localhost';
+            const port = serverInfo.port || 8080;
+            const portSuffix = (protocol === 'https:' && port === 443) || (protocol === 'http:' && port === 80) ? '' : `:${port}`;
+            const proxiedUrl = `${protocol}//${hostname}${portSuffix}/${id}/${shuffledUrl}`;
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ url: proxiedUrl, sessionId: id }));
+        } catch (error) {
+            logger.error(`(generatelink) ${config.getIP(req)} ${req.url} Error: ${error.message}`);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message || 'Internal server error' }));
         }
-        
-        const id = generateId();
-        const session = new RammerheadSession();
-        session.data.restrictIP = config.getIP(req);
-        session.data.neverExpire = true; // Mark as never-expiring
-        
-        // Enable shuffling by default for better compatibility
-        session.shuffleDict = StrShuffler.generateDictionary();
-        
-        sessionStore.addSerializedSession(id, session.serializeSession());
-        
-        // Generate the proxied URL
-        const shuffler = new StrShuffler(session.shuffleDict);
-        const shuffledUrl = shuffler.shuffle(targetUrl);
-        const serverInfo = config.getServerInfo(req);
-        const protocol = serverInfo.protocol || 'http:';
-        const hostname = serverInfo.hostname || 'localhost';
-        const port = serverInfo.port || 8080;
-        const portSuffix = (protocol === 'https:' && port === 443) || (protocol === 'http:' && port === 80) ? '' : `:${port}`;
-        const proxiedUrl = `${protocol}//${hostname}${portSuffix}/${id}/${shuffledUrl}`;
-        
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ url: proxiedUrl, sessionId: id }));
     });
 };
