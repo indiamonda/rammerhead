@@ -4,6 +4,9 @@ const httpResponse = require('../util/httpResponse');
 const config = require('../config');
 const StrShuffler = require('../util/StrShuffler');
 const RammerheadSession = require('../classes/RammerheadSession');
+const fs = require('fs');
+const path = require('path');
+const mime = require('mime');
 
 /**
  *
@@ -93,5 +96,39 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/mainport', (req, res) => {
         const serverInfo = config.getServerInfo(req);
         res.end((serverInfo.port || '').toString());
+    });
+    
+    // Auto-create session route for browser-like experience
+    proxyServer.GET('/', (req, res) => {
+        const { url: targetUrl } = new URLPath(req.url).getParams();
+        
+        // If URL parameter is provided, auto-create session and redirect
+        if (targetUrl) {
+            const id = generateId();
+            const session = new RammerheadSession();
+            session.data.restrictIP = config.getIP(req);
+            
+            // Enable shuffling by default for better compatibility
+            session.shuffleDict = StrShuffler.generateDictionary();
+            
+            sessionStore.addSerializedSession(id, session.serializeSession());
+            
+            // Redirect to proxied URL
+            const shuffler = new StrShuffler(session.shuffleDict);
+            const shuffledUrl = shuffler.shuffle(targetUrl);
+            res.writeHead(302, { Location: `/${id}/${shuffledUrl}` });
+            res.end();
+            return;
+        }
+        
+        // Otherwise, serve index.html manually (static files might not handle this if route is registered after)
+        if (config.publicDir) {
+            const indexPath = path.join(config.publicDir, 'index.html');
+            if (fs.existsSync(indexPath)) {
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(fs.readFileSync(indexPath));
+                return;
+            }
+        }
     });
 };

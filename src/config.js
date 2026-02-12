@@ -32,7 +32,7 @@ module.exports = {
     // },
 
     // enforce a password for creating new sessions. set to null to disable
-    password: 'sharkie4life',
+    password: null,
 
     // disable or enable localStorage sync (turn off if clients send over huge localStorage data, resulting in huge memory usages)
     disableLocalStorageSync: false,
@@ -42,8 +42,9 @@ module.exports = {
 
     // caching options for js rewrites. (disk caching not recommended for slow HDD disks)
     // recommended: 50mb for memory, 5gb for disk
-    // jsCache: new RammerheadJSMemCache(5 * 1024 * 1024),
-    jsCache: new RammerheadJSFileCache(path.join(__dirname, '../cache-js'), 5 * 1024 * 1024 * 1024, 50000, enableWorkers),
+    // Using memory cache for better performance
+    jsCache: new RammerheadJSMemCache(100 * 1024 * 1024), // 100MB memory cache for faster performance
+    // jsCache: new RammerheadJSFileCache(path.join(__dirname, '../cache-js'), 5 * 1024 * 1024 * 1024, 50000, enableWorkers),
 
     // whether to disable http2 support or not (from proxy to destination site).
     // disabling may reduce number of errors/memory, but also risk
@@ -70,13 +71,13 @@ module.exports = {
     // see src/classes/RammerheadSessionFileCache.js for more details and options
     fileCacheSessionConfig: {
         saveDirectory: path.join(__dirname, '../sessions'),
-        cacheTimeout: 1000 * 60 * 20, // 20 minutes
-        cacheCheckInterval: 1000 * 60 * 10, // 10 minutes
+        cacheTimeout: 1000 * 60 * 30, // 30 minutes (increased for better performance)
+        cacheCheckInterval: 1000 * 60 * 15, // 15 minutes (less frequent checks)
         deleteUnused: true,
         staleCleanupOptions: {
             staleTimeout: 1000 * 60 * 60 * 24 * 3, // 3 days
             maxToLive: null,
-            staleCheckInterval: 1000 * 60 * 60 * 6 // 6 hours
+            staleCheckInterval: 1000 * 60 * 60 * 12 // 12 hours (less frequent cleanup)
         },
         // corrupted session files happens when nodejs exits abruptly while serializing the JSON sessions to disk
         deleteCorruptedSessions: true,
