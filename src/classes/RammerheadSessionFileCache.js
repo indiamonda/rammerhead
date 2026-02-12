@@ -193,6 +193,11 @@ class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
                 this.logger.debug(`(FileCache._removeStaleSessions) skipping ${id} as .get() returned undefined`);
                 continue;
             }
+            // Skip never-expiring sessions
+            if (session.data && session.data.neverExpire) {
+                this.logger.debug(`(FileCache._removeStaleSessions) skipping ${id} - never-expire session`);
+                continue;
+            }
             if (
                 (staleTimeout && now - session.lastUsed > staleTimeout) ||
                 (maxToLive && now - session.createdAt > maxToLive)
@@ -215,7 +220,9 @@ class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
         const now = Date.now();
         for (const [sessionId, session] of this.cachedSessions) {
             if (forceSave || now - session.lastUsed > this.cacheTimeout) {
-                if (session.lastUsed === session.createdAt && this.deleteUnused) {
+                // Never-expiring sessions should not be deleted even if unused
+                const isNeverExpire = session.data && session.data.neverExpire;
+                if (session.lastUsed === session.createdAt && this.deleteUnused && !isNeverExpire) {
                     this.cachedSessions.delete(sessionId);
                     deleteCount++;
                     this.logger.debug(`(FileCache._saveCacheToDisk) deleted unused ${sessionId} from memory`);

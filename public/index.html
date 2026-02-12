@@ -13,6 +13,7 @@
             --bg-primary: #0a0a0f;
             --bg-secondary: #12121a;
             --bg-tertiary: #1a1a25;
+            --bg-elevated: #22222f;
             --accent: #00d4aa;
             --accent-glow: rgba(0, 212, 170, 0.15);
             --text-primary: #f0f0f5;
@@ -152,6 +153,89 @@
             transform: translateY(0);
         }
 
+        .generate-link-button {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 28px;
+            color: var(--text-primary);
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .generate-link-button:hover {
+            background: var(--bg-elevated);
+            border-color: var(--accent);
+        }
+
+        .link-result {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        .link-result.active {
+            display: block;
+        }
+
+        .link-result-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 12px;
+        }
+
+        .link-display {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .link-url {
+            flex: 1;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--accent);
+            background: var(--bg-tertiary);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            word-break: break-all;
+        }
+
+        .copy-button {
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            color: var(--bg-primary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .copy-button:hover {
+            background: #00b894;
+        }
+
+        .copy-button.copied {
+            background: #00b894;
+        }
+
         .error-message {
             display: none;
             margin-top: 16px;
@@ -258,6 +342,22 @@
             </button>
         </div>
 
+        <button class="generate-link-button" id="generate-link-button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            Generate never-expire link
+        </button>
+
+        <div class="link-result" id="link-result">
+            <div class="link-result-label">Never-expire link:</div>
+            <div class="link-display">
+                <div class="link-url" id="link-url"></div>
+                <button class="copy-button" id="copy-button">Copy</button>
+            </div>
+        </div>
+
         <div class="error-message" id="error-message"></div>
         <div class="loading" id="loading">
             <span class="spinner"></span>
@@ -269,8 +369,12 @@
         (function() {
             const urlInput = document.getElementById('url-input');
             const goButton = document.getElementById('go-button');
+            const generateLinkButton = document.getElementById('generate-link-button');
             const errorMessage = document.getElementById('error-message');
             const loading = document.getElementById('loading');
+            const linkResult = document.getElementById('link-result');
+            const linkUrl = document.getElementById('link-url');
+            const copyButton = document.getElementById('copy-button');
 
             function showError(message) {
                 errorMessage.textContent = message;
@@ -282,6 +386,14 @@
                 errorMessage.style.display = 'none';
             }
 
+            function normalizeUrl(url) {
+                url = url.trim();
+                if (!url.match(/^https?:\/\//i)) {
+                    url = 'https://' + url;
+                }
+                return url;
+            }
+
             function navigate() {
                 let url = urlInput.value.trim();
                 
@@ -290,11 +402,7 @@
                     return;
                 }
 
-                // Add protocol if missing
-                if (!url.match(/^https?:\/\//i)) {
-                    url = 'https://' + url;
-                }
-
+                url = normalizeUrl(url);
                 hideError();
                 loading.classList.add('active');
                 goButton.disabled = true;
@@ -303,7 +411,72 @@
                 window.location.href = '/?url=' + encodeURIComponent(url);
             }
 
+            function generateLink() {
+                let url = urlInput.value.trim();
+                
+                if (!url) {
+                    showError('Please enter a URL first');
+                    return;
+                }
+
+                url = normalizeUrl(url);
+                hideError();
+                loading.classList.add('active');
+                generateLinkButton.disabled = true;
+                linkResult.classList.remove('active');
+
+                fetch('/generatelink?url=' + encodeURIComponent(url))
+                    .then(response => response.json())
+                    .then(data => {
+                        linkUrl.textContent = data.url;
+                        linkResult.classList.add('active');
+                        loading.classList.remove('active');
+                        generateLinkButton.disabled = false;
+                        
+                        // Scroll to result
+                        linkResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    })
+                    .catch(error => {
+                        showError('Failed to generate link: ' + error.message);
+                        generateLinkButton.disabled = false;
+                    });
+            }
+
+            function copyLink() {
+                const url = linkUrl.textContent;
+                navigator.clipboard.writeText(url).then(() => {
+                    copyButton.textContent = 'Copied!';
+                    copyButton.classList.add('copied');
+                    setTimeout(() => {
+                        copyButton.textContent = 'Copy';
+                        copyButton.classList.remove('copied');
+                    }, 2000);
+                }).catch(err => {
+                    // Fallback for older browsers
+                    const textarea = document.createElement('textarea');
+                    textarea.value = url;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        copyButton.textContent = 'Copied!';
+                        copyButton.classList.add('copied');
+                        setTimeout(() => {
+                            copyButton.textContent = 'Copy';
+                            copyButton.classList.remove('copied');
+                        }, 2000);
+                    } catch (e) {
+                        showError('Failed to copy link');
+                    }
+                    document.body.removeChild(textarea);
+                });
+            }
+
             goButton.addEventListener('click', navigate);
+            generateLinkButton.addEventListener('click', generateLink);
+            copyButton.addEventListener('click', copyLink);
             
             urlInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {

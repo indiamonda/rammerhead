@@ -91,6 +91,11 @@ class RammerheadSessionMemoryStore extends RammerheadSessionAbstractStore {
 
         const now = Date.now();
         for (const [sessionId, session] of this.mapStore) {
+            // Skip never-expiring sessions
+            if (session.data && session.data.neverExpire) {
+                this.logger.debug(`(MemoryStore._cleanupRun) skipping ${sessionId} - never-expire session`);
+                continue;
+            }
             if (
                 (staleTimeout && now - session.lastUsed > staleTimeout) ||
                 (maxToLive && now - session.createdAt > maxToLive)
