@@ -236,50 +236,50 @@ var setError, api, sessionIdsStore, loadSettings, renderSessionTable;
         
         // Old table-based UI (fallback)
         if (tbody) {
-            while (tbody.firstChild && !tbody.firstChild.remove());
+        while (tbody.firstChild && !tbody.firstChild.remove());
             for (var j = 0; j < data.length; j++) {
-                var tr = document.createElement('tr');
+            var tr = document.createElement('tr');
                 appendIntoTr(data[j].id);
                 appendIntoTr(data[j].createdOn);
 
-                var fillInBtn = document.createElement('button');
-                fillInBtn.textContent = 'Fill in existing session ID';
-                fillInBtn.className = 'btn btn-outline-primary';
+            var fillInBtn = document.createElement('button');
+            fillInBtn.textContent = 'Fill in existing session ID';
+            fillInBtn.className = 'btn btn-outline-primary';
                 fillInBtn.onclick = index(j, function (idx) {
-                    setError();
-                    sessionIdsStore.setDefault(data[idx].id);
-                    loadSettings(data[idx]);
-                });
-                appendIntoTr(fillInBtn);
+                setError();
+                sessionIdsStore.setDefault(data[idx].id);
+                loadSettings(data[idx]);
+            });
+            appendIntoTr(fillInBtn);
 
-                var deleteBtn = document.createElement('button');
-                deleteBtn.textContent = 'Delete';
-                deleteBtn.className = 'btn btn-outline-danger';
+            var deleteBtn = document.createElement('button');
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.className = 'btn btn-outline-danger';
                 deleteBtn.onclick = index(j, function (idx) {
-                    setError();
-                    api.deletesession(data[idx].id, function () {
-                        data.splice(idx, 1)[0];
-                        sessionIdsStore.set(data);
-                        renderSessionTable(data);
-                    });
+                setError();
+                api.deletesession(data[idx].id, function () {
+                    data.splice(idx, 1)[0];
+                    sessionIdsStore.set(data);
+                    renderSessionTable(data);
                 });
-                appendIntoTr(deleteBtn);
+            });
+            appendIntoTr(deleteBtn);
 
-                tbody.appendChild(tr);
-            }
-            function appendIntoTr(stuff) {
-                var td = document.createElement('td');
-                if (typeof stuff === 'object') {
-                    td.appendChild(stuff);
-                } else {
-                    td.textContent = stuff;
-                }
-                tr.appendChild(td);
-            }
-            function index(i, func) {
-                return func.bind(null, i);
-            }
+            tbody.appendChild(tr);
         }
+        function appendIntoTr(stuff) {
+            var td = document.createElement('td');
+            if (typeof stuff === 'object') {
+                td.appendChild(stuff);
+            } else {
+                td.textContent = stuff;
+            }
+            tr.appendChild(td);
+        }
+        function index(i, func) {
+            return func.bind(null, i);
+        }
+    }
     }
     loadSettings = function(session) {
         document.getElementById('session-id').value = session.id;

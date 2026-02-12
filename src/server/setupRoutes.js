@@ -107,11 +107,11 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         return '';
     };
     
-    // Auto-create session route for browser-like experience - handle both / and /rammerhead/
+    // Auto-create session route - handle both ?url= parameter and serve root index.html
     const handleRoot = (req, res) => {
         try {
             const pathname = req.url.split('?')[0];
-            // Only handle root paths, not other files
+            // Only handle root paths
             if (pathname !== '/' && pathname !== '/rammerhead' && pathname !== '/rammerhead/') {
                 return; // Let other handlers process this
             }
@@ -119,7 +119,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             const { url: targetUrl } = new URLPath(req.url).getParams();
             const basePath = getBasePath(req);
             
-            // If URL parameter is provided, auto-create session and redirect
+            // If URL parameter is provided, create session and redirect
             if (targetUrl) {
                 logger.debug(`(handleRoot) Creating session for URL: ${targetUrl}`);
                 const id = generateId();
@@ -138,32 +138,34 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 logger.debug(`(handleRoot) Redirecting to: ${redirectUrl}`);
                 res.writeHead(302, { Location: redirectUrl });
                 res.end();
-                return true; // Signal that we handled the request
+                return;
             }
             
-        // Otherwise, serve index.html - prefer root index.html (React app), fallback to public/index.html
-        const rootIndexPath = path.join(__dirname, '../../index.html');
-        if (fs.existsSync(rootIndexPath)) {
-            res.writeHead(200, { 'Content-Type': 'text/html' });
-            res.end(fs.readFileSync(rootIndexPath));
-            return true; // Signal that we handled the request
-        }
-        // Fallback to public/index.html if root index.html doesn't exist
-        if (config.publicDir) {
-            const indexPath = path.join(config.publicDir, 'index.html');
-            if (fs.existsSync(indexPath)) {
+            // Otherwise, serve root index.html (React app) - prefer root, fallback to public
+            const rootIndexPath = path.join(__dirname, '../../index.html');
+            if (fs.existsSync(rootIndexPath)) {
+                logger.debug(`(handleRoot) Serving root index.html`);
                 res.writeHead(200, { 'Content-Type': 'text/html' });
-                res.end(fs.readFileSync(indexPath));
-                return true; // Signal that we handled the request
+                res.end(fs.readFileSync(rootIndexPath));
+                return;
             }
-        }
+            // Fallback to public/index.html
+            if (config.publicDir) {
+                const indexPath = path.join(config.publicDir, 'index.html');
+                if (fs.existsSync(indexPath)) {
+                    logger.debug(`(handleRoot) Serving public index.html`);
+                    res.writeHead(200, { 'Content-Type': 'text/html' });
+                    res.end(fs.readFileSync(indexPath));
+                    return;
+                }
+            }
         } catch (error) {
             logger.error(`(handleRoot) Error: ${error.message}`);
-            // Don't throw, let other handlers try
+            logger.error(error.stack);
         }
     };
     
-    // Register routes - these should be checked before static files
+    // Register routes - these will handle / and serve index.html
     proxyServer.GET('/', handleRoot);
     proxyServer.GET('/rammerhead', handleRoot);
     proxyServer.GET('/rammerhead/', handleRoot);
