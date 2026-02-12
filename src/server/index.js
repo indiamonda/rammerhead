@@ -48,11 +48,6 @@ sessionStore.attachToProxy(proxyServer);
 setupPipeline(proxyServer, sessionStore);
 // Register static files FIRST (they won't conflict with our custom routes)
 if (config.publicDir) addStaticDirToProxy(proxyServer, config.publicDir);
-// Also serve the static directory (for React app assets like /static/js/main.ce3653a9.js)
-const staticDir = path.join(__dirname, '../static');
-if (fs.existsSync(staticDir)) {
-    addStaticDirToProxy(proxyServer, staticDir, '/static');
-}
 // Register routes AFTER static files, but they'll take precedence for matching routes
 setupRoutes(proxyServer, sessionStore, logger);
 

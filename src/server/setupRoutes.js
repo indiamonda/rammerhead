@@ -107,7 +107,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         return '';
     };
     
-    // Auto-create session route - handle both ?url= parameter and serve root index.html
+    // Auto-create session route - handle ?url= parameter and serve public/index.html
     const handleRoot = (req, res) => {
         try {
             const pathname = req.url.split('?')[0];
@@ -141,15 +141,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 return;
             }
             
-            // Otherwise, serve root index.html (React app) - prefer root, fallback to public
-            const rootIndexPath = path.join(__dirname, '../../index.html');
-            if (fs.existsSync(rootIndexPath)) {
-                logger.debug(`(handleRoot) Serving root index.html`);
-                res.writeHead(200, { 'Content-Type': 'text/html' });
-                res.end(fs.readFileSync(rootIndexPath));
-                return;
-            }
-            // Fallback to public/index.html
+            // Otherwise, serve public/index.html (original Rammerhead interface)
             if (config.publicDir) {
                 const indexPath = path.join(config.publicDir, 'index.html');
                 if (fs.existsSync(indexPath)) {
