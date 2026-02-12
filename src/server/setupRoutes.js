@@ -109,40 +109,63 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     
     // Auto-create session route for browser-like experience - handle both / and /rammerhead/
     const handleRoot = (req, res) => {
-        const { url: targetUrl } = new URLPath(req.url).getParams();
-        const basePath = getBasePath(req);
-        
-        // If URL parameter is provided, auto-create session and redirect
-        if (targetUrl) {
-            const id = generateId();
-            const session = new RammerheadSession();
-            session.data.restrictIP = config.getIP(req);
+        try {
+            const pathname = req.url.split('?')[0];
+            // Only handle root paths, not other files
+            if (pathname !== '/' && pathname !== '/rammerhead' && pathname !== '/rammerhead/') {
+                return; // Let other handlers process this
+            }
             
-            // Enable shuffling by default for better compatibility
-            session.shuffleDict = StrShuffler.generateDictionary();
+            const { url: targetUrl } = new URLPath(req.url).getParams();
+            const basePath = getBasePath(req);
             
-            sessionStore.addSerializedSession(id, session.serializeSession());
+            // If URL parameter is provided, auto-create session and redirect
+            if (targetUrl) {
+                logger.debug(`(handleRoot) Creating session for URL: ${targetUrl}`);
+                const id = generateId();
+                const session = new RammerheadSession();
+                session.data.restrictIP = config.getIP(req);
+                
+                // Enable shuffling by default for better compatibility
+                session.shuffleDict = StrShuffler.generateDictionary();
+                
+                sessionStore.addSerializedSession(id, session.serializeSession());
+                
+                // Redirect to proxied URL with base path
+                const shuffler = new StrShuffler(session.shuffleDict);
+                const shuffledUrl = shuffler.shuffle(targetUrl);
+                const redirectUrl = `${basePath}/${id}/${shuffledUrl}`;
+                logger.debug(`(handleRoot) Redirecting to: ${redirectUrl}`);
+                res.writeHead(302, { Location: redirectUrl });
+                res.end();
+                return true; // Signal that we handled the request
+            }
             
-            // Redirect to proxied URL with base path
-            const shuffler = new StrShuffler(session.shuffleDict);
-            const shuffledUrl = shuffler.shuffle(targetUrl);
-            res.writeHead(302, { Location: `${basePath}/${id}/${shuffledUrl}` });
-            res.end();
-            return;
+        // Otherwise, serve index.html - prefer root index.html (React app), fallback to public/index.html
+        const rootIndexPath = path.join(__dirname, '../../index.html');
+        if (fs.existsSync(rootIndexPath)) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(fs.readFileSync(rootIndexPath));
+            return true; // Signal that we handled the request
         }
-        
-        // Otherwise, serve index.html manually (static files might not handle this if route is registered after)
+        // Fallback to public/index.html if root index.html doesn't exist
         if (config.publicDir) {
             const indexPath = path.join(config.publicDir, 'index.html');
             if (fs.existsSync(indexPath)) {
                 res.writeHead(200, { 'Content-Type': 'text/html' });
                 res.end(fs.readFileSync(indexPath));
-                return;
+                return true; // Signal that we handled the request
             }
+        }
+        } catch (error) {
+            logger.error(`(handleRoot) Error: ${error.message}`);
+            // Don't throw, let other handlers try
         }
     };
     
+    // Register routes - these should be checked before static files
     proxyServer.GET('/', handleRoot);
+    proxyServer.GET('/rammerhead', handleRoot);
     proxyServer.GET('/rammerhead/', handleRoot);
     
     // Generate never-expire link route - handle both /generatelink and /rammerhead/generatelink

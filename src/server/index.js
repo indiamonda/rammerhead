@@ -5,6 +5,9 @@ if (cluster.isMaster) {
 
 const exitHook = require('async-exit-hook');
 const sticky = require('sticky-session-custom');
+const fs = require('fs');
+const path = require('path');
+const mime = require('mime');
 const RammerheadProxy = require('../classes/RammerheadProxy');
 const addStaticDirToProxy = require('../util/addStaticDirToProxy');
 const RammerheadSessionFileCache = require('../classes/RammerheadSessionFileCache');
@@ -35,8 +38,6 @@ const proxyServer = new RammerheadProxy({
     disableHttp2: config.disableHttp2
 });
 
-if (config.publicDir) addStaticDirToProxy(proxyServer, config.publicDir);
-
 const fileCacheOptions = { logger, ...config.fileCacheSessionConfig };
 if (!cluster.isMaster) {
     fileCacheOptions.staleCleanupOptions = null;
@@ -45,7 +46,15 @@ const sessionStore = new RammerheadSessionFileCache(fileCacheOptions);
 sessionStore.attachToProxy(proxyServer);
 
 setupPipeline(proxyServer, sessionStore);
+// Register routes BEFORE static files so routes take precedence
 setupRoutes(proxyServer, sessionStore, logger);
+// Register static files AFTER routes
+if (config.publicDir) addStaticDirToProxy(proxyServer, config.publicDir);
+// Also serve the static directory (for React app assets like /static/js/main.ce3653a9.js)
+const staticDir = path.join(__dirname, '../static');
+if (fs.existsSync(staticDir)) {
+    addStaticDirToProxy(proxyServer, staticDir, '/static');
+}
 
 // nicely close proxy server and save sessions to store before we exit
 exitHook(() => {

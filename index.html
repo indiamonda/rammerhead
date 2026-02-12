@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <title>Rammerhead Proxy</title>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width,initial-scale=1"/>
+        <link rel="shortcut icon" href="/favicon.png"/>
+        <script defer="defer" src="/static/js/main.ce3653a9.js"></script>
+        <link href="/static/css/main.fa2171d9.css" rel="stylesheet">
+        <style>
+            /* Custom improvements to make it less ugly */
+            body {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+            }
+            
+            /* Hide unwanted ad elements - specifically the ad slot */
+            .rhnewtab-header-ad-318332,
+            [class*="ad"], [class*="slot"], [class*="ticket"], 
+            [id*="ad"], [id*="slot"], [id*="ticket"],
+            [data-ad], [data-slot], [data-ticket] {
+                display: none !important;
+            }
+            
+            /* Hide elements containing ad/slot/ticket text */
+            *:not(script):not(style) {
+                text-transform: none;
+            }
+            
+            /* Additional cleanup - hide any element with specific text */
+            * {
+                position: relative;
+            }
+            
+            /* Improve new tab page styling */
+            .rhnewtab-261459 {
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+                padding: 40px;
+                margin: 20px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            }
+            
+            /* Style for the Generate never-expire link button */
+            .rammerhead-generate-link-btn {
+                background: linear-gradient(135deg, #00d4aa 0%, #00b894 100%);
+                border: none;
+                border-radius: 12px;
+                padding: 14px 28px;
+                color: #0a0a0f;
+                font-weight: 600;
+                font-size: 0.9rem;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                box-shadow: 0 4px 20px rgba(0, 212, 170, 0.3);
+                margin: 20px auto;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            }
+            
+            .rammerhead-generate-link-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 28px rgba(0, 212, 170, 0.4);
+            }
+            
+            .rammerhead-generate-link-btn:active {
+                transform: translateY(0);
+            }
+            
+            .rammerhead-link-result {
+                display: none;
+                margin-top: 20px;
+                padding: 20px;
+                background: rgba(255, 255, 255, 0.9);
+                border-radius: 12px;
+                border: 1px solid rgba(0, 0, 0, 0.1);
+            }
+            
+            .rammerhead-link-result.active {
+                display: block;
+            }
+            
+            .rammerhead-link-url {
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 0.85rem;
+                color: #00d4aa;
+                background: rgba(0, 212, 170, 0.1);
+                padding: 12px 16px;
+                border-radius: 8px;
+                word-break: break-all;
+                margin-bottom: 12px;
+            }
+            
+            .rammerhead-copy-btn {
+                background: #00d4aa;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 20px;
+                color: #0a0a0f;
+                font-weight: 600;
+                font-size: 0.85rem;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            
+            .rammerhead-copy-btn:hover {
+                background: #00b894;
+            }
+            
+            .rammerhead-copy-btn.copied {
+                background: #00b894;
+            }
+            
+            .rammerhead-loading {
+                display: none;
+                text-align: center;
+                margin-top: 20px;
+                color: rgba(255, 255, 255, 0.8);
+            }
+            
+            .rammerhead-loading.active {
+                display: block;
+            }
+            
+            .rammerhead-error {
+                display: none;
+                margin-top: 16px;
+                padding: 12px 16px;
+                background: rgba(255, 107, 107, 0.2);
+                border: 1px solid rgba(255, 107, 107, 0.3);
+                border-radius: 10px;
+                color: #ff6b6b;
+                font-size: 0.875rem;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <noscript>You're going to need to enable JavaScript to run this browser.</noscript>
+        <div id="root"></div>
+        <script>
+            // Wait for React app to load, then modify the DOM
+            (function() {
+                function initRammerheadFeatures() {
+                        // Remove unwanted ad/slot/ticket elements
+                        function removeUnwantedElements() {
+                            // Remove the specific ad slot element
+                            const adSlot = document.querySelector('.rhnewtab-header-ad-318332');
+                            if (adSlot) {
+                                adSlot.remove();
+                            }
+                            
+                            const selectors = [
+                                '[class*="ad"]',
+                                '[class*="slot"]', 
+                                '[class*="ticket"]',
+                                '[id*="ad"]',
+                                '[id*="slot"]',
+                                '[id*="ticket"]',
+                                '[data-ad]',
+                                '[data-slot]',
+                                '[data-ticket]'
+                            ];
+                            
+                            selectors.forEach(selector => {
+                                try {
+                                    document.querySelectorAll(selector).forEach(el => {
+                                        const text = (el.textContent || '').trim();
+                                        if (text.match(/open\s+ad\s+slot|speed\s+ticket|ad\s+slot|advertisement/i)) {
+                                            el.remove();
+                                        }
+                                    });
+                                } catch(e) {}
+                            });
+                            
+                            // Also check all elements for ad-related text (more aggressive)
+                            document.querySelectorAll('*').forEach(el => {
+                                const text = (el.textContent || '').trim().toLowerCase();
+                                if (text === 'open ad slot' || text === 'speed ticket' || 
+                                    text.match(/^ad\s+slot$/) || text.match(/^open\s+ad$/)) {
+                                    el.remove();
+                                }
+                            });
+                        }
+                    
+                    // Add Generate never-expire link button
+                    function addGenerateLinkButton() {
+                        // Check if button already exists
+                        if (document.getElementById('rammerhead-generate-link-btn')) {
+                            return;
+                        }
+                        
+                        // Find a good place to insert the button (new tab page content)
+                        const newTabContent = document.querySelector('.rhnewtab-261459') || 
+                                             document.querySelector('[class*="newtab"]') ||
+                                             document.querySelector('[class*="home"]') ||
+                                             document.body;
+                        
+                        if (!newTabContent) return;
+                        
+                        // Create container
+                        const container = document.createElement('div');
+                        container.style.cssText = 'text-align: center; margin: 30px 0;';
+                        container.innerHTML = `
+                            <button id="rammerhead-generate-link-btn" class="rammerhead-generate-link-btn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                                </svg>
+                                Generate never-expire link
+                            </button>
+                            <div id="rammerhead-link-result" class="rammerhead-link-result">
+                                <div style="font-size: 0.8rem; color: #666; margin-bottom: 12px;">Never-expire link:</div>
+                                <div id="rammerhead-link-url" class="rammerhead-link-url"></div>
+                                <button id="rammerhead-copy-btn" class="rammerhead-copy-btn">Copy</button>
+                            </div>
+                            <div id="rammerhead-loading" class="rammerhead-loading">
+                                <span style="display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #00d4aa; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 8px;"></span>
+                                Generating link...
+                            </div>
+                            <div id="rammerhead-error" class="rammerhead-error"></div>
+                        `;
+                        
+                        // Add spin animation
+                        if (!document.getElementById('rammerhead-spin-style')) {
+                            const style = document.createElement('style');
+                            style.id = 'rammerhead-spin-style';
+                            style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+                            document.head.appendChild(style);
+                        }
+                        
+                        // Insert at the beginning or after first child
+                        if (newTabContent.firstChild) {
+                            newTabContent.insertBefore(container, newTabContent.firstChild);
+                        } else {
+                            newTabContent.appendChild(container);
+                        }
+                        
+                        // Get current URL from address bar if available
+                        function getCurrentUrl() {
+                            const urlInput = document.querySelector('.addressbar-urlbar-283095') || 
+                                           document.querySelector('input[type="text"]') ||
+                                           document.querySelector('[contenteditable="true"]');
+                            if (urlInput) {
+                                return urlInput.textContent || urlInput.value || '';
+                            }
+                            return '';
+                        }
+                        
+                        // Generate link functionality
+                        document.getElementById('rammerhead-generate-link-btn').addEventListener('click', function() {
+                            const url = getCurrentUrl() || window.location.href;
+                            
+                            if (!url || url === window.location.href) {
+                                document.getElementById('rammerhead-error').textContent = 'Please navigate to a website first, or enter a URL in the address bar';
+                                document.getElementById('rammerhead-error').style.display = 'block';
+                                return;
+                            }
+                            
+                            // Normalize URL
+                            let targetUrl = url.trim();
+                            if (!targetUrl.match(/^https?:\/\//i)) {
+                                targetUrl = 'https://' + targetUrl;
+                            }
+                            
+                            // Detect base path
+                            const basePath = window.location.pathname.startsWith('/rammerhead') ? '/rammerhead' : '';
+                            
+                            document.getElementById('rammerhead-error').style.display = 'none';
+                            document.getElementById('rammerhead-loading').classList.add('active');
+                            document.getElementById('rammerhead-link-result').classList.remove('active');
+                            
+                            fetch(basePath + '/generatelink?url=' + encodeURIComponent(targetUrl))
+                                .then(response => {
+                                    if (!response.ok) {
+                                        return response.json().then(data => {
+                                            throw new Error(data.error || 'Failed to generate link');
+                                        }).catch(() => {
+                                            throw new Error('Server error: ' + response.status);
+                                        });
+                                    }
+                                    return response.json();
+                                })
+                                .then(data => {
+                                    if (data.error) {
+                                        throw new Error(data.error);
+                                    }
+                                    document.getElementById('rammerhead-link-url').textContent = data.url;
+                                    document.getElementById('rammerhead-link-result').classList.add('active');
+                                    document.getElementById('rammerhead-loading').classList.remove('active');
+                                    
+                                    // Scroll to result
+                                    document.getElementById('rammerhead-link-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                })
+                                .catch(error => {
+                                    document.getElementById('rammerhead-error').textContent = 'Failed to generate link: ' + error.message;
+                                    document.getElementById('rammerhead-error').style.display = 'block';
+                                    document.getElementById('rammerhead-loading').classList.remove('active');
+                                });
+                        });
+                        
+                        // Copy button functionality
+                        document.getElementById('rammerhead-copy-btn').addEventListener('click', function() {
+                            const url = document.getElementById('rammerhead-link-url').textContent;
+                            navigator.clipboard.writeText(url).then(() => {
+                                this.textContent = 'Copied!';
+                                this.classList.add('copied');
+                                setTimeout(() => {
+                                    this.textContent = 'Copy';
+                                    this.classList.remove('copied');
+                                }, 2000);
+                            }).catch(() => {
+                                // Fallback
+                                const textarea = document.createElement('textarea');
+                                textarea.value = url;
+                                textarea.style.position = 'fixed';
+                                textarea.style.opacity = '0';
+                                document.body.appendChild(textarea);
+                                textarea.select();
+                                try {
+                                    document.execCommand('copy');
+                                    this.textContent = 'Copied!';
+                                    this.classList.add('copied');
+                                    setTimeout(() => {
+                                        this.textContent = 'Copy';
+                                        this.classList.remove('copied');
+                                    }, 2000);
+                                } catch(e) {
+                                    document.getElementById('rammerhead-error').textContent = 'Failed to copy link';
+                                    document.getElementById('rammerhead-error').style.display = 'block';
+                                }
+                                document.body.removeChild(textarea);
+                            });
+                        });
+                    }
+                    
+                    // Run cleanup and add button
+                    removeUnwantedElements();
+                    addGenerateLinkButton();
+                }
+                
+                // Try multiple times to catch React app when it loads
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initRammerheadFeatures);
+                } else {
+                    initRammerheadFeatures();
+                }
+                
+                // Also try after a delay to catch dynamically loaded content
+                setTimeout(initRammerheadFeatures, 1000);
+                setTimeout(initRammerheadFeatures, 3000);
+                
+                // Watch for DOM changes
+                const observer = new MutationObserver(() => {
+                    initRammerheadFeatures();
+                });
+                observer.observe(document.body, { childList: true, subtree: true });
+            })();
+        </script>
+    </body>
+</html>
