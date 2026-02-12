@@ -8,75 +8,38 @@
         <script defer="defer" src="/static/js/main.ce3653a9.js"></script>
         <link href="/static/css/main.fa2171d9.css" rel="stylesheet">
         <style>
-            /* Custom improvements to make it less ugly */
-            body {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-            }
-            
-            /* Hide unwanted ad elements - specifically the ad slot */
-            .rhnewtab-header-ad-318332,
-            [class*="ad"], [class*="slot"], [class*="ticket"], 
-            [id*="ad"], [id*="slot"], [id*="ticket"],
-            [data-ad], [data-slot], [data-ticket] {
+            /* Simple styles - only hide the ad slot */
+            .rhnewtab-header-ad-318332 {
                 display: none !important;
             }
             
-            /* Hide elements containing ad/slot/ticket text */
-            *:not(script):not(style) {
-                text-transform: none;
-            }
-            
-            /* Additional cleanup - hide any element with specific text */
-            * {
-                position: relative;
-            }
-            
-            /* Improve new tab page styling */
-            .rhnewtab-261459 {
-                background: rgba(255, 255, 255, 0.95);
-                backdrop-filter: blur(10px);
-                border-radius: 20px;
-                padding: 40px;
-                margin: 20px;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            }
-            
-            /* Style for the Generate never-expire link button */
+            /* Simple button style */
             .rammerhead-generate-link-btn {
-                background: linear-gradient(135deg, #00d4aa 0%, #00b894 100%);
+                background: #4CAF50;
                 border: none;
-                border-radius: 12px;
-                padding: 14px 28px;
-                color: #0a0a0f;
-                font-weight: 600;
-                font-size: 0.9rem;
+                border-radius: 6px;
+                padding: 12px 24px;
+                color: white;
+                font-weight: 500;
+                font-size: 14px;
                 cursor: pointer;
-                transition: all 0.2s ease;
                 display: inline-flex;
                 align-items: center;
                 gap: 8px;
-                box-shadow: 0 4px 20px rgba(0, 212, 170, 0.3);
                 margin: 20px auto;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
             }
             
             .rammerhead-generate-link-btn:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 6px 28px rgba(0, 212, 170, 0.4);
-            }
-            
-            .rammerhead-generate-link-btn:active {
-                transform: translateY(0);
+                background: #45a049;
             }
             
             .rammerhead-link-result {
                 display: none;
                 margin-top: 20px;
-                padding: 20px;
-                background: rgba(255, 255, 255, 0.9);
-                border-radius: 12px;
-                border: 1px solid rgba(0, 0, 0, 0.1);
+                padding: 16px;
+                background: white;
+                border-radius: 6px;
+                border: 1px solid #ddd;
             }
             
             .rammerhead-link-result.active {
@@ -84,41 +47,40 @@
             }
             
             .rammerhead-link-url {
-                font-family: 'JetBrains Mono', monospace;
-                font-size: 0.85rem;
-                color: #00d4aa;
-                background: rgba(0, 212, 170, 0.1);
-                padding: 12px 16px;
-                border-radius: 8px;
+                font-family: monospace;
+                font-size: 13px;
+                color: #333;
+                background: #f9f9f9;
+                padding: 10px;
+                border-radius: 4px;
                 word-break: break-all;
-                margin-bottom: 12px;
+                margin-bottom: 10px;
             }
             
             .rammerhead-copy-btn {
-                background: #00d4aa;
+                background: #2196F3;
                 border: none;
-                border-radius: 8px;
-                padding: 12px 20px;
-                color: #0a0a0f;
-                font-weight: 600;
-                font-size: 0.85rem;
+                border-radius: 4px;
+                padding: 8px 16px;
+                color: white;
+                font-weight: 500;
+                font-size: 13px;
                 cursor: pointer;
-                transition: all 0.2s ease;
             }
             
             .rammerhead-copy-btn:hover {
-                background: #00b894;
+                background: #0b7dda;
             }
             
             .rammerhead-copy-btn.copied {
-                background: #00b894;
+                background: #4CAF50;
             }
             
             .rammerhead-loading {
                 display: none;
                 text-align: center;
                 margin-top: 20px;
-                color: rgba(255, 255, 255, 0.8);
+                color: #666;
             }
             
             .rammerhead-loading.active {
@@ -128,12 +90,12 @@
             .rammerhead-error {
                 display: none;
                 margin-top: 16px;
-                padding: 12px 16px;
-                background: rgba(255, 107, 107, 0.2);
-                border: 1px solid rgba(255, 107, 107, 0.3);
-                border-radius: 10px;
-                color: #ff6b6b;
-                font-size: 0.875rem;
+                padding: 12px;
+                background: #ffebee;
+                border: 1px solid #ef5350;
+                border-radius: 4px;
+                color: #c62828;
+                font-size: 13px;
                 text-align: center;
             }
         </style>
@@ -153,34 +115,10 @@
                                 adSlot.remove();
                             }
                             
-                            const selectors = [
-                                '[class*="ad"]',
-                                '[class*="slot"]', 
-                                '[class*="ticket"]',
-                                '[id*="ad"]',
-                                '[id*="slot"]',
-                                '[id*="ticket"]',
-                                '[data-ad]',
-                                '[data-slot]',
-                                '[data-ticket]'
-                            ];
-                            
-                            selectors.forEach(selector => {
-                                try {
-                                    document.querySelectorAll(selector).forEach(el => {
-                                        const text = (el.textContent || '').trim();
-                                        if (text.match(/open\s+ad\s+slot|speed\s+ticket|ad\s+slot|advertisement/i)) {
-                                            el.remove();
-                                        }
-                                    });
-                                } catch(e) {}
-                            });
-                            
-                            // Also check all elements for ad-related text (more aggressive)
+                            // Remove elements with specific text content
                             document.querySelectorAll('*').forEach(el => {
                                 const text = (el.textContent || '').trim().toLowerCase();
-                                if (text === 'open ad slot' || text === 'speed ticket' || 
-                                    text.match(/^ad\s+slot$/) || text.match(/^open\s+ad$/)) {
+                                if (text === 'open ad slot' || text === 'speed ticket') {
                                     el.remove();
                                 }
                             });
