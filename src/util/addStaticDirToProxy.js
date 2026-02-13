@@ -43,10 +43,6 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
         }
 
         const pathToFile = path.join(staticDir, file);
-        const staticContent = {
-            content: fs.readFileSync(pathToFile),
-            contentType: mime.getType(file)
-        };
         const route = rootPath + file;
 
         if (forbiddenRoutes.includes(route)) {
@@ -55,9 +51,28 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
             );
         }
 
-        proxy.GET(rootPath + file, staticContent);
+        // Use a handler function to read files on-demand instead of caching
+        const handler = (req, res) => {
+            try {
+                const content = fs.readFileSync(pathToFile);
+                const contentType = mime.getType(file);
+                // Add cache-control headers to prevent caching during development
+                res.writeHead(200, { 
+                    'Content-Type': contentType,
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                });
+                res.end(content);
+            } catch (error) {
+                res.writeHead(404);
+                res.end('Not Found');
+            }
+        };
+
+        proxy.GET(rootPath + file, handler);
         if (file === 'index.html') {
-            proxy.GET(rootPath, staticContent);
+            proxy.GET(rootPath, handler);
         }
     });
 }
