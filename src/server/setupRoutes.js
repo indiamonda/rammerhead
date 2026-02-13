@@ -176,7 +176,8 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             
             const id = generateId();
             const session = new RammerheadSession();
-            session.data.restrictIP = config.getIP(req);
+            // Don't restrict IP for never-expiring links so they work from anywhere
+            session.data.restrictIP = null;
             session.data.neverExpire = true; // Mark as never-expiring
             
             // Enable shuffling by default for better compatibility

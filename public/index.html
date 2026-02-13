@@ -8,22 +8,8 @@
     <link rel="manifest" href="/rammerhead/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-primary: #0a0a0f;
-            --bg-secondary: #12121a;
-            --bg-tertiary: #1a1a25;
-            --bg-elevated: #22222f;
-            --accent: #00d4aa;
-            --accent-glow: rgba(0, 212, 170, 0.15);
-            --text-primary: #f0f0f5;
-            --text-secondary: #8888a0;
-            --text-muted: #55556a;
-            --border: #2a2a3a;
-            --danger: #ff6b6b;
-        }
-
         * {
             margin: 0;
             padding: 0;
@@ -31,159 +17,285 @@
         }
 
         body {
-            font-family: 'Outfit', -apple-system, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            color: #202124;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
+            padding: 20px;
         }
 
-        .bg-gradient {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: 
-                radial-gradient(ellipse 80% 50% at 20% -20%, rgba(0, 212, 170, 0.08), transparent),
-                radial-gradient(ellipse 60% 40% at 80% 100%, rgba(0, 180, 148, 0.06), transparent);
-            pointer-events: none;
-            z-index: -1;
-        }
-
-        .browser-container {
+        .browser-window {
             width: 100%;
-            max-width: 900px;
-            padding: 0 24px;
-            animation: fadeInUp 0.6s ease-out;
+            max-width: 1200px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            max-height: 800px;
         }
 
-        .logo-section {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-
-        .logo {
-            width: 64px;
-            height: 64px;
-            filter: drop-shadow(0 0 24px var(--accent-glow));
-            margin-bottom: 16px;
-        }
-
-        h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 8px;
-        }
-
-        .tagline {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-        }
-
-        .url-bar-container {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 4px;
+        .browser-chrome {
+            background: #f1f3f4;
+            border-bottom: 1px solid #dadce0;
+            padding: 8px 12px;
             display: flex;
             align-items: center;
             gap: 8px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
-        }
-
-        .url-bar-container:focus-within {
-            border-color: var(--accent);
-            box-shadow: 0 8px 32px var(--accent-glow);
-        }
-
-        .url-icon {
-            width: 20px;
-            height: 20px;
-            margin-left: 12px;
-            opacity: 0.6;
             flex-shrink: 0;
+        }
+
+        .browser-button {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #5f6368;
+            transition: background 0.2s;
+        }
+
+        .browser-button:hover {
+            background: rgba(0, 0, 0, 0.08);
+        }
+
+        .browser-button:active {
+            background: rgba(0, 0, 0, 0.12);
+        }
+
+        .browser-button svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .browser-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .url-bar-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: #fff;
+            border: 1px solid #dadce0;
+            border-radius: 24px;
+            padding: 0 16px;
+            margin: 0 8px;
+            height: 40px;
+            transition: box-shadow 0.2s;
+        }
+
+        .url-bar-wrapper:focus-within {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-color: #4285f4;
+        }
+
+        .security-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 12px;
+            flex-shrink: 0;
+            color: #5f6368;
         }
 
         .url-input {
             flex: 1;
-            background: transparent;
             border: none;
             outline: none;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.95rem;
-            color: var(--text-primary);
-            padding: 14px 8px;
+            font-size: 14px;
+            color: #202124;
+            font-family: 'Inter', sans-serif;
+            background: transparent;
         }
 
         .url-input::placeholder {
-            color: var(--text-muted);
+            color: #80868b;
         }
 
-        .go-button {
-            background: linear-gradient(135deg, var(--accent) 0%, #00b894 100%);
+        .page-action {
+            width: 20px;
+            height: 20px;
             border: none;
-            border-radius: 12px;
-            padding: 14px 28px;
-            color: var(--bg-primary);
-            font-weight: 600;
-            font-size: 0.9rem;
+            background: transparent;
             cursor: pointer;
-            transition: all 0.2s ease;
+            color: #5f6368;
+            margin-left: 8px;
+            padding: 0;
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-right: 4px;
-            box-shadow: 0 4px 20px var(--accent-glow);
-        }
-
-        .go-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 28px rgba(0, 212, 170, 0.25);
-        }
-
-        .go-button:active {
-            transform: translateY(0);
-        }
-
-        .generate-link-button {
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 14px 28px;
-            color: var(--text-primary);
-            font-weight: 500;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 16px;
-            width: 100%;
             justify-content: center;
         }
 
+        .page-action:hover {
+            color: #202124;
+        }
+
+        .browser-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+        }
+
+        .new-tab-content {
+            text-align: center;
+            max-width: 600px;
+        }
+
+        .new-tab-logo {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 24px;
+            opacity: 0.6;
+        }
+
+        .new-tab-title {
+            font-size: 22px;
+            font-weight: 400;
+            color: #202124;
+            margin-bottom: 8px;
+        }
+
+        .new-tab-subtitle {
+            font-size: 14px;
+            color: #5f6368;
+            margin-bottom: 32px;
+        }
+
+        .search-box {
+            width: 100%;
+            max-width: 584px;
+            margin: 0 auto 24px;
+            position: relative;
+        }
+
+        .search-input-wrapper {
+            display: flex;
+            align-items: center;
+            background: #fff;
+            border: 1px solid #dfe1e5;
+            border-radius: 24px;
+            padding: 0 16px;
+            height: 44px;
+            box-shadow: 0 2px 5px 1px rgba(64, 60, 67, 0.16);
+            transition: box-shadow 0.2s;
+        }
+
+        .search-input-wrapper:hover {
+            box-shadow: 0 2px 8px 1px rgba(64, 60, 67, 0.24);
+        }
+
+        .search-input-wrapper:focus-within {
+            box-shadow: 0 2px 8px 1px rgba(64, 60, 67, 0.24);
+            border-color: transparent;
+        }
+
+        .search-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            color: #9aa0a6;
+            flex-shrink: 0;
+        }
+
+        .search-input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 16px;
+            color: #202124;
+            font-family: 'Inter', sans-serif;
+            background: transparent;
+        }
+
+        .search-input::placeholder {
+            color: #9aa0a6;
+        }
+
+        .search-buttons {
+            display: flex;
+            gap: 11px;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+
+        .search-button {
+            background: #f8f9fa;
+            border: 1px solid #f8f9fa;
+            border-radius: 4px;
+            padding: 11px 16px;
+            font-size: 14px;
+            color: #3c4043;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .search-button:hover {
+            box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+            background: #f8f9fa;
+            border-color: #dadce0;
+        }
+
+        .generate-link-section {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #e8eaed;
+            width: 100%;
+            max-width: 584px;
+        }
+
+        .generate-link-button {
+            background: #1a73e8;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 24px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-family: 'Inter', sans-serif;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .generate-link-button:hover {
-            background: var(--bg-elevated);
-            border-color: var(--accent);
+            background: #1765cc;
+        }
+
+        .generate-link-button:active {
+            background: #1557b0;
+        }
+
+        .generate-link-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         .link-result {
             display: none;
-            margin-top: 20px;
-            padding: 20px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            margin-top: 16px;
+            padding: 16px;
+            background: #f8f9fa;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            width: 100%;
         }
 
         .link-result.active {
@@ -191,11 +303,10 @@
         }
 
         .link-result-label {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 12px;
+            font-size: 12px;
+            color: #5f6368;
+            margin-bottom: 8px;
+            font-weight: 500;
         }
 
         .link-display {
@@ -206,172 +317,226 @@
 
         .link-url {
             flex: 1;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            color: var(--accent);
-            background: var(--bg-tertiary);
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #1a73e8;
+            background: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #dadce0;
             word-break: break-all;
         }
 
         .copy-button {
-            background: var(--accent);
-            border: none;
-            border-radius: 8px;
-            padding: 12px 20px;
-            color: var(--bg-primary);
-            font-weight: 600;
-            font-size: 0.85rem;
+            background: #fff;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            padding: 8px 16px;
+            color: #3c4043;
+            font-size: 13px;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.2s;
             white-space: nowrap;
+            font-family: 'Inter', sans-serif;
         }
 
         .copy-button:hover {
-            background: #00b894;
+            background: #f8f9fa;
+            border-color: #c4c7c5;
         }
 
         .copy-button.copied {
-            background: #00b894;
+            background: #e8f0fe;
+            border-color: #1a73e8;
+            color: #1a73e8;
         }
 
         .error-message {
             display: none;
             margin-top: 16px;
             padding: 12px 16px;
-            background: rgba(255, 107, 107, 0.1);
-            border: 1px solid rgba(255, 107, 107, 0.3);
-            border-radius: 10px;
-            color: var(--danger);
-            font-size: 0.875rem;
+            background: #fce8e6;
+            border: 1px solid #f28b82;
+            border-radius: 4px;
+            color: #c5221f;
+            font-size: 13px;
             text-align: center;
+        }
+
+        .error-message.active {
+            display: block;
         }
 
         .loading {
             display: none;
             text-align: center;
-            margin-top: 20px;
-            color: var(--text-secondary);
-            font-size: 0.875rem;
+            margin-top: 16px;
+            color: #5f6368;
+            font-size: 13px;
         }
 
         .loading.active {
             display: block;
         }
 
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e8eaed;
+            border-top-color: #1a73e8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
         }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
 
-        .spinner {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 2px solid var(--text-muted);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
-            margin-right: 8px;
-        }
-
-        @media (max-width: 600px) {
-            .browser-container {
-                padding: 0 16px;
+        @media (max-width: 768px) {
+            .browser-window {
+                height: 100vh;
+                max-height: none;
+                border-radius: 0;
             }
 
-            h1 {
-                font-size: 1.5rem;
+            .browser-content {
+                padding: 24px 16px;
             }
 
-            .url-bar-container {
+            .search-input-wrapper {
+                height: 40px;
+            }
+
+            .search-buttons {
                 flex-direction: column;
-                padding: 12px;
+                align-items: center;
             }
 
-            .url-icon {
-                margin-left: 0;
-            }
-
-            .go-button {
+            .search-button {
                 width: 100%;
-                justify-content: center;
+                max-width: 200px;
             }
         }
     </style>
 </head>
 <body>
-    <div class="bg-gradient"></div>
-    
-    <div class="browser-container">
-        <div class="logo-section">
-            <img src="logo.png" alt="Rammerhead" class="logo" />
-            <h1>Rammerhead</h1>
-            <p class="tagline">Fast, secure web proxy</p>
-        </div>
-
-        <div class="url-bar-container">
-            <svg class="url-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-            </svg>
-            <input 
-                type="text" 
-                id="url-input" 
-                class="url-input" 
-                placeholder="Enter a URL to browse..."
-                autocomplete="off"
-                autofocus
-            />
-            <button class="go-button" id="go-button">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <path d="M5 12h14M12 5l7 7-7 7"/>
+    <div class="browser-window">
+        <div class="browser-chrome">
+            <button class="browser-button" id="back-button" disabled>
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
                 </svg>
-                Go
             </button>
-        </div>
-
-        <button class="generate-link-button" id="generate-link-button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-            </svg>
-            Generate never-expire link
-        </button>
-
-        <div class="link-result" id="link-result">
-            <div class="link-result-label">Never-expire link:</div>
-            <div class="link-display">
-                <div class="link-url" id="link-url"></div>
-                <button class="copy-button" id="copy-button">Copy</button>
+            <button class="browser-button" id="forward-button" disabled>
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                </svg>
+            </button>
+            <button class="browser-button" id="refresh-button">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                </svg>
+            </button>
+            <div class="url-bar-wrapper">
+                <svg class="security-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                </svg>
+                <input 
+                    type="text" 
+                    id="url-input" 
+                    class="url-input" 
+                    placeholder="Search Google or type a URL"
+                    autocomplete="off"
+                    autofocus
+                />
+                <button class="page-action" id="clear-button" style="display: none;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
             </div>
         </div>
 
-        <div class="error-message" id="error-message"></div>
-        <div class="loading" id="loading">
-            <span class="spinner"></span>
-            Creating session and loading...
+        <div class="browser-content">
+            <div class="new-tab-content">
+                <div class="new-tab-logo">
+                    <svg viewBox="0 0 272 92" fill="#4285f4">
+                        <path d="M115.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18C71.25 34.32 81.24 25 93.5 25s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44S80.99 39.2 80.99 47.18c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>
+                        <path d="M163.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18c0-12.85 9.99-22.18 22.25-22.18s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44s-12.51 5.46-12.51 13.44c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>
+                        <path d="M209.75 26.34v39.82c0 16.38-9.66 23.07-21.08 23.07-10.75 0-17.22-7.19-19.66-13.07l8.48-3.53c1.51 3.61 5.21 7.87 11.18 7.87 7.31 0 11.84-4.51 11.84-13v-3.19h-.34c-2.18 2.69-6.38 5.04-11.68 5.04-11.09 0-21.25-9.66-21.25-22.09 0-12.52 10.16-22.26 21.25-22.26 5.29 0 9.49 2.35 11.68 4.96h.34v-3.61h9.25zm-8.56 20.92c0 7.81-5.21 13.52-11.68 13.52-6.68 0-12.51-5.71-12.51-13.52 0-7.73 5.83-13.36 12.51-13.36 6.47 0 11.68 5.63 11.68 13.36z"/>
+                        <path d="M225 3v65h-9.5V3h9.5z"/>
+                    </svg>
+                </div>
+                <div class="new-tab-title">Rammerhead Proxy</div>
+                <div class="new-tab-subtitle">Fast, secure web browsing</div>
+
+                <div class="search-box">
+                    <div class="search-input-wrapper">
+                        <svg class="search-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                        </svg>
+                        <input 
+                            type="text" 
+                            id="search-input" 
+                            class="search-input" 
+                            placeholder="Search Google or type a URL"
+                            autocomplete="off"
+                        />
+            </div>
+                    <div class="search-buttons">
+                        <button class="search-button" id="go-button">Google Search</button>
+                        <button class="search-button" id="lucky-button">I'm Feeling Lucky</button>
+            </div>
+        </div>
+
+                <div class="generate-link-section">
+                    <button class="generate-link-button" id="generate-link-button">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+                        </svg>
+                        Generate never-expire link
+                    </button>
+
+                    <div class="link-result" id="link-result">
+                        <div class="link-result-label">Never-expire link:</div>
+                        <div class="link-display">
+                            <div class="link-url" id="link-url"></div>
+                            <button class="copy-button" id="copy-button">Copy</button>
+            </div>
+        </div>
+
+                    <div class="error-message" id="error-message"></div>
+                    <div class="loading" id="loading">
+                        <span class="spinner"></span>
+                        Creating session...
+            </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         (function() {
+            // Redirect to correct domain if needed
+            const targetHost = '192.168.1.198';
+            const targetPort = '8080';
+            const currentHost = window.location.hostname;
+            const currentPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+            
+            if (currentHost !== targetHost || currentPort !== targetPort) {
+                const currentPath = window.location.pathname;
+                const redirectUrl = `http://${targetHost}:${targetPort}${currentPath}${window.location.search}${window.location.hash}`;
+                window.location.replace(redirectUrl);
+                return; // Stop execution until redirect completes
+            }
+            
             // Detect base path from current location
             function getBasePath() {
                 const path = window.location.pathname;
-                // If we're at /rammerhead/ or /rammerhead, use /rammerhead as base
                 if (path.startsWith('/rammerhead')) {
                     return '/rammerhead';
                 }
@@ -381,37 +546,67 @@
             const basePath = getBasePath();
             
             const urlInput = document.getElementById('url-input');
+            const searchInput = document.getElementById('search-input');
             const goButton = document.getElementById('go-button');
+            const luckyButton = document.getElementById('lucky-button');
             const generateLinkButton = document.getElementById('generate-link-button');
             const errorMessage = document.getElementById('error-message');
             const loading = document.getElementById('loading');
             const linkResult = document.getElementById('link-result');
             const linkUrl = document.getElementById('link-url');
             const copyButton = document.getElementById('copy-button');
+            const clearButton = document.getElementById('clear-button');
+            const backButton = document.getElementById('back-button');
+            const forwardButton = document.getElementById('forward-button');
+            const refreshButton = document.getElementById('refresh-button');
+
+            // Sync inputs
+            function syncInputs() {
+                const value = urlInput.value || searchInput.value;
+                urlInput.value = value;
+                searchInput.value = value;
+                clearButton.style.display = value ? 'block' : 'none';
+            }
+
+            urlInput.addEventListener('input', syncInputs);
+            searchInput.addEventListener('input', syncInputs);
+
+            clearButton.addEventListener('click', () => {
+                urlInput.value = '';
+                searchInput.value = '';
+                clearButton.style.display = 'none';
+                urlInput.focus();
+            });
 
             function showError(message) {
                 errorMessage.textContent = message;
-                errorMessage.style.display = 'block';
+                errorMessage.classList.add('active');
                 loading.classList.remove('active');
             }
 
             function hideError() {
-                errorMessage.style.display = 'none';
+                errorMessage.classList.remove('active');
             }
 
             function normalizeUrl(url) {
                 url = url.trim();
-                if (!url.match(/^https?:\/\//i)) {
-                    url = 'https://' + url;
+                // Check if it looks like a URL
+                if (url.match(/^https?:\/\//i) || url.match(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}/)) {
+                    if (!url.match(/^https?:\/\//i)) {
+                        url = 'https://' + url;
+                    }
+                } else {
+                    // Treat as search query
+                    url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
                 }
                 return url;
             }
 
             function navigate() {
-                let url = urlInput.value.trim();
+                let url = (urlInput.value || searchInput.value).trim();
                 
                 if (!url) {
-                    showError('Please enter a URL');
+                    showError('Please enter a URL or search query');
                     return;
                 }
 
@@ -419,20 +614,47 @@
                 hideError();
                 loading.classList.add('active');
                 goButton.disabled = true;
+                luckyButton.disabled = true;
 
                 // Open in new tab using the auto-session route with base path
                 const proxiedUrl = basePath + '/?url=' + encodeURIComponent(url);
                 window.open(proxiedUrl, '_blank');
                 
-                // Reset UI after a short delay
                 setTimeout(() => {
                     loading.classList.remove('active');
                     goButton.disabled = false;
+                    luckyButton.disabled = false;
+                }, 500);
+            }
+
+            function navigateLucky() {
+                let url = (urlInput.value || searchInput.value).trim();
+                
+                if (!url) {
+                    showError('Please enter a search query');
+                    return;
+                }
+
+                // I'm Feeling Lucky goes directly to first result
+                url = 'https://www.google.com/search?q=' + encodeURIComponent(url) + '&btnI=1';
+                url = normalizeUrl(url);
+                hideError();
+                loading.classList.add('active');
+                goButton.disabled = true;
+                luckyButton.disabled = true;
+
+                const proxiedUrl = basePath + '/?url=' + encodeURIComponent(url);
+                window.open(proxiedUrl, '_blank');
+                
+                setTimeout(() => {
+                    loading.classList.remove('active');
+                    goButton.disabled = false;
+                    luckyButton.disabled = false;
                 }, 500);
             }
 
             function generateLink() {
-                let url = urlInput.value.trim();
+                let url = (urlInput.value || searchInput.value).trim();
                 
                 if (!url) {
                     showError('Please enter a URL first');
@@ -465,7 +687,6 @@
                         loading.classList.remove('active');
                         generateLinkButton.disabled = false;
                         
-                        // Scroll to result
                         linkResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     })
                     .catch(error => {
@@ -485,7 +706,6 @@
                         copyButton.classList.remove('copied');
                     }, 2000);
                 }).catch(err => {
-                    // Fallback for older browsers
                     const textarea = document.createElement('textarea');
                     textarea.value = url;
                     textarea.style.position = 'fixed';
@@ -507,18 +727,28 @@
                 });
             }
 
+            // Browser buttons
+            refreshButton.addEventListener('click', () => {
+                window.location.reload();
+            });
+
+            // Event listeners
             goButton.addEventListener('click', navigate);
+            luckyButton.addEventListener('click', navigateLucky);
             generateLinkButton.addEventListener('click', generateLink);
             copyButton.addEventListener('click', copyLink);
             
-            urlInput.addEventListener('keydown', function(e) {
+            function handleEnter(e) {
                 if (e.key === 'Enter') {
                     navigate();
                 }
-            });
+            }
 
-            // Focus input on load
-            urlInput.focus();
+            urlInput.addEventListener('keydown', handleEnter);
+            searchInput.addEventListener('keydown', handleEnter);
+
+            // Focus search input on load
+            searchInput.focus();
         })();
     </script>
 </body>

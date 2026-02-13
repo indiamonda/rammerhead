@@ -14,7 +14,8 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         if (config.restrictSessionToIP) {
             const sessionId = getSessionId(req.url);
             const session = sessionId && sessionStore.get(sessionId);
-            if (session && session.data.restrictIP && session.data.restrictIP !== config.getIP(req)) {
+            // Never-expiring sessions bypass IP restriction
+            if (session && !session.data.neverExpire && session.data.restrictIP && session.data.restrictIP !== config.getIP(req)) {
                 res.writeHead(403);
                 res.end('Sessions must come from the same IP');
                 return true;

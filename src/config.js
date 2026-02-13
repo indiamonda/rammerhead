@@ -9,7 +9,7 @@ const enableWorkers = os.cpus().length !== 1;
 module.exports = {
     //// HOSTING CONFIGURATION ////
 
-    bindingAddress: '127.0.0.1',
+    bindingAddress: '0.0.0.0',
     port: 8080,
     crossDomainPort: 8081,
     publicDir: path.join(__dirname, '../public'), // set to null to disable
@@ -25,11 +25,17 @@ module.exports = {
     // this function's return object will determine how the client url rewriting will work.
     // set them differently from bindingAddress and port if rammerhead is being served
     // from a reverse proxy.
-    getServerInfo: () => ({ hostname: 'localhost', port: 8080, crossDomainPort: 8081, protocol: 'http:' }),
-    // example of non-hard-coding the hostname header
-    // getServerInfo: (req) => {
-    //     return { hostname: new URL('http://' + req.headers.host).hostname, port: 443, crossDomainPort: 8443, protocol: 'https: };
-    // },
+    getServerInfo: (req) => {
+        const hostHeader = req?.headers?.host || 'localhost:8080';
+        const [hostname, port] = hostHeader.split(':');
+        const protocol = req?.socket?.encrypted ? 'https:' : 'http:';
+        return {
+            hostname: hostname || 'localhost',
+            port: parseInt(port || (protocol === 'https:' ? 443 : 80)),
+            crossDomainPort: parseInt(port || (protocol === 'https:' ? 443 : 80)),
+            protocol
+        };
+    },
 
     // enforce a password for creating new sessions. set to null to disable
     password: null,
