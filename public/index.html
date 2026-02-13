@@ -440,7 +440,7 @@
                     type="text" 
                     id="url-input" 
                     class="url-input" 
-                    placeholder="Search Google or type a URL"
+                    placeholder="Search Bing or type a URL"
                     autocomplete="off"
                     autofocus
                 />
@@ -454,14 +454,7 @@
 
         <div class="browser-content">
             <div class="new-tab-content">
-                <div class="new-tab-logo">
-                    <svg viewBox="0 0 272 92" fill="#4285f4">
-                        <path d="M115.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18C71.25 34.32 81.24 25 93.5 25s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44S80.99 39.2 80.99 47.18c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>
-                        <path d="M163.75 47.18c0 12.77-9.99 22.18-22.25 22.18s-22.25-9.41-22.25-22.18c0-12.85 9.99-22.18 22.25-22.18s22.25 9.32 22.25 22.18zm-9.74 0c0-7.98-5.79-13.44-12.51-13.44s-12.51 5.46-12.51 13.44c0 7.9 5.79 13.44 12.51 13.44s12.51-5.55 12.51-13.44z"/>
-                        <path d="M209.75 26.34v39.82c0 16.38-9.66 23.07-21.08 23.07-10.75 0-17.22-7.19-19.66-13.07l8.48-3.53c1.51 3.61 5.21 7.87 11.18 7.87 7.31 0 11.84-4.51 11.84-13v-3.19h-.34c-2.18 2.69-6.38 5.04-11.68 5.04-11.09 0-21.25-9.66-21.25-22.09 0-12.52 10.16-22.26 21.25-22.26 5.29 0 9.49 2.35 11.68 4.96h.34v-3.61h9.25zm-8.56 20.92c0 7.81-5.21 13.52-11.68 13.52-6.68 0-12.51-5.71-12.51-13.52 0-7.73 5.83-13.36 12.51-13.36 6.47 0 11.68 5.63 11.68 13.36z"/>
-                        <path d="M225 3v65h-9.5V3h9.5z"/>
-                    </svg>
-                </div>
+                <div class="new-tab-logo" style="font-size: 72px; font-weight: 300; color: #008373; letter-spacing: -2px;">Bing</div>
                 <div class="new-tab-title">Rammerhead Proxy</div>
                 <div class="new-tab-subtitle">Fast, secure web browsing</div>
 
@@ -474,12 +467,12 @@
                             type="text" 
                             id="search-input" 
                             class="search-input" 
-                            placeholder="Search Google or type a URL"
+                            placeholder="Search Bing or type a URL"
                             autocomplete="off"
                         />
             </div>
                     <div class="search-buttons">
-                        <button class="search-button" id="go-button">Google Search</button>
+                        <button class="search-button" id="go-button">Bing Search</button>
                         <button class="search-button" id="lucky-button">I'm Feeling Lucky</button>
             </div>
         </div>
@@ -551,16 +544,19 @@
             const forwardButton = document.getElementById('forward-button');
             const refreshButton = document.getElementById('refresh-button');
 
-            // Sync inputs
-            function syncInputs() {
-                const value = urlInput.value || searchInput.value;
-                urlInput.value = value;
-                searchInput.value = value;
+            // Sync inputs - only sync from the active input to the other
+            let syncing = false;
+            function syncInputs(source, target) {
+                if (syncing) return;
+                syncing = true;
+                const value = source.value;
+                target.value = value;
                 clearButton.style.display = value ? 'block' : 'none';
+                syncing = false;
             }
 
-            urlInput.addEventListener('input', syncInputs);
-            searchInput.addEventListener('input', syncInputs);
+            urlInput.addEventListener('input', () => syncInputs(urlInput, searchInput));
+            searchInput.addEventListener('input', () => syncInputs(searchInput, urlInput));
 
             clearButton.addEventListener('click', () => {
                 urlInput.value = '';
@@ -587,8 +583,8 @@
                         url = 'https://' + url;
                     }
                 } else {
-                    // Treat as search query
-                    url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+                    // Treat as search query - use Bing
+                    url = 'https://www.bing.com/search?q=' + encodeURIComponent(url);
                 }
                 return url;
             }
@@ -626,9 +622,8 @@
                     return;
                 }
 
-                // I'm Feeling Lucky goes directly to first result
-                url = 'https://www.google.com/search?q=' + encodeURIComponent(url) + '&btnI=1';
-                url = normalizeUrl(url);
+                // I'm Feeling Lucky - Bing doesn't have this, so just do regular search
+                url = 'https://www.bing.com/search?q=' + encodeURIComponent(url);
                 hideError();
                 loading.classList.add('active');
                 goButton.disabled = true;
