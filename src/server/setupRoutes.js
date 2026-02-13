@@ -15,6 +15,52 @@ const mime = require('mime');
  * @param {import('../classes/RammerheadLogging')} logger
  */
 module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
+    // Serve /styles.css (new path) directly to bypass caching - register FIRST
+    const stylePath = path.join(config.publicDir, 'style.css');
+    logger.info(`(setupRoutes) Registering /styles.css handler, path: ${stylePath}, exists: ${fs.existsSync(stylePath)}`);
+    
+    const handleStylesCss = (req, res) => {
+        // Force fresh read every time - no caching
+        try {
+            logger.info(`(handleStylesCss) HANDLER CALLED for ${req.url}`);
+            if (!config.publicDir) {
+                logger.error(`(handleStylesCss) config.publicDir is null`);
+                res.writeHead(404);
+                res.end('Public dir not configured');
+                return;
+            }
+            const currentStylePath = path.join(config.publicDir, 'style.css');
+            if (!fs.existsSync(currentStylePath)) {
+                logger.error(`(handleStylesCss) File not found: ${currentStylePath}`);
+                res.writeHead(404);
+                res.end(`Not Found: ${currentStylePath}`);
+                return;
+            }
+            // Read fresh from disk every time
+            const content = fs.readFileSync(currentStylePath);
+            const firstChars = content.toString().substring(0, 50);
+            logger.info(`(handleStylesCss) Serving file: ${content.length} bytes, starts with: ${firstChars}`);
+            res.writeHead(200, { 
+                'Content-Type': 'text/css',
+                'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'X-Custom-Handler': 'true',
+                'X-File-Size': content.length.toString()
+            });
+            res.end(content);
+        } catch (error) {
+            logger.error(`(handleStylesCss) Error: ${error.message}`);
+            logger.error(`(handleStylesCss) Stack: ${error.stack}`);
+            res.writeHead(500);
+            res.end('Internal Server Error');
+        }
+    };
+    
+    // Register the handler for the new path
+    proxyServer.GET('/styles.css', handleStylesCss);
+    logger.info(`(setupRoutes) Successfully registered /styles.css handler`);
+    
     const isNotAuthorized = (req, res) => {
         if (!config.password) return;
         const { pwd } = new URLPath(req.url).getParams();

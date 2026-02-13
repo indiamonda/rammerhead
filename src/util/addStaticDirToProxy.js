@@ -30,6 +30,7 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
     if (!rootPath.endsWith('/')) rootPath = rootPath + '/';
     if (!rootPath.startsWith('/')) rootPath = '/' + rootPath;
 
+    // Re-read directory to pick up new files (like styles.css)
     const files = fs.readdirSync(staticDir);
 
     files.map((file) => {
@@ -39,6 +40,11 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
         }
 
         if (shouldIgnoreFile(file, staticDir)) {
+            return;
+        }
+
+        // Skip style.css - it's handled by a custom route to bypass caching
+        if (file === 'style.css') {
             return;
         }
 
@@ -54,8 +60,14 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
         // Use a handler function to read files on-demand instead of caching
         const handler = (req, res) => {
             try {
+                // Always read fresh from disk
+                if (!fs.existsSync(pathToFile)) {
+                    res.writeHead(404);
+                    res.end('Not Found');
+                    return;
+                }
                 const content = fs.readFileSync(pathToFile);
-                const contentType = mime.getType(file);
+                const contentType = mime.getType(file) || 'application/octet-stream';
                 // Add cache-control headers to prevent caching during development
                 res.writeHead(200, { 
                     'Content-Type': contentType,
@@ -65,8 +77,9 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
                 });
                 res.end(content);
             } catch (error) {
-                res.writeHead(404);
-                res.end('Not Found');
+                console.error(`Error serving ${pathToFile}:`, error);
+                res.writeHead(500);
+                res.end('Internal Server Error');
             }
         };
 

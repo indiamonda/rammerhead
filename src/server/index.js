@@ -46,10 +46,10 @@ const sessionStore = new RammerheadSessionFileCache(fileCacheOptions);
 sessionStore.attachToProxy(proxyServer);
 
 setupPipeline(proxyServer, sessionStore);
-// Register static files FIRST (they won't conflict with our custom routes)
-if (config.publicDir) addStaticDirToProxy(proxyServer, config.publicDir);
-// Register routes AFTER static files, but they'll take precedence for matching routes
+// Register routes FIRST so they take precedence
 setupRoutes(proxyServer, sessionStore, logger);
+// Register static files AFTER routes (they won't conflict with our custom routes)
+if (config.publicDir) addStaticDirToProxy(proxyServer, config.publicDir);
 
 // nicely close proxy server and save sessions to store before we exit
 exitHook(() => {
