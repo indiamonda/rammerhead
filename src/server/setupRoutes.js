@@ -107,7 +107,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         return '';
     };
     
-    // Auto-create session route - handle ?url= parameter and serve public/index.html
+    // Route handler - serve public/index.html for root paths
     const handleRoot = (req, res) => {
         try {
             const pathname = req.url.split('?')[0];
@@ -116,32 +116,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 return; // Let other handlers process this
             }
             
-            const { url: targetUrl } = new URLPath(req.url).getParams();
-            const basePath = getBasePath(req);
-            
-            // If URL parameter is provided, create session and redirect
-            if (targetUrl) {
-                logger.debug(`(handleRoot) Creating session for URL: ${targetUrl}`);
-                const id = generateId();
-                const session = new RammerheadSession();
-                session.data.restrictIP = config.getIP(req);
-                
-                // Enable shuffling by default for better compatibility
-                session.shuffleDict = StrShuffler.generateDictionary();
-                
-                sessionStore.addSerializedSession(id, session.serializeSession());
-                
-                // Redirect to proxied URL with base path
-                const shuffler = new StrShuffler(session.shuffleDict);
-                const shuffledUrl = shuffler.shuffle(targetUrl);
-                const redirectUrl = `${basePath}/${id}/${shuffledUrl}`;
-                logger.debug(`(handleRoot) Redirecting to: ${redirectUrl}`);
-                res.writeHead(302, { Location: redirectUrl });
-                res.end();
-                return;
-            }
-            
-            // Otherwise, serve public/index.html (original Rammerhead interface)
+            // Serve public/index.html (browser interface)
             if (config.publicDir) {
                 const indexPath = path.join(config.publicDir, 'index.html');
                 if (fs.existsSync(indexPath)) {
@@ -157,10 +132,92 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         }
     };
     
+    // Route to ensure/create a session (called by client when needed)
+    const handleEnsureSession = (req, res) => {
+        try {
+            const { id } = new URLPath(req.url).getParams();
+            const basePath = getBasePath(req);
+            
+            if (!id) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Session ID required' }));
+                return;
+            }
+            
+            // Check if session exists, create if it doesn't
+            if (!sessionStore.has(id)) {
+                logger.debug(`(ensureSession) Creating session: ${id}`);
+                const session = new RammerheadSession();
+                session.data.restrictIP = null; // Don't restrict IP for device sessions
+                session.shuffleDict = StrShuffler.generateDictionary();
+                sessionStore.addSerializedSession(id, session.serializeSession());
+            }
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, sessionId: id }));
+        } catch (error) {
+            logger.error(`(ensureSession) Error: ${error.message}`);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+    };
+    
+    // Route to get proxied URL with proper shuffling
+    const handleGetProxiedUrl = (req, res) => {
+        try {
+            const { id, url: targetUrl } = new URLPath(req.url).getParams();
+            const basePath = getBasePath(req);
+            
+            if (!id || !targetUrl) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Session ID and URL required' }));
+                return;
+            }
+            
+            // Ensure session exists
+            if (!sessionStore.has(id)) {
+                const session = new RammerheadSession();
+                session.data.restrictIP = null;
+                session.shuffleDict = StrShuffler.generateDictionary();
+                sessionStore.addSerializedSession(id, session.serializeSession());
+            }
+            
+            // Get session and shuffle URL
+            const session = sessionStore.get(id);
+            if (!session.shuffleDict) {
+                session.shuffleDict = StrShuffler.generateDictionary();
+            }
+            const shuffler = new StrShuffler(session.shuffleDict);
+            const shuffledUrl = shuffler.shuffle(targetUrl);
+            
+            const serverInfo = config.getServerInfo(req);
+            const protocol = serverInfo.protocol || 'http:';
+            const hostname = serverInfo.hostname || 'localhost';
+            const port = serverInfo.port || 8080;
+            const portSuffix = (protocol === 'https:' && port === 443) || (protocol === 'http:' && port === 80) ? '' : `:${port}`;
+            const proxiedUrl = `${protocol}//${hostname}${portSuffix}${basePath}/${id}/${shuffledUrl}`;
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ proxiedUrl, sessionId: id }));
+        } catch (error) {
+            logger.error(`(getProxiedUrl) Error: ${error.message}`);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+    };
+    
     // Register routes - these will handle / and serve index.html
     proxyServer.GET('/', handleRoot);
     proxyServer.GET('/rammerhead', handleRoot);
     proxyServer.GET('/rammerhead/', handleRoot);
+    
+    // Route to ensure/create session
+    proxyServer.GET('/ensuresession', handleEnsureSession);
+    proxyServer.GET('/rammerhead/ensuresession', handleEnsureSession);
+    
+    // Route to get proxied URL
+    proxyServer.GET('/getproxiedurl', handleGetProxiedUrl);
+    proxyServer.GET('/rammerhead/getproxiedurl', handleGetProxiedUrl);
     
     // Generate never-expire link route - handle both /generatelink and /rammerhead/generatelink
     const handleGenerateLink = (req, res) => {

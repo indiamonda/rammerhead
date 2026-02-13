@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rammerhead</title>
-    <link rel="icon" type="image/png" href="/rammerhead/favicon.png" />
+    <title id="page-title">Rammerhead</title>
+    <link rel="icon" type="image/png" id="favicon" href="/rammerhead/favicon.png" />
     <link rel="manifest" href="/rammerhead/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,6 +25,8 @@
             --color-bg-tertiary: #f8f9fa;
             --color-bg-hover: rgba(0, 0, 0, 0.08);
             --color-bg-active: rgba(0, 0, 0, 0.12);
+            --color-bg-tab-active: #fff;
+            --color-bg-tab-hover: rgba(0, 0, 0, 0.05);
             --color-border: #dadce0;
             --color-border-light: #dfe1e5;
             --color-border-hover: #c4c7c5;
@@ -36,6 +38,7 @@
             --color-error-bg: #fce8e6;
             --color-error-border: #f28b82;
             --color-error-text: #c5221f;
+            --color-success: #137333;
             --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             --font-family-mono: 'Courier New', monospace;
             --transition-fast: 0.2s;
@@ -68,11 +71,117 @@
             width: 100%;
             height: 100vh;
             background: var(--color-bg-primary);
-            border-radius: 0;
-            box-shadow: none;
-            overflow: hidden;
             display: flex;
             flex-direction: column;
+        }
+
+        /* ============================================
+           Tab Bar
+           ============================================ */
+        .tab-bar {
+            background: var(--color-bg-secondary);
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            align-items: flex-end;
+            padding: 0 8px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            flex-shrink: 0;
+            min-height: 36px;
+        }
+
+        .tab-bar::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .tab-bar::-webkit-scrollbar-thumb {
+            background: var(--color-border);
+            border-radius: 2px;
+        }
+
+        .tab {
+            position: relative;
+            background: var(--color-bg-tertiary);
+            border: 1px solid var(--color-border);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            padding: 8px 32px 8px 12px;
+            margin-right: 2px;
+            cursor: pointer;
+            user-select: none;
+            min-width: 120px;
+            max-width: 240px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background var(--transition-fast);
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .tab:hover {
+            background: var(--color-bg-tab-hover);
+        }
+
+        .tab.active {
+            background: var(--color-bg-tab-active);
+            z-index: 1;
+            border-bottom: 1px solid var(--color-bg-tab-active);
+            margin-bottom: -1px;
+        }
+
+        .tab-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 13px;
+            color: var(--color-text-primary);
+        }
+
+        .tab-close {
+            position: absolute;
+            right: 8px;
+            width: 18px;
+            height: 18px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.6;
+            transition: all var(--transition-fast);
+        }
+
+        .tab-close:hover {
+            opacity: 1;
+            background: var(--color-bg-hover);
+        }
+
+        .tab-close svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .new-tab-button {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 4px 0;
+            color: var(--color-text-muted);
+            transition: all var(--transition-fast);
+        }
+
+        .new-tab-button:hover {
+            background: var(--color-bg-hover);
+            color: var(--color-text-primary);
         }
 
         /* ============================================
@@ -183,25 +292,61 @@
            ============================================ */
         .browser-content {
             flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .tab-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: none;
             overflow-y: auto;
+            background: var(--color-bg-primary);
+        }
+
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tab-content iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .new-tab-content {
             padding: 40px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            background: var(--color-bg-primary);
-        }
-
-        .new-tab-content {
             text-align: center;
             max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .new-tab-logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .bing-logo {
+            width: 72px;
+            height: 72px;
         }
 
         .new-tab-logo {
-            width: 72px;
-            height: 72px;
-            margin: 0 auto 24px;
-            opacity: 0.6;
+            font-size: 72px;
+            font-weight: 300;
+            color: #008373;
+            letter-spacing: -2px;
         }
 
         .new-tab-title {
@@ -403,6 +548,136 @@
         }
 
         /* ============================================
+           Settings & Sessions Pages
+           ============================================ */
+        .settings-page, .sessions-page {
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            margin-bottom: 32px;
+        }
+
+        .page-header h1 {
+            font-size: 28px;
+            font-weight: 400;
+            color: var(--color-text-primary);
+            margin-bottom: 8px;
+        }
+
+        .page-header p {
+            font-size: 14px;
+            color: var(--color-text-muted);
+        }
+
+        .settings-section, .sessions-section {
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .settings-section h2, .sessions-section h2 {
+            font-size: 18px;
+            font-weight: 500;
+            color: var(--color-text-primary);
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--color-text-primary);
+            margin-bottom: 8px;
+        }
+
+        .form-group input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: var(--font-family);
+            color: var(--color-text-primary);
+        }
+
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: var(--font-family);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 2px var(--color-primary-light);
+        }
+
+        .button {
+            background: var(--color-primary);
+            border: none;
+            border-radius: 4px;
+            padding: 10px 24px;
+            color: var(--color-white);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background var(--transition-fast);
+            font-family: var(--font-family);
+        }
+
+        .button:hover {
+            background: var(--color-primary-hover);
+        }
+
+        .button-secondary {
+            background: var(--color-bg-tertiary);
+            border: 1px solid var(--color-border);
+            color: var(--color-text-primary);
+        }
+
+        .button-secondary:hover {
+            background: var(--color-bg-hover);
+        }
+
+        .session-id-display {
+            background: var(--color-bg-tertiary);
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            padding: 12px;
+            font-family: var(--font-family-mono);
+            font-size: 14px;
+            color: var(--color-text-primary);
+            word-break: break-all;
+            margin-bottom: 16px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .preview-favicon {
+            width: 32px;
+            height: 32px;
+            margin-top: 8px;
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+        }
+
+        /* ============================================
            Status Messages
            ============================================ */
         .error-message {
@@ -418,6 +693,22 @@
         }
 
         .error-message.active {
+            display: block;
+        }
+
+        .success-message {
+            display: none;
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: #e6f4ea;
+            border: 1px solid #34a853;
+            border-radius: 4px;
+            color: var(--color-success);
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .success-message.active {
             display: block;
         }
 
@@ -456,7 +747,7 @@
            Responsive Design
            ============================================ */
         @media (max-width: 768px) {
-            .browser-content {
+            .new-tab-content, .settings-page, .sessions-page {
                 padding: 24px 16px;
             }
 
@@ -473,11 +764,26 @@
                 width: 100%;
                 max-width: 200px;
             }
+
+            .tab {
+                min-width: 100px;
+                max-width: 180px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="browser-window">
+        <!-- Tab Bar -->
+        <div class="tab-bar" id="tab-bar">
+            <button class="new-tab-button" id="new-tab-button" title="New Tab">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Browser Chrome -->
         <div class="browser-chrome">
             <button class="browser-button" id="back-button" disabled>
                 <svg viewBox="0 0 24 24" fill="currentColor">
@@ -504,7 +810,6 @@
                     class="url-input" 
                     placeholder="Search Bing or type a URL"
                     autocomplete="off"
-                    autofocus
                 />
                 <button class="page-action" id="clear-button" style="display: none;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -514,54 +819,9 @@
             </div>
         </div>
 
-        <div class="browser-content">
-            <div class="new-tab-content">
-                <div class="new-tab-logo" style="font-size: 72px; font-weight: 300; color: #008373; letter-spacing: -2px;">Bing</div>
-                <div class="new-tab-title">Rammerhead Proxy</div>
-                <div class="new-tab-subtitle">Fast, secure web browsing</div>
-
-                <div class="search-box">
-                    <div class="search-input-wrapper">
-                        <svg class="search-icon" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-                        </svg>
-                        <input 
-                            type="text" 
-                            id="search-input" 
-                            class="search-input" 
-                            placeholder="Search Bing or type a URL"
-                            autocomplete="off"
-                        />
-            </div>
-                    <div class="search-buttons">
-                        <button class="search-button" id="go-button">Bing Search</button>
-                        <button class="search-button" id="lucky-button">I'm Feeling Lucky</button>
-            </div>
-        </div>
-
-                <div class="generate-link-section">
-                    <button class="generate-link-button" id="generate-link-button">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
-                        </svg>
-                        Generate never-expire link
-                    </button>
-
-                    <div class="link-result" id="link-result">
-                        <div class="link-result-label">Never-expire link:</div>
-                        <div class="link-display">
-                            <div class="link-url" id="link-url"></div>
-                            <button class="copy-button" id="copy-button">Copy</button>
-            </div>
-        </div>
-
-                    <div class="error-message" id="error-message"></div>
-                    <div class="loading" id="loading">
-                        <span class="spinner"></span>
-                        Creating session...
-            </div>
-                </div>
-            </div>
+        <!-- Browser Content -->
+        <div class="browser-content" id="browser-content">
+            <!-- Tab contents will be dynamically added here -->
         </div>
     </div>
 
@@ -577,10 +837,10 @@
                 const currentPath = window.location.pathname;
                 const redirectUrl = `http://${targetHost}:${targetPort}${currentPath}${window.location.search}${window.location.hash}`;
                 window.location.replace(redirectUrl);
-                return; // Stop execution until redirect completes
+                return;
             }
             
-            // Detect base path from current location
+            // Detect base path
             function getBasePath() {
                 const path = window.location.pathname;
                 if (path.startsWith('/rammerhead')) {
@@ -591,212 +851,537 @@
             
             const basePath = getBasePath();
             
+            // Session Management - One session per device
+            function getDeviceSessionId() {
+                let sessionId = localStorage.getItem('deviceSessionId');
+                if (!sessionId) {
+                    // Generate new session ID
+                    sessionId = generateSessionId();
+                    localStorage.setItem('deviceSessionId', sessionId);
+                }
+                return sessionId;
+            }
+
+            function generateSessionId() {
+                return Array.from(crypto.getRandomValues(new Uint8Array(16)))
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+            }
+
+            function setDeviceSessionId(sessionId) {
+                localStorage.setItem('deviceSessionId', sessionId);
+            }
+
+            // Tab Management
+            let tabs = [];
+            let activeTabId = null;
+            let tabIdCounter = 0;
+
+            const tabBar = document.getElementById('tab-bar');
+            const browserContent = document.getElementById('browser-content');
+            const newTabButton = document.getElementById('new-tab-button');
             const urlInput = document.getElementById('url-input');
-            const searchInput = document.getElementById('search-input');
-            const goButton = document.getElementById('go-button');
-            const luckyButton = document.getElementById('lucky-button');
-            const generateLinkButton = document.getElementById('generate-link-button');
-            const errorMessage = document.getElementById('error-message');
-            const loading = document.getElementById('loading');
-            const linkResult = document.getElementById('link-result');
-            const linkUrl = document.getElementById('link-url');
-            const copyButton = document.getElementById('copy-button');
             const clearButton = document.getElementById('clear-button');
             const backButton = document.getElementById('back-button');
             const forwardButton = document.getElementById('forward-button');
             const refreshButton = document.getElementById('refresh-button');
 
-            // Sync inputs - only sync from the active input to the other
-            let syncing = false;
-            function syncInputs(source, target) {
-                if (syncing) return;
-                syncing = true;
-                const value = source.value;
-                target.value = value;
-                clearButton.style.display = value ? 'block' : 'none';
-                syncing = false;
-            }
+            function createTab(url = 'jq://newtab/', title = 'New Tab') {
+                const tabId = `tab-${++tabIdCounter}`;
+                const tab = {
+                    id: tabId,
+                    url: url,
+                    title: title,
+                    canGoBack: false,
+                    canGoForward: false
+                };
+                tabs.push(tab);
 
-            urlInput.addEventListener('input', () => syncInputs(urlInput, searchInput));
-            searchInput.addEventListener('input', () => syncInputs(searchInput, urlInput));
-
-            clearButton.addEventListener('click', () => {
-                urlInput.value = '';
-                searchInput.value = '';
-                clearButton.style.display = 'none';
-                urlInput.focus();
-            });
-
-            function showError(message) {
-                errorMessage.textContent = message;
-                errorMessage.classList.add('active');
-                loading.classList.remove('active');
-            }
-
-            function hideError() {
-                errorMessage.classList.remove('active');
-            }
-
-            function normalizeUrl(url) {
-                url = url.trim();
-                // Check if it looks like a URL
-                if (url.match(/^https?:\/\//i) || url.match(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}/)) {
-                    if (!url.match(/^https?:\/\//i)) {
-                        url = 'https://' + url;
+                // Create tab element
+                const tabElement = document.createElement('div');
+                tabElement.className = 'tab';
+                tabElement.dataset.tabId = tabId;
+                tabElement.innerHTML = `
+                    <span class="tab-title">${title}</span>
+                    <button class="tab-close" onclick="closeTab('${tabId}')">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                `;
+                tabElement.addEventListener('click', (e) => {
+                    if (!e.target.closest('.tab-close')) {
+                        switchToTab(tabId);
                     }
-                } else {
-                    // Treat as search query - use Bing
-                    url = 'https://www.bing.com/search?q=' + encodeURIComponent(url);
-                }
-                return url;
+                });
+
+                // Insert before new tab button
+                tabBar.insertBefore(tabElement, newTabButton);
+
+                // Create tab content
+                const contentElement = document.createElement('div');
+                contentElement.className = 'tab-content';
+                contentElement.id = `content-${tabId}`;
+                contentElement.dataset.tabId = tabId;
+                browserContent.appendChild(contentElement);
+
+                // Load content
+                loadTabContent(tabId, url);
+
+                // Make it active
+                switchToTab(tabId);
+
+                return tabId;
             }
 
-            function navigate() {
-                let url = (urlInput.value || searchInput.value).trim();
-                
-                if (!url) {
-                    showError('Please enter a URL or search query');
+            function closeTab(tabId) {
+                const tabIndex = tabs.findIndex(t => t.id === tabId);
+                if (tabIndex === -1) return;
+
+                tabs.splice(tabIndex, 1);
+
+                // Remove tab element
+                const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+                if (tabElement) tabElement.remove();
+
+                // Remove content
+                const contentElement = document.getElementById(`content-${tabId}`);
+                if (contentElement) contentElement.remove();
+
+                // Switch to another tab if this was active
+                if (activeTabId === tabId) {
+                    if (tabs.length > 0) {
+                        switchToTab(tabs[tabs.length - 1].id);
+                    } else {
+                        activeTabId = null;
+                        createTab();
+                    }
+                }
+            }
+
+            function switchToTab(tabId) {
+                activeTabId = tabId;
+
+                // Update tab appearance
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                const activeTabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+                if (activeTabElement) activeTabElement.classList.add('active');
+
+                // Update content visibility
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                const activeContent = document.getElementById(`content-${tabId}`);
+                if (activeContent) activeContent.classList.add('active');
+
+                // Update URL bar
+                const tab = tabs.find(t => t.id === tabId);
+                if (tab) {
+                    urlInput.value = tab.url;
+                    updateNavigationButtons(tab);
+                }
+            }
+
+            async function loadTabContent(tabId, url) {
+                const tab = tabs.find(t => t.id === tabId);
+                if (!tab) return;
+
+                const contentElement = document.getElementById(`content-${tabId}`);
+                if (!contentElement) return;
+
+                // Handle special URLs
+                if (url.startsWith('jq://')) {
+                    handleSpecialUrl(tabId, url);
                     return;
                 }
 
-                url = normalizeUrl(url);
-                hideError();
-                loading.classList.add('active');
-                goButton.disabled = true;
-                luckyButton.disabled = true;
-
-                // Open in new tab using the auto-session route with base path
-                const proxiedUrl = basePath + '/?url=' + encodeURIComponent(url);
-                window.open(proxiedUrl, '_blank');
+                // Regular URL - ensure session exists, then get proxied URL
+                const sessionId = getDeviceSessionId();
                 
-                setTimeout(() => {
-                    loading.classList.remove('active');
-                    goButton.disabled = false;
-                    luckyButton.disabled = false;
-                }, 500);
-            }
-
-            function navigateLucky() {
-                let url = (urlInput.value || searchInput.value).trim();
-                
-                if (!url) {
-                    showError('Please enter a search query');
-                    return;
+                // Ensure session exists and get proxied URL with proper shuffling
+                try {
+                    const response = await fetch(`${basePath}/getproxiedurl?id=${encodeURIComponent(sessionId)}&url=${encodeURIComponent(url)}`);
+                    const data = await response.json();
+                    const proxiedUrl = data.proxiedUrl || `${basePath}/${sessionId}/${url}`;
+                    
+                    contentElement.innerHTML = `<iframe src="${proxiedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+                } catch (e) {
+                    console.error('Failed to get proxied URL:', e);
+                    // Fallback: ensure session and use direct URL
+                    await fetch(`${basePath}/ensuresession?id=${encodeURIComponent(sessionId)}`);
+                    const proxiedUrl = `${basePath}/${sessionId}/${url}`;
+                    contentElement.innerHTML = `<iframe src="${proxiedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
                 }
-
-                // I'm Feeling Lucky - Bing doesn't have this, so just do regular search
-                url = 'https://www.bing.com/search?q=' + encodeURIComponent(url);
-                hideError();
-                loading.classList.add('active');
-                goButton.disabled = true;
-                luckyButton.disabled = true;
-
-                const proxiedUrl = basePath + '/?url=' + encodeURIComponent(url);
-                window.open(proxiedUrl, '_blank');
                 
-                setTimeout(() => {
-                    loading.classList.remove('active');
-                    goButton.disabled = false;
-                    luckyButton.disabled = false;
-                }, 500);
-            }
-
-            function generateLink() {
-                let url = (urlInput.value || searchInput.value).trim();
-                
-                if (!url) {
-                    showError('Please enter a URL first');
-                    return;
-                }
-
-                url = normalizeUrl(url);
-                hideError();
-                loading.classList.add('active');
-                generateLinkButton.disabled = true;
-                linkResult.classList.remove('active');
-
-                fetch(basePath + '/generatelink?url=' + encodeURIComponent(url))
-                    .then(response => {
-                        if (!response.ok) {
-                            return response.json().then(data => {
-                                throw new Error(data.error || 'Failed to generate link');
-                            }).catch(() => {
-                                throw new Error('Server error: ' + response.status);
-                            });
+                // Update tab title from iframe
+                const iframe = contentElement.querySelector('iframe');
+                if (iframe) {
+                    iframe.onload = () => {
+                        try {
+                            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                            const title = iframeDoc.title || new URL(url).hostname;
+                            updateTabTitle(tabId, title);
+                        } catch (e) {
+                            // Cross-origin, use URL hostname
+                            try {
+                                const urlObj = new URL(url);
+                                updateTabTitle(tabId, urlObj.hostname);
+                            } catch (e2) {
+                                updateTabTitle(tabId, 'Page');
+                            }
                         }
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data.error) {
-                            throw new Error(data.error);
-                        }
-                        linkUrl.textContent = data.url;
-                        linkResult.classList.add('active');
-                        loading.classList.remove('active');
-                        generateLinkButton.disabled = false;
-                        
-                        linkResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    })
-                    .catch(error => {
-                        showError('Failed to generate link: ' + error.message);
-                        loading.classList.remove('active');
-                        generateLinkButton.disabled = false;
-                    });
+                    };
+                }
             }
 
-            function copyLink() {
-                const url = linkUrl.textContent;
-                navigator.clipboard.writeText(url).then(() => {
-                    copyButton.textContent = 'Copied!';
-                    copyButton.classList.add('copied');
+            function handleSpecialUrl(tabId, url) {
+                const contentElement = document.getElementById(`content-${tabId}`);
+                
+                if (url === 'jq://newtab/') {
+                    contentElement.innerHTML = getNewTabHTML();
+                    updateTabTitle(tabId, 'New Tab');
+                } else if (url === 'jq://sessions/') {
+                    contentElement.innerHTML = getSessionsPageHTML();
+                    updateTabTitle(tabId, 'Sessions');
+                    initSessionsPage();
+                } else if (url === 'jq://settings/') {
+                    contentElement.innerHTML = getSettingsPageHTML();
+                    updateTabTitle(tabId, 'Settings');
+                    initSettingsPage();
+                }
+            }
+
+            function getNewTabHTML() {
+                const pageTitle = localStorage.getItem('pageTitle') || 'Rammerhead Proxy';
+                return `
+                    <div class="new-tab-content">
+                        <div class="new-tab-logo-container">
+                            <svg class="bing-logo" viewBox="0 0 200 200" fill="#008373">
+                                <path d="M100 50c-27.6 0-50 22.4-50 50s22.4 50 50 50 50-22.4 50-50-22.4-50-50-50zm0 80c-16.6 0-30-13.4-30-30s13.4-30 30-30 30 13.4 30 30-13.4 30-30 30z"/>
+                                <path d="M100 70l20 20-20 20-20-20 20-20z"/>
+                            </svg>
+                            <div class="new-tab-logo">Bing</div>
+                        </div>
+                        <div class="new-tab-title">${pageTitle}</div>
+                        <div class="new-tab-subtitle">Fast, secure web browsing</div>
+                        <div class="search-box">
+                            <div class="search-input-wrapper">
+                                <svg class="search-icon" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                                </svg>
+                                <input type="text" class="search-input" id="newtab-search-input" placeholder="Search Bing or type a URL" autocomplete="off" />
+                            </div>
+                            <div class="search-buttons">
+                                <button class="search-button" id="newtab-go-button">Bing Search</button>
+                                <button class="search-button" id="newtab-lucky-button">I'm Feeling Lucky</button>
+                            </div>
+                        </div>
+                        <div class="generate-link-section">
+                            <button class="generate-link-button" id="newtab-generate-link-button">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
+                                </svg>
+                                Generate never-expire link
+                            </button>
+                            <div class="link-result" id="newtab-link-result">
+                                <div class="link-result-label">Never-expire link:</div>
+                                <div class="link-display">
+                                    <div class="link-url" id="newtab-link-url"></div>
+                                    <button class="copy-button" id="newtab-copy-button">Copy</button>
+                                </div>
+                            </div>
+                            <div class="error-message" id="newtab-error-message"></div>
+                            <div class="loading" id="newtab-loading">
+                                <span class="spinner"></span>
+                                Creating session...
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function getSessionsPageHTML() {
+                const sessionId = getDeviceSessionId();
+                return `
+                    <div class="sessions-page">
+                        <div class="page-header">
+                            <h1>Session Management</h1>
+                            <p>Manage your proxy session ID</p>
+                        </div>
+                        <div class="sessions-section">
+                            <h2>Current Session</h2>
+                            <div class="session-id-display" id="current-session-id">${sessionId}</div>
+                            <div class="form-group">
+                                <label for="new-session-id">Change Session ID</label>
+                                <input type="text" id="new-session-id" placeholder="Enter new session ID" />
+                            </div>
+                            <div class="button-group">
+                                <button class="button" id="update-session-button">Update Session ID</button>
+                                <button class="button button-secondary" id="generate-session-button">Generate New Session ID</button>
+                            </div>
+                            <div class="success-message" id="session-success-message"></div>
+                            <div class="error-message" id="session-error-message"></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function getSettingsPageHTML() {
+                const pageTitle = localStorage.getItem('pageTitle') || 'Rammerhead Proxy';
+                const faviconData = localStorage.getItem('faviconData');
+                return `
+                    <div class="settings-page">
+                        <div class="page-header">
+                            <h1>Settings</h1>
+                            <p>Customize your browser experience</p>
+                        </div>
+                        <div class="settings-section">
+                            <h2>Page Title</h2>
+                            <div class="form-group">
+                                <label for="page-title-input">Current Title</label>
+                                <input type="text" id="page-title-input" value="${pageTitle}" placeholder="Enter page title" />
+                            </div>
+                            <button class="button" id="save-title-button">Save Title</button>
+                        </div>
+                        <div class="settings-section">
+                            <h2>Favicon</h2>
+                            <div class="form-group">
+                                <label for="favicon-input">Upload Favicon</label>
+                                <input type="file" id="favicon-input" accept="image/*" />
+                                ${faviconData ? `<img src="${faviconData}" class="preview-favicon" id="favicon-preview" />` : ''}
+                            </div>
+                            <button class="button" id="save-favicon-button">Save Favicon</button>
+                        </div>
+                        <div class="success-message" id="settings-success-message"></div>
+                        <div class="error-message" id="settings-error-message"></div>
+                    </div>
+                `;
+            }
+
+            function initSessionsPage() {
+                const updateButton = document.getElementById('update-session-button');
+                const generateButton = document.getElementById('generate-session-button');
+                const newSessionIdInput = document.getElementById('new-session-id');
+                const successMsg = document.getElementById('session-success-message');
+                const errorMsg = document.getElementById('session-error-message');
+
+                updateButton?.addEventListener('click', () => {
+                    const newId = newSessionIdInput.value.trim();
+                    if (!newId) {
+                        showMessage(errorMsg, 'Please enter a session ID', 'error');
+                        return;
+                    }
+                    setDeviceSessionId(newId);
+                    showMessage(successMsg, 'Session ID updated successfully', 'success');
                     setTimeout(() => {
-                        copyButton.textContent = 'Copy';
-                        copyButton.classList.remove('copied');
-                    }, 2000);
-                }).catch(err => {
-                    const textarea = document.createElement('textarea');
-                    textarea.value = url;
-                    textarea.style.position = 'fixed';
-                    textarea.style.opacity = '0';
-                    document.body.appendChild(textarea);
-                    textarea.select();
-                    try {
-                        document.execCommand('copy');
-                        copyButton.textContent = 'Copied!';
-                        copyButton.classList.add('copied');
-                        setTimeout(() => {
-                            copyButton.textContent = 'Copy';
-                            copyButton.classList.remove('copied');
-                        }, 2000);
-                    } catch (e) {
-                        showError('Failed to copy link');
-                    }
-                    document.body.removeChild(textarea);
+                        document.getElementById('current-session-id').textContent = newId;
+                        newSessionIdInput.value = '';
+                    }, 500);
+                });
+
+                generateButton?.addEventListener('click', () => {
+                    const newId = generateSessionId();
+                    setDeviceSessionId(newId);
+                    newSessionIdInput.value = newId;
+                    document.getElementById('current-session-id').textContent = newId;
+                    showMessage(successMsg, 'New session ID generated', 'success');
                 });
             }
 
-            // Browser buttons
-            refreshButton.addEventListener('click', () => {
-                window.location.reload();
-            });
+            function initSettingsPage() {
+                const saveTitleButton = document.getElementById('save-title-button');
+                const saveFaviconButton = document.getElementById('save-favicon-button');
+                const titleInput = document.getElementById('page-title-input');
+                const faviconInput = document.getElementById('favicon-input');
+                const successMsg = document.getElementById('settings-success-message');
+                const errorMsg = document.getElementById('settings-error-message');
 
-            // Event listeners
-            goButton.addEventListener('click', navigate);
-            luckyButton.addEventListener('click', navigateLucky);
-            generateLinkButton.addEventListener('click', generateLink);
-            copyButton.addEventListener('click', copyLink);
-            
-            function handleEnter(e) {
-                if (e.key === 'Enter') {
-                    navigate();
+                saveTitleButton?.addEventListener('click', () => {
+                    const title = titleInput.value.trim() || 'Rammerhead Proxy';
+                    localStorage.setItem('pageTitle', title);
+                    document.getElementById('page-title').textContent = title;
+                    showMessage(successMsg, 'Title saved successfully', 'success');
+                });
+
+                saveFaviconButton?.addEventListener('click', () => {
+                    const file = faviconInput.files[0];
+                    if (!file) {
+                        showMessage(errorMsg, 'Please select an image file', 'error');
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        localStorage.setItem('faviconData', e.target.result);
+                        const favicon = document.getElementById('favicon');
+                        if (favicon) favicon.href = e.target.result;
+                        const preview = document.getElementById('favicon-preview');
+                        if (preview) {
+                            preview.src = e.target.result;
+                            preview.style.display = 'block';
+                        } else {
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            img.className = 'preview-favicon';
+                            img.id = 'favicon-preview';
+                            faviconInput.parentElement.appendChild(img);
+                        }
+                        showMessage(successMsg, 'Favicon saved successfully', 'success');
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            function showMessage(element, text, type) {
+                if (!element) return;
+                element.textContent = text;
+                element.classList.add('active');
+                setTimeout(() => element.classList.remove('active'), 3000);
+            }
+
+            function updateTabTitle(tabId, title) {
+                const tab = tabs.find(t => t.id === tabId);
+                if (tab) {
+                    tab.title = title;
+                    const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+                    if (tabElement) {
+                        const titleElement = tabElement.querySelector('.tab-title');
+                        if (titleElement) titleElement.textContent = title;
+                    }
                 }
             }
 
-            urlInput.addEventListener('keydown', handleEnter);
-            searchInput.addEventListener('keydown', handleEnter);
+            function updateNavigationButtons(tab) {
+                backButton.disabled = !tab.canGoBack;
+                forwardButton.disabled = !tab.canGoForward;
+            }
 
-            // Focus search input on load
-            searchInput.focus();
+            function navigateToUrl(url) {
+                if (!activeTabId) return;
+                const tab = tabs.find(t => t.id === activeTabId);
+                if (!tab) return;
+
+                tab.url = url;
+                urlInput.value = url;
+                loadTabContent(activeTabId, url);
+            }
+
+            // Initialize new tab page handlers
+            function initNewTabHandlers(contentElement) {
+                const searchInput = contentElement.querySelector('#newtab-search-input');
+                const goButton = contentElement.querySelector('#newtab-go-button');
+                const luckyButton = contentElement.querySelector('#newtab-lucky-button');
+                const generateButton = contentElement.querySelector('#newtab-generate-link-button');
+                const copyButton = contentElement.querySelector('#newtab-copy-button');
+
+                function normalizeUrl(url) {
+                    url = url.trim();
+                    if (url.match(/^https?:\/\//i) || url.match(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}/)) {
+                        if (!url.match(/^https?:\/\//i)) {
+                            url = 'https://' + url;
+                        }
+                    } else {
+                        url = 'https://www.bing.com/search?q=' + encodeURIComponent(url);
+                    }
+                    return url;
+                }
+
+                function handleNavigate() {
+                    const url = searchInput.value.trim();
+                    if (!url) return;
+                    const normalized = normalizeUrl(url);
+                    createTab(normalized);
+                }
+
+                goButton?.addEventListener('click', handleNavigate);
+                searchInput?.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') handleNavigate();
+                });
+
+                luckyButton?.addEventListener('click', () => {
+                    const url = searchInput.value.trim();
+                    if (!url) return;
+                    createTab('https://www.bing.com/search?q=' + encodeURIComponent(url));
+                });
+
+                generateButton?.addEventListener('click', async () => {
+                    const url = searchInput.value.trim();
+                    if (!url) return;
+                    const normalized = normalizeUrl(url);
+                    try {
+                        const response = await fetch(`${basePath}/generatelink?url=${encodeURIComponent(normalized)}`);
+                        const data = await response.json();
+                        if (data.url) {
+                            const linkResult = contentElement.querySelector('#newtab-link-result');
+                            const linkUrl = contentElement.querySelector('#newtab-link-url');
+                            linkUrl.textContent = data.url;
+                            linkResult.classList.add('active');
+                        }
+                    } catch (e) {
+                        console.error('Failed to generate link', e);
+                    }
+                });
+
+                copyButton?.addEventListener('click', () => {
+                    const linkUrl = contentElement.querySelector('#newtab-link-url');
+                    navigator.clipboard.writeText(linkUrl.textContent);
+                    copyButton.textContent = 'Copied!';
+                    setTimeout(() => copyButton.textContent = 'Copy', 2000);
+                });
+            }
+
+            // Event listeners
+            newTabButton.addEventListener('click', () => createTab());
+            urlInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    navigateToUrl(urlInput.value);
+                }
+            });
+            clearButton.addEventListener('click', () => {
+                urlInput.value = '';
+                clearButton.style.display = 'none';
+            });
+            urlInput.addEventListener('input', () => {
+                clearButton.style.display = urlInput.value ? 'block' : 'none';
+            });
+            refreshButton.addEventListener('click', () => {
+                if (activeTabId) {
+                    const tab = tabs.find(t => t.id === activeTabId);
+                    if (tab) loadTabContent(activeTabId, tab.url);
+                }
+            });
+
+            // Load saved settings
+            const savedTitle = localStorage.getItem('pageTitle');
+            if (savedTitle) {
+                document.getElementById('page-title').textContent = savedTitle;
+            }
+            const savedFavicon = localStorage.getItem('faviconData');
+            if (savedFavicon) {
+                document.getElementById('favicon').href = savedFavicon;
+            }
+
+            // Create initial tab
+            createTab('jq://newtab/');
+
+            // Re-initialize new tab handlers when content is loaded
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1 && node.classList.contains('tab-content')) {
+                            const newtabContent = node.querySelector('.new-tab-content');
+                            if (newtabContent) {
+                                setTimeout(() => initNewTabHandlers(node), 100);
+                            }
+                        }
+                    });
+                });
+            });
+            observer.observe(browserContent, { childList: true, subtree: true });
+
+            // Make closeTab available globally
+            window.closeTab = closeTab;
         })();
     </script>
 </body>
