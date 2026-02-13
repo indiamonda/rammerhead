@@ -46,10 +46,38 @@ const sessionStore = new RammerheadSessionFileCache(fileCacheOptions);
 sessionStore.attachToProxy(proxyServer);
 
 setupPipeline(proxyServer, sessionStore);
-// Register routes FIRST so they take precedence
-setupRoutes(proxyServer, sessionStore, logger);
-// Register static files AFTER routes (they won't conflict with our custom routes)
+// Register static files FIRST
 if (config.publicDir) addStaticDirToProxy(proxyServer, config.publicDir);
+// Register routes AFTER static files - this allows us to override specific routes
+setupRoutes(proxyServer, sessionStore, logger);
+// Override style.css route AFTER everything to ensure it takes precedence
+const fs = require('fs');
+const path = require('path');
+const stylePath = path.join(config.publicDir, 'style.css');
+if (fs.existsSync(stylePath)) {
+    logger.info(`(server) Overriding /style.css route to serve fresh content`);
+    const handleStyleCss = (req, res) => {
+        try {
+            const content = fs.readFileSync(stylePath);
+            res.writeHead(200, { 
+                'Content-Type': 'text/css',
+                'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'X-Override-Handler': 'true',
+                'X-File-Size': content.length.toString()
+            });
+            res.end(content);
+        } catch (error) {
+            logger.error(`(server) Error serving style.css: ${error.message}`);
+            res.writeHead(500);
+            res.end('Internal Server Error');
+        }
+    };
+    // Override the route - this should take precedence over cached static content
+    proxyServer.GET('/style.css', handleStyleCss);
+    logger.info(`(server) Successfully overrode /style.css route`);
+}
 
 // nicely close proxy server and save sessions to store before we exit
 exitHook(() => {

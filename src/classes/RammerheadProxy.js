@@ -600,6 +600,15 @@ class RammerheadProxy extends Proxy {
                 path.join(__dirname, '../client/transport-worker' + (process.env.DEVELOPMENT ? '.js' : '.min.js'))
             );
         }
+        // Special handling for style.css - ensure handler function is used, not cached content
+        if (route === '/style.css' && typeof handler === 'function') {
+            // Wrap the handler to ensure it's always called fresh
+            const originalHandler = handler;
+            handler = (req, res) => {
+                // Force fresh read - bypass any caching
+                return originalHandler(req, res);
+            };
+        }
         super.GET(route, handler);
     }
 
