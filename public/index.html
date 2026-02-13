@@ -9,7 +9,35 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // Fallback: Load CSS dynamically if link fails
+        (function() {
+            const link = document.querySelector('link[href*="styles.css"]');
+            if (link) {
+                const loadCSS = () => {
+                    fetch('/styles.css?t=' + Date.now())
+                        .then(r => r.ok ? r.text() : fetch('/style.css?t=' + Date.now()).then(r2 => r2.ok ? r2.text() : ''))
+                        .then(css => {
+                            if (css && css.length > 100) {
+                                const style = document.createElement('style');
+                                style.textContent = css;
+                                document.head.appendChild(style);
+                                console.log('CSS loaded dynamically');
+                            }
+                        })
+                        .catch(() => {});
+                };
+                link.onerror = loadCSS;
+                // Also try loading after a short delay in case onerror doesn't fire
+                setTimeout(() => {
+                    if (!document.querySelector('style[data-dynamic-css]')) {
+                        loadCSS();
+                    }
+                }, 100);
+            }
+        })();
+    </script>
 </head>
 <body>
     <div class="browser-window">

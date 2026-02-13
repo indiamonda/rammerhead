@@ -44,6 +44,7 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
         }
 
         // Skip style.css - it's handled by a custom route to bypass caching
+        // But DO serve styles.css (the new path)
         if (file === 'style.css') {
             return;
         }

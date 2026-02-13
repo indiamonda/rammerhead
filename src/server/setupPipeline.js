@@ -10,14 +10,17 @@ const path = require('path');
 module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Intercept /styles.css requests (new path to bypass cache)
     // Use addToOnRequestPipeline with beginning=true to add it FIRST in the pipeline
-    proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
-        // Handle /styles.css requests - check URL path directly
+    // This MUST run before hammerhead's static content cache
+    proxyServer.addToOnRequestPipeline(async (req, res, _serverInfo, isRoute) => {
+        // Handle /styles.css requests - check URL path directly (don't check isRoute, handle all requests to this path)
         const urlPath = req.url.split('?')[0];
         if (urlPath === '/styles.css' || urlPath.endsWith('/styles.css')) {
             try {
                 const stylePath = path.join(config.publicDir, 'style.css');
+                console.log(`[Pipeline] Handling /styles.css, file exists: ${fs.existsSync(stylePath)}`);
                 if (fs.existsSync(stylePath)) {
                     const content = fs.readFileSync(stylePath);
+                    console.log(`[Pipeline] Serving styles.css: ${content.length} bytes`);
                     res.writeHead(200, { 
                         'Content-Type': 'text/css',
                         'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
@@ -28,15 +31,13 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                     });
                     res.end(content);
                     return true; // Signal that we handled this request - stop pipeline
+                } else {
+                    console.error(`[Pipeline] styles.css file not found at: ${stylePath}`);
                 }
             } catch (error) {
                 // If there's an error, let other handlers process it
-                console.error('Error serving styles.css from pipeline:', error);
+                console.error('[Pipeline] Error serving styles.css:', error);
             }
-        }
-        // For other requests, only process if not a route (to avoid interfering with proxied requests)
-        if (isRoute) {
-            return false; // Let route handlers process
         }
         return false; // Let other handlers process
     }, true); // beginning=true to add to the START of the pipeline
