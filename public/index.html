@@ -10,16 +10,54 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        /* ============================================
+           CSS Variables & Reset
+           ============================================ */
+        :root {
+            --color-white: #fff;
+            --color-text-primary: #202124;
+            --color-text-secondary: #3c4043;
+            --color-text-muted: #5f6368;
+            --color-text-placeholder: #80868b;
+            --color-text-icon: #9aa0a6;
+            --color-bg-primary: #fff;
+            --color-bg-secondary: #f1f3f4;
+            --color-bg-tertiary: #f8f9fa;
+            --color-bg-hover: rgba(0, 0, 0, 0.08);
+            --color-bg-active: rgba(0, 0, 0, 0.12);
+            --color-border: #dadce0;
+            --color-border-light: #dfe1e5;
+            --color-border-hover: #c4c7c5;
+            --color-border-divider: #e8eaed;
+            --color-primary: #1a73e8;
+            --color-primary-hover: #1765cc;
+            --color-primary-active: #1557b0;
+            --color-primary-light: #e8f0fe;
+            --color-error-bg: #fce8e6;
+            --color-error-border: #f28b82;
+            --color-error-text: #c5221f;
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-family-mono: 'Courier New', monospace;
+            --transition-fast: 0.2s;
+            --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 2px 5px 1px rgba(64, 60, 67, 0.16);
+            --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.1);
+            --shadow-xl: 0 2px 8px 1px rgba(64, 60, 67, 0.24);
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
+        /* ============================================
+           Base Layout
+           ============================================ */
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #fff;
-            color: #202124;
+            font-family: var(--font-family);
+            background: var(--color-bg-primary);
+            color: var(--color-text-primary);
             margin: 0;
             padding: 0;
             height: 100vh;
@@ -29,7 +67,7 @@
         .browser-window {
             width: 100%;
             height: 100vh;
-            background: #fff;
+            background: var(--color-bg-primary);
             border-radius: 0;
             box-shadow: none;
             overflow: hidden;
@@ -37,9 +75,12 @@
             flex-direction: column;
         }
 
+        /* ============================================
+           Browser Chrome (Top Bar)
+           ============================================ */
         .browser-chrome {
-            background: #f1f3f4;
-            border-bottom: 1px solid #dadce0;
+            background: var(--color-bg-secondary);
+            border-bottom: 1px solid var(--color-border);
             padding: 8px 12px;
             display: flex;
             align-items: center;
@@ -57,21 +98,16 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #5f6368;
-            transition: background 0.2s;
+            color: var(--color-text-muted);
+            transition: background var(--transition-fast);
         }
 
         .browser-button:hover {
-            background: rgba(0, 0, 0, 0.08);
+            background: var(--color-bg-hover);
         }
 
         .browser-button:active {
-            background: rgba(0, 0, 0, 0.12);
-        }
-
-        .browser-button svg {
-            width: 18px;
-            height: 18px;
+            background: var(--color-bg-active);
         }
 
         .browser-button:disabled {
@@ -79,21 +115,26 @@
             cursor: not-allowed;
         }
 
+        .browser-button svg {
+            width: 18px;
+            height: 18px;
+        }
+
         .url-bar-wrapper {
             flex: 1;
             display: flex;
             align-items: center;
-            background: #fff;
-            border: 1px solid #dadce0;
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
             border-radius: 24px;
             padding: 0 16px;
             margin: 0 8px;
             height: 40px;
-            transition: box-shadow 0.2s;
+            transition: box-shadow var(--transition-fast);
         }
 
         .url-bar-wrapper:focus-within {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: var(--shadow-lg);
             border-color: #4285f4;
         }
 
@@ -102,7 +143,7 @@
             height: 16px;
             margin-right: 12px;
             flex-shrink: 0;
-            color: #5f6368;
+            color: var(--color-text-muted);
         }
 
         .url-input {
@@ -110,13 +151,13 @@
             border: none;
             outline: none;
             font-size: 14px;
-            color: #202124;
-            font-family: 'Inter', sans-serif;
+            color: var(--color-text-primary);
+            font-family: var(--font-family);
             background: transparent;
         }
 
         .url-input::placeholder {
-            color: #80868b;
+            color: var(--color-text-placeholder);
         }
 
         .page-action {
@@ -125,7 +166,7 @@
             border: none;
             background: transparent;
             cursor: pointer;
-            color: #5f6368;
+            color: var(--color-text-muted);
             margin-left: 8px;
             padding: 0;
             display: flex;
@@ -134,9 +175,12 @@
         }
 
         .page-action:hover {
-            color: #202124;
+            color: var(--color-text-primary);
         }
 
+        /* ============================================
+           Browser Content Area
+           ============================================ */
         .browser-content {
             flex: 1;
             overflow-y: auto;
@@ -145,7 +189,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            background: #fff;
+            background: var(--color-bg-primary);
         }
 
         .new-tab-content {
@@ -163,16 +207,19 @@
         .new-tab-title {
             font-size: 22px;
             font-weight: 400;
-            color: #202124;
+            color: var(--color-text-primary);
             margin-bottom: 8px;
         }
 
         .new-tab-subtitle {
             font-size: 14px;
-            color: #5f6368;
+            color: var(--color-text-muted);
             margin-bottom: 32px;
         }
 
+        /* ============================================
+           Search Box & Input
+           ============================================ */
         .search-box {
             width: 100%;
             max-width: 584px;
@@ -183,21 +230,21 @@
         .search-input-wrapper {
             display: flex;
             align-items: center;
-            background: #fff;
-            border: 1px solid #dfe1e5;
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border-light);
             border-radius: 24px;
             padding: 0 16px;
             height: 44px;
-            box-shadow: 0 2px 5px 1px rgba(64, 60, 67, 0.16);
-            transition: box-shadow 0.2s;
+            box-shadow: var(--shadow-md);
+            transition: box-shadow var(--transition-fast);
         }
 
         .search-input-wrapper:hover {
-            box-shadow: 0 2px 8px 1px rgba(64, 60, 67, 0.24);
+            box-shadow: var(--shadow-xl);
         }
 
         .search-input-wrapper:focus-within {
-            box-shadow: 0 2px 8px 1px rgba(64, 60, 67, 0.24);
+            box-shadow: var(--shadow-xl);
             border-color: transparent;
         }
 
@@ -205,7 +252,7 @@
             width: 20px;
             height: 20px;
             margin-right: 12px;
-            color: #9aa0a6;
+            color: var(--color-text-icon);
             flex-shrink: 0;
         }
 
@@ -214,15 +261,18 @@
             border: none;
             outline: none;
             font-size: 16px;
-            color: #202124;
-            font-family: 'Inter', sans-serif;
+            color: var(--color-text-primary);
+            font-family: var(--font-family);
             background: transparent;
         }
 
         .search-input::placeholder {
-            color: #9aa0a6;
+            color: var(--color-text-icon);
         }
 
+        /* ============================================
+           Buttons
+           ============================================ */
         .search-buttons {
             display: flex;
             gap: 11px;
@@ -231,53 +281,45 @@
         }
 
         .search-button {
-            background: #f8f9fa;
-            border: 1px solid #f8f9fa;
+            background: var(--color-bg-tertiary);
+            border: 1px solid var(--color-bg-tertiary);
             border-radius: 4px;
             padding: 11px 16px;
             font-size: 14px;
-            color: #3c4043;
+            color: var(--color-text-secondary);
             cursor: pointer;
-            transition: all 0.2s;
-            font-family: 'Inter', sans-serif;
+            transition: all var(--transition-fast);
+            font-family: var(--font-family);
         }
 
         .search-button:hover {
-            box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
-            background: #f8f9fa;
-            border-color: #dadce0;
-        }
-
-        .generate-link-section {
-            margin-top: 24px;
-            padding-top: 24px;
-            border-top: 1px solid #e8eaed;
-            width: 100%;
-            max-width: 584px;
+            box-shadow: var(--shadow-sm);
+            background: var(--color-bg-tertiary);
+            border-color: var(--color-border);
         }
 
         .generate-link-button {
-            background: #1a73e8;
+            background: var(--color-primary);
             border: none;
             border-radius: 4px;
             padding: 10px 24px;
-            color: #fff;
+            color: var(--color-white);
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
-            transition: background 0.2s;
-            font-family: 'Inter', sans-serif;
+            transition: background var(--transition-fast);
+            font-family: var(--font-family);
             display: inline-flex;
             align-items: center;
             gap: 8px;
         }
 
         .generate-link-button:hover {
-            background: #1765cc;
+            background: var(--color-primary-hover);
         }
 
         .generate-link-button:active {
-            background: #1557b0;
+            background: var(--color-primary-active);
         }
 
         .generate-link-button:disabled {
@@ -285,12 +327,48 @@
             cursor: not-allowed;
         }
 
+        .copy-button {
+            background: var(--color-bg-primary);
+            border: 1px solid var(--color-border);
+            border-radius: 4px;
+            padding: 8px 16px;
+            color: var(--color-text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            white-space: nowrap;
+            font-family: var(--font-family);
+        }
+
+        .copy-button:hover {
+            background: var(--color-bg-tertiary);
+            border-color: var(--color-border-hover);
+        }
+
+        .copy-button.copied {
+            background: var(--color-primary-light);
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+        }
+
+        /* ============================================
+           Link Generation Section
+           ============================================ */
+        .generate-link-section {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--color-border-divider);
+            width: 100%;
+            max-width: 584px;
+        }
+
         .link-result {
             display: none;
             margin-top: 16px;
             padding: 16px;
-            background: #f8f9fa;
-            border: 1px solid #dadce0;
+            background: var(--color-bg-tertiary);
+            border: 1px solid var(--color-border);
             border-radius: 8px;
             width: 100%;
         }
@@ -301,7 +379,7 @@
 
         .link-result-label {
             font-size: 12px;
-            color: #5f6368;
+            color: var(--color-text-muted);
             margin-bottom: 8px;
             font-weight: 500;
         }
@@ -314,49 +392,27 @@
 
         .link-url {
             flex: 1;
-            font-family: 'Courier New', monospace;
+            font-family: var(--font-family-mono);
             font-size: 13px;
-            color: #1a73e8;
-            background: #fff;
+            color: var(--color-primary);
+            background: var(--color-bg-primary);
             padding: 8px 12px;
             border-radius: 4px;
-            border: 1px solid #dadce0;
+            border: 1px solid var(--color-border);
             word-break: break-all;
         }
 
-        .copy-button {
-            background: #fff;
-            border: 1px solid #dadce0;
-            border-radius: 4px;
-            padding: 8px 16px;
-            color: #3c4043;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            white-space: nowrap;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .copy-button:hover {
-            background: #f8f9fa;
-            border-color: #c4c7c5;
-        }
-
-        .copy-button.copied {
-            background: #e8f0fe;
-            border-color: #1a73e8;
-            color: #1a73e8;
-        }
-
+        /* ============================================
+           Status Messages
+           ============================================ */
         .error-message {
             display: none;
             margin-top: 16px;
             padding: 12px 16px;
-            background: #fce8e6;
-            border: 1px solid #f28b82;
+            background: var(--color-error-bg);
+            border: 1px solid var(--color-error-border);
             border-radius: 4px;
-            color: #c5221f;
+            color: var(--color-error-text);
             font-size: 13px;
             text-align: center;
         }
@@ -369,7 +425,7 @@
             display: none;
             text-align: center;
             margin-top: 16px;
-            color: #5f6368;
+            color: var(--color-text-muted);
             font-size: 13px;
         }
 
@@ -381,18 +437,24 @@
             display: inline-block;
             width: 16px;
             height: 16px;
-            border: 2px solid #e8eaed;
-            border-top-color: #1a73e8;
+            border: 2px solid var(--color-border-divider);
+            border-top-color: var(--color-primary);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
             margin-right: 8px;
             vertical-align: middle;
         }
 
+        /* ============================================
+           Animations
+           ============================================ */
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
 
+        /* ============================================
+           Responsive Design
+           ============================================ */
         @media (max-width: 768px) {
             .browser-content {
                 padding: 24px 16px;
