@@ -51,8 +51,6 @@ if (config.publicDir) addStaticDirToProxy(proxyServer, config.publicDir);
 // Register routes AFTER static files - this allows us to override specific routes
 setupRoutes(proxyServer, sessionStore, logger);
 // Override style.css route AFTER everything to ensure it takes precedence
-const fs = require('fs');
-const path = require('path');
 const stylePath = path.join(config.publicDir, 'style.css');
 if (fs.existsSync(stylePath)) {
     logger.info(`(server) Overriding /style.css route to serve fresh content`);
