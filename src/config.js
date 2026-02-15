@@ -4,7 +4,8 @@ const os = require('os');
 const RammerheadJSMemCache = require('./classes/RammerheadJSMemCache.js');
 const RammerheadJSFileCache = require('./classes/RammerheadJSFileCache.js');
 
-const enableWorkers = os.cpus().length !== 1;
+// Disable workers for Node.js v24+ compatibility (sticky-session-custom has issues)
+const enableWorkers = false; // os.cpus().length !== 1;
 
 module.exports = {
     //// HOSTING CONFIGURATION ////
