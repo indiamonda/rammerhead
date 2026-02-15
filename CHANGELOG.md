@@ -1,3 +1,39 @@
+## v2.0.0 (Custom Fork - Chrome-like UI)
+
+### Major Features
+- **Chrome-inspired Interface**: Complete UI redesign matching Google Chrome's aesthetics
+- **Tab Management System**: Full tab support with drag-and-drop, close, and switch functionality
+- **Window API Integration**: `window.open()` and `window.close()` work with the tab system
+- **Special Pages**: Internal browser pages (`jq://home/`, `jq://newtab/`, `jq://sessions/`, `jq://settings/`)
+- **Customizable UI**: Change page title and favicon from settings
+- **Never-Expire Links**: Generate permanent proxy links from the new tab page
+- **Session Management UI**: Visual interface for managing proxy sessions
+- **Tunnel Support**: Automatic detection and support for tunnel URLs (localtunnel, ngrok, etc.)
+- **Device-Specific Sessions**: One unique session per device with localStorage persistence
+
+### Technical Improvements
+- Embedded CSS to bypass caching issues
+- Improved redirect logic for local and tunnel URLs
+- Enhanced error handling and user feedback
+- Better mobile responsiveness
+- Optimized static file serving with cache control headers
+
+### Documentation
+- Comprehensive README.md with full feature documentation
+- Quick Start guide for easy setup
+- Tunnel setup guide for remote access
+- Cloud deployment guide for Render, Railway, Fly.io, etc.
+
+### UI/UX Enhancements
+- Removed "Bing" branding from new tab page
+- Display page titles and favicons in tabs
+- Chrome-like address bar with navigation buttons
+- Modern search interface
+- Settings page for customization
+- Home page listing all internal pages
+
+---
+
 ## v1.2.64
 
 - catch websocket errors
