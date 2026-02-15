@@ -11,7 +11,8 @@
     "test": "npm run format && npm run lint && npm run build",
     "lint": "eslint -c .eslintrc.json --ext .js src",
     "format": "prettier --write 'src/**/*.js'",
-    "clientes5": "es-check es5 src/client/*.js public/**/*.js"
+    "clientes5": "es-check es5 src/client/*.js public/**/*.js",
+    "tunnel": "npx --yes localtunnel --port 8080"
   },
   "repository": {
     "type": "git",

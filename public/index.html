@@ -937,13 +937,22 @@ body {
 
     <script>
         (function() {
-            // Redirect to correct domain if needed - always redirect exactly to http://192.168.1.198:8080/
+            // Redirect to correct domain if needed - but allow tunnel URLs (loca.lt, etc.)
             const targetHost = '192.168.1.198';
             const targetPort = '8080';
             const currentHost = window.location.hostname;
             const currentPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
             
-            if (currentHost !== targetHost || currentPort !== targetPort) {
+            // Check if we're on a tunnel URL (loca.lt, ngrok.io, etc.) - don't redirect those
+            const isTunnelUrl = currentHost.includes('.loca.lt') || 
+                               currentHost.includes('.ngrok.io') || 
+                               currentHost.includes('.ngrok-free.app') ||
+                               currentHost.includes('.cloudflared.net') ||
+                               currentHost.includes('tunnel') ||
+                               window.location.protocol === 'https:';
+            
+            // Only redirect if not on tunnel and not on the correct local address
+            if (!isTunnelUrl && (currentHost !== targetHost || currentPort !== targetPort)) {
                 // Always redirect exactly to http://192.168.1.198:8080/ (root path only, ignore current path/query/hash)
                 const redirectUrl = `http://${targetHost}:${targetPort}/`;
                 window.location.replace(redirectUrl);
