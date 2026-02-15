@@ -943,11 +943,15 @@ body {
             const currentHost = window.location.hostname;
             const currentPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
             
-            // Check if we're on a tunnel URL (loca.lt, ngrok.io, etc.) - don't redirect those
+            // Check if we're on a tunnel URL or deployed domain - don't redirect those
             const isTunnelUrl = currentHost.includes('.loca.lt') || 
                                currentHost.includes('.ngrok.io') || 
                                currentHost.includes('.ngrok-free.app') ||
                                currentHost.includes('.cloudflared.net') ||
+                               currentHost.includes('.onrender.com') ||
+                               currentHost.includes('.railway.app') ||
+                               currentHost.includes('.fly.dev') ||
+                               currentHost.includes('.vercel.app') ||
                                currentHost.includes('tunnel') ||
                                window.location.protocol === 'https:';
             

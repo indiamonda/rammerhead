@@ -10,8 +10,9 @@ module.exports = {
     //// HOSTING CONFIGURATION ////
 
     bindingAddress: '0.0.0.0',
-    port: 8080,
-    crossDomainPort: 8081,
+    port: process.env.PORT || 8080,
+    // Use same port for crossDomain in cloud deployments (most platforms don't allow multiple ports)
+    crossDomainPort: process.env.PORT ? parseInt(process.env.PORT) : 8081,
     publicDir: path.join(__dirname, '../public'), // set to null to disable
 
     // enable or disable multithreading
