@@ -1,0 +1,27 @@
+# Replit configuration for Rammerhead Proxy
+
+# Language
+language = "nodejs"
+
+# Run command - Replit will use this to start your app
+run = "npm start"
+
+# Entrypoint
+entrypoint = "src/server.js"
+
+# Environment variables
+[env]
+NODE_ENV = "production"
+PORT = "8080"
+
+# Always on (for free tier, this keeps the app running)
+alwaysOn = true
+
+# Enable package manager
+[packager]
+language = "nodejs"
+ignoredPackages = ["*.test.js"]
+
+# Deploy configuration
+[deploy]
+run = ["sh", "-c", "npm start"]

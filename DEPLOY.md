@@ -11,7 +11,45 @@ Deploy Rammerhead to cloud platforms for permanent, always-on access from anywhe
 
 ## 🚀 Platform Options
 
-### Option 1: Render (Recommended - Free Tier)
+### Option 1: Replit (Easiest - Free Tier)
+
+**Best for:** Quick deployment, beginners, learning
+
+**Steps:**
+
+1. **Create Replit Account**:
+   - Go to [replit.com](https://replit.com) and sign up
+
+2. **Import Project**:
+   - Click "Create Repl" → "Import from GitHub"
+   - Enter your repository URL
+   - Or upload your project folder
+
+3. **Run**:
+   - Click the green "Run" button
+   - Replit will automatically install dependencies and start the server
+
+4. **Access**:
+   - Use the URL Replit provides (e.g., `https://your-app.repl.co`)
+   - Your proxy is now live!
+
+**Pros:**
+- ✅ Easiest setup (just click Run)
+- ✅ Free tier available
+- ✅ Automatic HTTPS
+- ✅ Built-in code editor
+- ✅ No configuration needed (`.replit` file included)
+
+**Cons:**
+- ⚠️ Free tier sleeps after inactivity (~5 min)
+- ⚠️ Cold starts can be slow
+- ⚠️ Limited resources on free tier
+
+**See detailed guide:** [REPLIT_DEPLOY.md](./REPLIT_DEPLOY.md)
+
+---
+
+### Option 2: Render (Recommended - Free Tier)
 
 **Best for:** Beginners, free hosting
 

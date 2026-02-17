@@ -47,6 +47,13 @@ npm run tunnel       # Terminal 2
 
 See [TUNNEL_SETUP.md](TUNNEL_SETUP.md) for more options.
 
+### Cloud Deployment (Recommended)
+
+Deploy to Replit, Render, Railway, or other platforms for always-on access:
+
+- **Replit** (Easiest): [REPLIT_DEPLOY.md](REPLIT_DEPLOY.md)
+- **All Platforms**: [DEPLOY.md](DEPLOY.md)
+
 ## 📖 Documentation
 
 - **[QUICK_START.md](QUICK_START.md)](QUICK_START.md)** - Quick reference guide
