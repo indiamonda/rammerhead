@@ -11,9 +11,78 @@ Deploy Rammerhead to cloud platforms for permanent, always-on access from anywhe
 
 ## 🚀 Platform Options
 
-### Option 1: Replit (Easiest - Free Tier)
+### Option 1: Render (Recommended - Free Tier, No Time Limit)
 
-**Best for:** Quick deployment, beginners, learning
+**Best for:** Free hosting, beginners, permanent deployment
+
+**Steps:**
+
+1. **Push to GitHub**:
+   ```bash
+   git add .
+   git commit -m "Ready for deployment"
+   git push
+   ```
+
+2. **Deploy on Render**:
+   - Go to https://render.com
+   - Sign up/login (free)
+   - Click "New +" → "Web Service"
+   - Connect your GitHub repository
+   - Select the rammerhead repository
+   - Render auto-detects settings from `render.yaml`:
+     - **Build Command**: `npm install && npm run build`
+     - **Start Command**: `npm start`
+     - **Environment**: Node
+   - Click "Create Web Service"
+   - Wait 5-10 minutes for deployment
+
+3. **Access your proxy**:
+   - Render provides: `https://rammerhead-proxy.onrender.com`
+   - Use this URL from anywhere!
+
+**Pros:**
+- ✅ **Free forever** (no time limit)
+- ✅ Automatic HTTPS
+- ✅ Auto-deploys from GitHub
+- ✅ Easy setup
+- ✅ No credit card required
+
+**Cons:**
+- ⚠️ Spins down after 15 minutes of inactivity
+- ⚠️ First request after spin-down takes ~30 seconds
+- ⚠️ Upgrade to paid ($7/month) for always-on service
+
+---
+
+### Option 2: Railway (Quick Setup - $5 Free Credit/Month)
+
+**Best for:** Quick deployment, $5 free credit/month
+
+**Steps:**
+
+1. Go to https://railway.app
+2. Sign up with GitHub
+3. Click "New Project" → "Deploy from GitHub repo"
+4. Select your repository
+5. Railway auto-detects Node.js
+6. Deploy! (takes 2-5 minutes)
+
+**Pros:**
+- ✅ $5 free credit per month
+- ✅ Very fast deployment
+- ✅ Always-on (no spin-down)
+- ✅ Easy setup
+
+**Cons:**
+- ⚠️ Pay-as-you-go after free credit
+- ⚠️ Need to monitor usage
+
+---
+
+### Option 3: Replit (Easiest Setup - 30-Day Free Trial)
+
+**Best for:** Quick testing, learning (not for long-term hosting)
 
 **Steps:**
 
@@ -35,21 +104,23 @@ Deploy Rammerhead to cloud platforms for permanent, always-on access from anywhe
 
 **Pros:**
 - ✅ Easiest setup (just click Run)
-- ✅ Free tier available
 - ✅ Automatic HTTPS
 - ✅ Built-in code editor
 - ✅ No configuration needed (`.replit` file included)
 
 **Cons:**
+- ⚠️ **30-day hosting limit on free tier** (requires payment after)
 - ⚠️ Free tier sleeps after inactivity (~5 min)
 - ⚠️ Cold starts can be slow
 - ⚠️ Limited resources on free tier
 
 **See detailed guide:** [REPLIT_DEPLOY.md](./REPLIT_DEPLOY.md)
 
+**⚠️ Note:** Not recommended for permanent hosting due to 30-day limit.
+
 ---
 
-### Option 2: Render (Recommended - Free Tier)
+### Option 5: Fly.io (Global Edge - Free Tier)
 
 **Best for:** Beginners, free hosting
 
@@ -141,7 +212,7 @@ Deploy Rammerhead to cloud platforms for permanent, always-on access from anywhe
 
 ---
 
-### Option 4: Vercel
+### Option 6: Vercel
 
 **Best for:** Frontend-focused, may have WebSocket limitations
 

@@ -57,9 +57,12 @@ If you have Replit Pro, you can:
 
 ### Free Tier Limitations
 
+⚠️ **30-Day Limit**: Replit free tier only allows hosting for 30 days. After that, you need to pay to continue hosting.
+
 - **Sleeps after inactivity** - Free Repls sleep after ~5 minutes of inactivity
 - **Cold starts** - First request after sleep takes 10-30 seconds
 - **Resource limits** - Limited CPU and memory
+- **30-day hosting limit** - Requires payment after 30 days
 
 ### Upgrading to Replit Pro
 
@@ -68,6 +71,15 @@ For production use, consider Replit Pro:
 - More resources
 - Custom domains
 - Better performance
+- No 30-day limit
+
+### ⚠️ Better Free Alternatives
+
+If you need free hosting without time limits, consider:
+- **Render** - Free tier with no time limit (spins down after 15 min inactivity)
+- **Railway** - $5 free credit/month, pay-as-you-go
+- **Fly.io** - Free tier available
+- See [DEPLOY.md](./DEPLOY.md) for all options
 
 ## Troubleshooting
 
