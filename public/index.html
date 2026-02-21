@@ -1406,7 +1406,103 @@ body {
             }
             
             const basePath = getBasePath();
-            
+
+            // ============================================
+            // URL Shuffler (client-side mirror of server StrShuffler)
+            // ============================================
+            const _shufflerBaseDictionary = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
+            const _shuffledIndicator = '_rhs';
+            const _mod = (n, m) => ((n % m) + m) % m;
+
+            class StrShuffler {
+                constructor(dictionary) {
+                    this.dictionary = dictionary;
+                }
+                shuffle(str) {
+                    if (str.startsWith(_shuffledIndicator)) return str;
+                    let out = '';
+                    for (let i = 0; i < str.length; i++) {
+                        const ch = str.charAt(i);
+                        const idx = _shufflerBaseDictionary.indexOf(ch);
+                        if (ch === '%' && str.length - i >= 3) {
+                            out += ch; out += str.charAt(++i); out += str.charAt(++i);
+                        } else if (idx === -1) {
+                            out += ch;
+                        } else {
+                            out += this.dictionary.charAt(_mod(idx + i, _shufflerBaseDictionary.length));
+                        }
+                    }
+                    return _shuffledIndicator + out;
+                }
+                unshuffle(str) {
+                    if (!str.startsWith(_shuffledIndicator)) return str;
+                    str = str.slice(_shuffledIndicator.length);
+                    let out = '';
+                    for (let i = 0; i < str.length; i++) {
+                        const ch = str.charAt(i);
+                        const idx = this.dictionary.indexOf(ch);
+                        if (ch === '%' && str.length - i >= 3) {
+                            out += ch; out += str.charAt(++i); out += str.charAt(++i);
+                        } else if (idx === -1) {
+                            out += ch;
+                        } else {
+                            out += _shufflerBaseDictionary.charAt(_mod(idx - i, _shufflerBaseDictionary.length));
+                        }
+                    }
+                    return out;
+                }
+            }
+
+            let _shuffler = null; // Will be initialized when shuffle dict is fetched
+
+            async function getShuffler() {
+                if (_shuffler) return _shuffler;
+                try {
+                    const sessionId = getDeviceSessionId();
+                    const resp = await fetch(`${basePath}/api/shuffleDict?id=${encodeURIComponent(sessionId)}`);
+                    if (resp.ok) {
+                        const dictText = await resp.text();
+                        const dict = JSON.parse(dictText);
+                        if (dict) {
+                            _shuffler = new StrShuffler(dict);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Could not fetch shuffle dict:', e);
+                }
+                return _shuffler;
+            }
+
+            /**
+             * Extract the actual destination URL from a proxied iframe URL.
+             * The proxy URL format: http://host:port/[basePath/]sessionId/shuffledUrl
+             * where shuffledUrl is the entire destination URL (protocol + host + path + query + hash)
+             * shuffled as one string.
+             */
+            function extractRealUrl(proxyUrl) {
+                try {
+                    // Work with the full URL string to avoid browser URL parsing issues
+                    // Find the session ID pattern (32 hex chars) and extract everything after it
+                    const match = proxyUrl.match(/\/([a-f0-9]{32})\/(.+)/);
+                    if (match) {
+                        const shuffledPart = match[2];
+                        // Unshuffle using the client-side StrShuffler
+                        if (_shuffler && shuffledPart.startsWith(_shuffledIndicator)) {
+                            return _shuffler.unshuffle(shuffledPart);
+                        }
+                        // If not shuffled (no _rhs prefix), return as-is
+                        if (!shuffledPart.startsWith(_shuffledIndicator)) {
+                            return shuffledPart;
+                        }
+                        // Shuffled but no shuffler available — can't decode
+                        return null;
+                    }
+                } catch (e) {
+                    // Not a valid URL or extraction failed
+                }
+                return null;
+            }
+
             // Session Management - One session per device
             function getDeviceSessionId() {
                 let sessionId = localStorage.getItem('deviceSessionId');
@@ -1426,6 +1522,7 @@ body {
 
             function setDeviceSessionId(sessionId) {
                 localStorage.setItem('deviceSessionId', sessionId);
+                _shuffler = null; // Invalidate shuffler so it's re-fetched for new session
             }
 
             // ============================================
@@ -1632,6 +1729,10 @@ body {
             }
 
             function createTab(url = 'jq://newtab/', title = 'New Tab') {
+                // Normalize jq:// URLs to always have trailing slash
+                if (url.startsWith('jq://') && !url.endsWith('/')) {
+                    url = url + '/';
+                }
                 const tabId = `tab-${++tabIdCounter}`;
                 const tab = {
                     id: tabId,
@@ -1743,7 +1844,10 @@ body {
                 const contentElement = document.getElementById(`content-${tabId}`);
                 if (!contentElement) return;
 
-                // Handle special URLs
+                // Handle special URLs - normalize jq:// URLs to always have trailing slash
+                if (url.startsWith('jq://') && !url.endsWith('/')) {
+                    url = url + '/';
+                }
                 if (url.startsWith('jq://')) {
                     handleSpecialUrl(tabId, url);
                     if (addToHistory && tab.history[tab.history.length - 1] !== url) {
@@ -1778,7 +1882,20 @@ body {
                     }
                     proxiedUrl = `${basePath}/${sessionId}/${normalizedUrl}`;
                 }
+
+                // Ensure shuffler is ready (fetch shuffle dict after session exists)
+                if (!_shuffler) {
+                    await getShuffler();
+                }
                 
+                // Store actual URL in tab (always the real URL, not shuffled)
+                tab.url = normalizedUrl;
+                if (tabId === activeTabId) {
+                    urlInput.value = normalizedUrl;
+                }
+
+                // Clear any wallpaper background from newtab
+                contentElement.style.backgroundImage = '';
                 contentElement.innerHTML = `<iframe src="${proxiedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
                 
                 // Update tab title from iframe and intercept window.open/close
@@ -1795,28 +1912,19 @@ body {
                             // Try to get current URL from iframe (for redirect tracking)
                             try {
                                 const currentUrl = iframeWindow.location.href;
-                                // Extract destination URL from proxied URL pattern
-                                const urlMatch = currentUrl.match(/\/[^\/]+\/([^\/]+)\/(.+)$/);
-                                if (urlMatch && urlMatch[2]) {
-                                    // Unshuffle if needed (simplified - in production you'd need the shuffle dict)
-                                    let destUrl = decodeURIComponent(urlMatch[2]);
-                                    // Remove shuffle prefix if present
-                                    if (destUrl.startsWith('_rhs')) {
-                                        destUrl = destUrl.substring(4);
-                                    }
-                                    
-                                    // Update URL bar if it changed (redirect)
-                                    if (destUrl !== lastUrl && destUrl !== normalizedUrl && tabId === activeTabId) {
-                                        lastUrl = destUrl;
-                                        urlInput.value = destUrl;
-                                        tab.url = destUrl;
-                                        // Add redirect to history
-                                        if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
-                                            tab.history = tab.history.slice(0, tab.historyIndex + 1);
-                                            tab.history.push(destUrl);
-                                            tab.historyIndex = tab.history.length - 1;
-                                            updateNavigationButtons(tab);
-                                        }
+                                // Use extractRealUrl to properly unshuffle the proxy URL
+                                const destUrl = extractRealUrl(currentUrl);
+                                
+                                if (destUrl && destUrl !== lastUrl && destUrl !== normalizedUrl && tabId === activeTabId) {
+                                    lastUrl = destUrl;
+                                    urlInput.value = destUrl;
+                                    tab.url = destUrl;
+                                    // Add redirect to history
+                                    if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
+                                        tab.history = tab.history.slice(0, tab.historyIndex + 1);
+                                        tab.history.push(destUrl);
+                                        tab.historyIndex = tab.history.length - 1;
+                                        updateNavigationButtons(tab);
                                     }
                                 }
                             } catch (e) {
@@ -1974,11 +2082,25 @@ body {
             function handleSpecialUrl(tabId, url) {
                 const contentElement = document.getElementById(`content-${tabId}`);
                 
+                // Clear wallpaper background when navigating away from newtab
+                if (url !== 'jq://newtab/') {
+                    contentElement.style.backgroundImage = '';
+                }
+                
                 if (url === 'jq://home/') {
                     contentElement.innerHTML = getHomePageHTML();
                     updateTabTitle(tabId, 'Home');
                     initHomePage();
                 } else if (url === 'jq://newtab/') {
+                    const bg = localStorage.getItem('newTabBackground') || '';
+                    if (bg) {
+                        contentElement.style.backgroundImage = `url('${bg}')`;
+                        contentElement.style.backgroundSize = 'cover';
+                        contentElement.style.backgroundPosition = 'center';
+                        contentElement.style.backgroundRepeat = 'no-repeat';
+                    } else {
+                        contentElement.style.backgroundImage = '';
+                    }
                     contentElement.innerHTML = getNewTabHTML();
                     updateTabTitle(tabId, 'New Tab');
                 } else if (url === 'jq://sessions/') {
@@ -2033,6 +2155,9 @@ body {
                                 <div class="home-card-desc">Change theme colors and background</div>
                             </a>
             </div>
+                        <footer style="text-align: center; padding: 24px 0 16px; color: var(--color-text-tertiary, #888); font-size: 13px; opacity: 0.7;">
+                            &copy; JimmyQrg 2026
+                        </footer>
         </div>
                 `;
             }
@@ -2390,10 +2515,8 @@ body {
             function getNewTabHTML() {
                 const pageTitle = localStorage.getItem('pageTitle') || 'Unlinewize';
                 const savedFavicon = localStorage.getItem('faviconData') || 'favicon.png';
-                const background = localStorage.getItem('newTabBackground') || '';
-                const backgroundStyle = background ? `background-image: url('${background}'); background-size: cover; background-position: center; background-repeat: no-repeat;` : '';
                 return `
-                    <div class="new-tab-content" style="${backgroundStyle}">
+                    <div class="new-tab-content">
                         <div class="new-tab-logo-container">
                             <img class="favicon-logo" src="${savedFavicon}" alt="${pageTitle}" />
             </div>
@@ -3030,8 +3153,13 @@ body {
                 const tab = tabs.find(t => t.id === activeTabId);
                 if (!tab) return;
 
-                // Normalize URL if it's not a special URL
-                const finalUrl = url.startsWith('jq://') ? url : normalizeUrl(url);
+                // Normalize URL - add trailing slash for jq:// URLs, normalize others
+                let finalUrl;
+                if (url.startsWith('jq://')) {
+                    finalUrl = url.endsWith('/') ? url : url + '/';
+                } else {
+                    finalUrl = normalizeUrl(url);
+                }
                 tab.url = finalUrl;
                 urlInput.value = finalUrl;
                 
@@ -3060,7 +3188,9 @@ body {
                     const url = searchInput.value.trim();
                     if (!url) return;
                     const normalized = normalizeUrl(url);
-                    createTab(normalized);
+                    if (activeTabId) {
+                        loadTabContent(activeTabId, normalized);
+                    }
                 }
 
                 goButton?.addEventListener('click', handleNavigate);
@@ -3071,7 +3201,9 @@ body {
                 luckyButton?.addEventListener('click', () => {
                     const url = searchInput.value.trim();
                     if (!url) return;
-                    createTab('https://www.bing.com/search?q=' + encodeURIComponent(url));
+                    if (activeTabId) {
+                        loadTabContent(activeTabId, 'https://www.bing.com/search?q=' + encodeURIComponent(url));
+                    }
                 });
 
                 generateButton?.addEventListener('click', async () => {

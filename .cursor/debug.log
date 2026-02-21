@@ -71,3 +71,36 @@
 {"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/rammerhead/favicon.png","routerQuery":"GET /rammerhead/favicon.png","routeFound":false,"routesSize":101,"routesHas":false},"timestamp":1771698654598,"hypothesisId":"H3"}
 {"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/rammerhead/favicon.png","method":"GET","isRoute":false,"pipelineLength":2},"timestamp":1771698654598,"hypothesisId":"H3"}
 {"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/rammerhead/favicon.png","isRoute":false},"timestamp":1771698654599,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771699716070,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771699716076,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771699716077,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771699729851,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771699729851,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771699729852,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771699736987,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771699736988,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771699736988,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771699773131,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771699773132,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771699773132,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771699806780,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771699806781,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771699806781,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771699823978,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771699823979,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771699823980,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771699826113,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771699826114,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771699826114,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771699852296,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771699852297,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771699852297,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771699880014,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771699880015,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771699880016,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771700709601,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771700709603,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771700709603,"hypothesisId":"H5"}
+{"location":"RammerheadProxy.js:checkIsRoute","message":"Route check","data":{"url":"/favicon.png","routerQuery":"GET /favicon.png","routeFound":true,"routesSize":101,"routesHas":true},"timestamp":1771700717280,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:399","message":"_onRequest entry","data":{"url":"/favicon.png","method":"GET","isRoute":true,"pipelineLength":2},"timestamp":1771700717281,"hypothesisId":"H3"}
+{"location":"RammerheadProxy.js:413","message":"After pipeline, before super._onRequest","data":{"url":"/favicon.png","isRoute":true},"timestamp":1771700717281,"hypothesisId":"H5"}
