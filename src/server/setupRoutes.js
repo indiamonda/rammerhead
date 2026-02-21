@@ -310,4 +310,33 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     
     proxyServer.GET('/generatelink', handleGenerateLink);
     proxyServer.GET('/rammerhead/generatelink', handleGenerateLink);
+    
+    // Serve wallpapers from assets/wallpapers directory
+    const wallpapersDir = path.join(__dirname, '../../assets/wallpapers');
+    if (fs.existsSync(wallpapersDir)) {
+        const wallpaperFiles = fs.readdirSync(wallpapersDir).filter(f => f.endsWith('.jpg') || f.endsWith('.png'));
+        wallpaperFiles.forEach(file => {
+            proxyServer.GET(`/wallpapers/${file}`, (req, res) => {
+                try {
+                    const filePath = path.join(wallpapersDir, file);
+                    if (!fs.existsSync(filePath)) {
+                        res.writeHead(404);
+                        res.end('Not Found');
+                        return;
+                    }
+                    const content = fs.readFileSync(filePath);
+                    res.writeHead(200, {
+                        'Content-Type': mime.getType(file) || 'image/jpeg',
+                        'Cache-Control': 'public, max-age=31536000' // Cache wallpapers for 1 year
+                    });
+                    res.end(content);
+                } catch (error) {
+                    logger.error(`Error serving wallpaper ${file}: ${error.message}`);
+                    res.writeHead(500);
+                    res.end('Internal Server Error');
+                }
+            });
+        });
+        logger.info(`(setupRoutes) Registered ${wallpaperFiles.length} wallpaper routes`);
+    }
 };

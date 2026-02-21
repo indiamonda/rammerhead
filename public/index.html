@@ -38,6 +38,7 @@
     --color-primary-hover: #1557b0;
     --color-primary-active: #174ea6;
     --color-primary-light: #e8f0fe;
+    --color-primary-secondary: #34a853;
     --color-link: #1a73e8;
     --color-link-hover: #1557b0;
     --color-error-bg: #fce8e6;
@@ -76,6 +77,7 @@
     --color-primary-hover: #aecbfa;
     --color-primary-active: #669df6;
     --color-primary-light: #1e3a5f;
+    --color-primary-secondary: #81c995;
     --color-link: #8ab4f8;
     --color-link-hover: #aecbfa;
     --color-error-bg: #3c1e1e;
@@ -126,6 +128,7 @@ body {
     flex-shrink: 0;
     min-height: 36px;
     height: 36px;
+    gap: 0;
 }
 
 .tab-bar::-webkit-scrollbar {
@@ -143,20 +146,21 @@ body {
     border: 1px solid var(--color-border);
     border-bottom: none;
     border-radius: 8px 8px 0 0;
-    padding: 0 20px 0 16px;
-    margin-right: 1px;
-    margin-top: 7px;
+    padding: 0 32px 0 16px;
+    margin-right: -1px;
+    margin-top: 0;
     cursor: pointer;
     user-select: none;
-    min-width: 80px;
+    min-width: 100px;
     max-width: 240px;
-    height: 28px;
+    height: 36px;
     display: flex;
     align-items: center;
     gap: 8px;
     transition: all 0.2s ease;
     white-space: nowrap;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .tab:hover {
@@ -169,7 +173,7 @@ body {
     border-bottom: 1px solid var(--color-bg-tab-active);
     margin-bottom: -1px;
     margin-top: 0;
-    height: 29px;
+    height: 36px;
     box-shadow: 0 -1px 0 var(--color-bg-tab-active);
 }
 
@@ -891,6 +895,22 @@ body {
     to { transform: rotate(360deg); }
 }
 
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { 
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* ============================================
    Responsive Design
    ============================================ */
@@ -1009,6 +1029,25 @@ body {
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+.download-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--color-primary);
+    color: var(--color-white);
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    min-width: 18px;
+    text-align: center;
+    line-height: 14px;
+}
+
+.browser-button {
+    position: relative;
 }
 
 .browser-chrome {
@@ -1247,10 +1286,10 @@ body {
         <!-- Browser Chrome -->
         <div class="browser-chrome">
             <div class="browser-controls">
-                <button class="browser-button" id="back-button" disabled title="Back">
+                <button class="browser-button" id="back-button" title="Back">
                     <i class="fas fa-arrow-left"></i>
                 </button>
-                <button class="browser-button" id="forward-button" disabled title="Forward">
+                <button class="browser-button" id="forward-button" title="Forward">
                     <i class="fas fa-arrow-right"></i>
                 </button>
                 <button class="browser-button" id="refresh-button" title="Refresh">
@@ -1277,11 +1316,12 @@ body {
                 </button>
             </div>
             <div class="browser-actions">
+                <button class="browser-button" id="downloads-button" title="Downloads">
+                    <i class="fas fa-download"></i>
+                    <span class="download-badge" id="download-badge" style="display: none;">0</span>
+                </button>
                 <button class="browser-button" id="menu-button" title="Menu">
                     <i class="fas fa-ellipsis-v"></i>
-                </button>
-                <button class="browser-button" id="devtools-button" title="Developer Tools (F12)">
-                    <i class="fas fa-code"></i>
                 </button>
             </div>
         </div>
@@ -1306,23 +1346,17 @@ body {
             <div class="menu-item" data-action="history">
                 <i class="fas fa-history"></i> History
                 </div>
-            <div class="menu-item" data-action="downloads">
-                <i class="fas fa-download"></i> Downloads
-            </div>
             <div class="menu-divider"></div>
-            <div class="menu-item" data-action="privacy">
-                <i class="fas fa-shield-alt"></i> Privacy & Security
-        </div>
             <div class="menu-item" data-action="settings">
                 <i class="fas fa-cog"></i> Settings
-    </div>
+            </div>
             <div class="menu-item" data-action="devtools">
                 <i class="fas fa-code"></i> Developer Tools
-    </div>
+        </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="theme">
                 <i class="fas fa-moon" id="theme-icon"></i> <span id="theme-text">Dark Mode</span>
-            </div>
+    </div>
         </div>
 
         <!-- Browser Content -->
@@ -1457,6 +1491,12 @@ body {
                 localStorage.removeItem('browserHistory');
             }
             
+            function removeHistoryItem(url, timestamp) {
+                const history = getHistory();
+                const filtered = history.filter(item => !(item.url === url && item.timestamp === timestamp));
+                saveHistory(filtered);
+            }
+            
             // Downloads
             function getDownloads() {
                 const downloads = localStorage.getItem('downloads');
@@ -1476,6 +1516,10 @@ body {
                     status: 'completed'
                 });
                 saveDownloads(downloads);
+                // Update badge
+                if (typeof window.updateDownloadsBadge === 'function') {
+                    window.updateDownloadsBadge();
+                }
             }
             
             // Search Engines
@@ -1483,8 +1527,7 @@ body {
                 google: { name: 'Google', url: 'https://www.google.com/search?q=' },
                 bing: { name: 'Bing', url: 'https://www.bing.com/search?q=' },
                 duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
-                yahoo: { name: 'Yahoo', url: 'https://search.yahoo.com/search?p=' },
-                startpage: { name: 'Startpage', url: 'https://www.startpage.com/sp/search?query=' }
+                yahoo: { name: 'Yahoo', url: 'https://search.yahoo.com/search?p=' }
             };
             
             function getSearchEngine() {
@@ -1594,6 +1637,8 @@ body {
                     id: tabId,
                     url: url,
                     title: title,
+                    history: [url],
+                    historyIndex: 0,
                     canGoBack: false,
                     canGoForward: false
                 };
@@ -1681,6 +1726,8 @@ body {
                 if (tab) {
                     urlInput.value = tab.url;
                     updateNavigationButtons(tab);
+                } else {
+                    updateNavigationButtons(null);
                 }
                 
                 // Update bookmark button if function exists
@@ -1689,7 +1736,7 @@ body {
                 }
             }
 
-            async function loadTabContent(tabId, url) {
+            async function loadTabContent(tabId, url, addToHistory = true) {
                 const tab = tabs.find(t => t.id === tabId);
                 if (!tab) return;
 
@@ -1699,6 +1746,12 @@ body {
                 // Handle special URLs
                 if (url.startsWith('jq://')) {
                     handleSpecialUrl(tabId, url);
+                    if (addToHistory && tab.history[tab.history.length - 1] !== url) {
+                        tab.history = tab.history.slice(0, tab.historyIndex + 1);
+                        tab.history.push(url);
+                        tab.historyIndex = tab.history.length - 1;
+                    }
+                    updateNavigationButtons(tab);
                     return;
                 }
 
@@ -1707,15 +1760,14 @@ body {
                 const sessionId = getDeviceSessionId();
                 
                 // Ensure session exists and get proxied URL with proper shuffling
+                let proxiedUrl;
                 try {
                     const response = await fetch(`${basePath}/getproxiedurl?id=${encodeURIComponent(sessionId)}&url=${encodeURIComponent(normalizedUrl)}`);
                     if (!response.ok) {
                         throw new Error(`Server error: ${response.status}`);
                     }
                     const data = await response.json();
-                    const proxiedUrl = data.proxiedUrl || `${basePath}/${sessionId}/${normalizedUrl}`;
-                    
-                    contentElement.innerHTML = `<iframe src="${proxiedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+                    proxiedUrl = data.proxiedUrl || `${basePath}/${sessionId}/${normalizedUrl}`;
                 } catch (e) {
                     console.error('Failed to get proxied URL:', e);
                     // Fallback: ensure session and use direct URL
@@ -1724,17 +1776,53 @@ body {
                     } catch (e2) {
                         console.error('Failed to ensure session:', e2);
                     }
-                    const proxiedUrl = `${basePath}/${sessionId}/${normalizedUrl}`;
-                    contentElement.innerHTML = `<iframe src="${proxiedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+                    proxiedUrl = `${basePath}/${sessionId}/${normalizedUrl}`;
                 }
+                
+                contentElement.innerHTML = `<iframe src="${proxiedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
                 
                 // Update tab title from iframe and intercept window.open/close
                 const iframe = contentElement.querySelector('iframe');
                 if (iframe) {
+                    // Track iframe URL changes for redirects
+                    let lastUrl = normalizedUrl;
+                    
                     iframe.onload = () => {
                         try {
                             const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                             const iframeWindow = iframe.contentWindow;
+                            
+                            // Try to get current URL from iframe (for redirect tracking)
+                            try {
+                                const currentUrl = iframeWindow.location.href;
+                                // Extract destination URL from proxied URL pattern
+                                const urlMatch = currentUrl.match(/\/[^\/]+\/([^\/]+)\/(.+)$/);
+                                if (urlMatch && urlMatch[2]) {
+                                    // Unshuffle if needed (simplified - in production you'd need the shuffle dict)
+                                    let destUrl = decodeURIComponent(urlMatch[2]);
+                                    // Remove shuffle prefix if present
+                                    if (destUrl.startsWith('_rhs')) {
+                                        destUrl = destUrl.substring(4);
+                                    }
+                                    
+                                    // Update URL bar if it changed (redirect)
+                                    if (destUrl !== lastUrl && destUrl !== normalizedUrl && tabId === activeTabId) {
+                                        lastUrl = destUrl;
+                                        urlInput.value = destUrl;
+                                        tab.url = destUrl;
+                                        // Add redirect to history
+                                        if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
+                                            tab.history = tab.history.slice(0, tab.historyIndex + 1);
+                                            tab.history.push(destUrl);
+                                            tab.historyIndex = tab.history.length - 1;
+                                            updateNavigationButtons(tab);
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                // Cross-origin or other error - can't read iframe URL
+                            }
+                            
                             const title = iframeDoc.title || new URL(normalizedUrl).hostname;
                             updateTabTitle(tabId, title);
                             
@@ -1913,14 +2001,6 @@ body {
                     contentElement.innerHTML = getDownloadsPageHTML();
                     updateTabTitle(tabId, 'Downloads');
                     initDownloadsPage();
-                } else if (url === 'jq://privacy/') {
-                    contentElement.innerHTML = getPrivacyPageHTML();
-                    updateTabTitle(tabId, 'Privacy & Security');
-                    initPrivacyPage();
-                } else if (url === 'jq://stats/') {
-                    contentElement.innerHTML = getStatsPageHTML();
-                    updateTabTitle(tabId, 'Statistics');
-                    initStatsPage();
                 }
             }
 
@@ -1937,40 +2017,20 @@ body {
                                 <div class="home-card-title">New Tab</div>
                                 <div class="home-card-desc">Search and browse the web</div>
                             </a>
-                            <a href="jq://bookmarks/" class="home-card" data-url="jq://bookmarks/">
-                                <div class="home-card-icon"><i class="fas fa-bookmark"></i></div>
-                                <div class="home-card-title">Bookmarks</div>
-                                <div class="home-card-desc">Your saved bookmarks</div>
-                            </a>
-                            <a href="jq://history/" class="home-card" data-url="jq://history/">
-                                <div class="home-card-icon"><i class="fas fa-history"></i></div>
-                                <div class="home-card-title">History</div>
-                                <div class="home-card-desc">Browsing history</div>
-                            </a>
-                            <a href="jq://downloads/" class="home-card" data-url="jq://downloads/">
-                                <div class="home-card-icon"><i class="fas fa-download"></i></div>
-                                <div class="home-card-title">Downloads</div>
-                                <div class="home-card-desc">Download history</div>
-                            </a>
                             <a href="jq://sessions/" class="home-card" data-url="jq://sessions/">
                                 <div class="home-card-icon"><i class="fas fa-key"></i></div>
                                 <div class="home-card-title">Sessions</div>
                                 <div class="home-card-desc">Manage your proxy session</div>
                             </a>
-                            <a href="jq://privacy/" class="home-card" data-url="jq://privacy/">
-                                <div class="home-card-icon"><i class="fas fa-shield-alt"></i></div>
-                                <div class="home-card-title">Privacy</div>
-                                <div class="home-card-desc">Privacy & security</div>
-                            </a>
-                            <a href="jq://stats/" class="home-card" data-url="jq://stats/">
-                                <div class="home-card-icon"><i class="fas fa-chart-bar"></i></div>
-                                <div class="home-card-title">Statistics</div>
-                                <div class="home-card-desc">Browsing statistics</div>
-                            </a>
                             <a href="jq://settings/" class="home-card" data-url="jq://settings/">
                                 <div class="home-card-icon"><i class="fas fa-cog"></i></div>
                                 <div class="home-card-title">Settings</div>
                                 <div class="home-card-desc">Customize your browser</div>
+                            </a>
+                            <a href="#" class="home-card" data-url="customize-theme" id="customize-theme-card">
+                                <div class="home-card-icon"><i class="fas fa-palette"></i></div>
+                                <div class="home-card-title">Customize Theme</div>
+                                <div class="home-card-desc">Change theme colors and background</div>
                             </a>
             </div>
         </div>
@@ -1982,18 +2042,357 @@ body {
                     card.addEventListener('click', (e) => {
                         e.preventDefault();
                         const url = card.dataset.url;
-                        if (url) {
+                        if (url === 'customize-theme') {
+                            showCustomizeThemeModal();
+                        } else if (url) {
                             createTab(url);
                         }
                     });
+                });
+            }
+            
+            function showCustomizeThemeModal() {
+                const currentThemeColor = localStorage.getItem('themeColor') || '#1a73e8';
+                const currentThemeColorSecondary = localStorage.getItem('themeColorSecondary') || '#34a853';
+                const currentBackground = localStorage.getItem('newTabBackground') || '';
+                const uploadedBackground = localStorage.getItem('uploadedBackground') || '';
+                
+                // Generate wallpaper gallery HTML with refined design
+                const wallpaperNumbers = Array.from({length: 34}, (_, i) => i + 1);
+                const wallpaperGallery = wallpaperNumbers.map(num => {
+                    const isSelected = currentBackground.includes(`/wallpapers/${num}.jpg`);
+                    return `
+                        <div class="wallpaper-thumb" data-wallpaper="${num}.jpg" style="
+                            width: 140px; 
+                            height: 90px; 
+                            background-image: url('/wallpapers/${num}.jpg'); 
+                            background-size: cover; 
+                            background-position: center; 
+                            border: 3px solid ${isSelected ? 'var(--color-primary)' : 'transparent'}; 
+                            border-radius: 8px; 
+                            cursor: pointer; 
+                            position: relative;
+                            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                            box-shadow: ${isSelected ? '0 4px 12px rgba(0,0,0,0.15)' : '0 2px 4px rgba(0,0,0,0.1)'};
+                            overflow: hidden;
+                        " ${isSelected ? 'data-selected="true"' : ''}>
+                            <div style="position: absolute; inset: 0; background: ${isSelected ? 'rgba(0,0,0,0.1)' : 'transparent'}; transition: background 0.3s;"></div>
+                            ${isSelected ? '<div style="position: absolute; top: 8px; right: 8px; background: var(--color-primary); color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 1;"><i class="fas fa-check"></i></div>' : ''}
+                        </div>
+                    `;
+                }).join('');
+                
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay';
+                modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 10000; display: flex; align-items: center; justify-content: center; overflow-y: auto; padding: 24px; animation: fadeIn 0.2s ease-out;';
+                modal.innerHTML = `
+                    <div style="
+                        background: var(--color-bg-primary); 
+                        padding: 32px; 
+                        border-radius: 16px; 
+                        max-width: 800px; 
+                        width: 100%; 
+                        max-height: 90vh; 
+                        overflow-y: auto; 
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        border: 1px solid var(--color-border);
+                        animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    ">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid var(--color-border-divider);">
+                            <h2 style="margin: 0; font-size: 24px; font-weight: 600; color: var(--color-text-primary); display: flex; align-items: center; gap: 12px;">
+                                <i class="fas fa-palette" style="color: var(--color-primary);"></i> Customize Theme
+                            </h2>
+                            <button id="close-modal-button" style="background: none; border: none; color: var(--color-text-icon); cursor: pointer; padding: 8px; border-radius: 50%; transition: all 0.2s; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <div style="margin-bottom: 32px;">
+                            <label style="display: block; margin-bottom: 16px; font-weight: 500; color: var(--color-text-primary); font-size: 14px;">
+                                <i class="fas fa-fill-drip" style="margin-right: 8px; color: var(--color-primary);"></i>Theme Colors
+                            </label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div>
+                                    <label for="theme-color-picker" style="display: block; margin-bottom: 8px; font-size: 13px; color: var(--color-text-secondary);">Primary Color</label>
+                                    <div style="display: flex; gap: 12px; align-items: center; background: var(--color-bg-tertiary); padding: 12px; border-radius: 8px; border: 1px solid var(--color-border);">
+                                        <input type="color" id="theme-color-picker" value="${currentThemeColor}" style="width: 56px; height: 40px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                                        <input type="text" id="theme-color-input" value="${currentThemeColor}" style="flex: 1; padding: 10px; border: 1px solid var(--color-border); border-radius: 8px; font-family: var(--font-family-mono); font-size: 13px; background: var(--color-bg-primary); color: var(--color-text-primary); transition: all 0.2s;">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="theme-color-secondary-picker" style="display: block; margin-bottom: 8px; font-size: 13px; color: var(--color-text-secondary);">Secondary Color</label>
+                                    <div style="display: flex; gap: 12px; align-items: center; background: var(--color-bg-tertiary); padding: 12px; border-radius: 8px; border: 1px solid var(--color-border);">
+                                        <input type="color" id="theme-color-secondary-picker" value="${currentThemeColorSecondary}" style="width: 56px; height: 40px; border: 2px solid var(--color-border); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                                        <input type="text" id="theme-color-secondary-input" value="${currentThemeColorSecondary}" style="flex: 1; padding: 10px; border: 1px solid var(--color-border); border-radius: 8px; font-family: var(--font-family-mono); font-size: 13px; background: var(--color-bg-primary); color: var(--color-text-primary); transition: all 0.2s;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 32px;">
+                            <label style="display: block; margin-bottom: 12px; font-weight: 500; color: var(--color-text-primary); font-size: 14px;">
+                                <i class="fas fa-image" style="margin-right: 8px; color: var(--color-primary);"></i>New Tab Background
+                            </label>
+                            
+                            <div style="margin-bottom: 16px;">
+                                <div style="
+                                    display: grid; 
+                                    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
+                                    gap: 16px; 
+                                    max-height: 320px; 
+                                    overflow-y: auto; 
+                                    padding: 16px; 
+                                    background: var(--color-bg-tertiary); 
+                                    border-radius: 12px;
+                                    border: 1px solid var(--color-border);
+                                ">
+                                    ${wallpaperGallery}
+                                </div>
+                            </div>
+                            
+                            <div style="margin-bottom: 16px;">
+                                <label for="background-upload" style="
+                                    display: block;
+                                    padding: 20px;
+                                    border: 2px dashed var(--color-border);
+                                    border-radius: 12px;
+                                    text-align: center;
+                                    cursor: pointer;
+                                    transition: all 0.3s;
+                                    background: var(--color-bg-tertiary);
+                                    color: var(--color-text-secondary);
+                                " onmouseover="this.style.borderColor='var(--color-primary)'; this.style.background='var(--color-primary-light)'" onmouseout="this.style.borderColor='var(--color-border)'; this.style.background='var(--color-bg-tertiary)'">
+                                    <i class="fas fa-cloud-upload-alt" style="font-size: 32px; margin-bottom: 8px; display: block; color: var(--color-primary);"></i>
+                                    <div style="font-weight: 500; margin-bottom: 4px;">Upload Custom Background</div>
+                                    <div style="font-size: 12px; color: var(--color-text-muted);">Click to select an image file</div>
+                                    <input type="file" id="background-upload" accept="image/*" style="display: none;">
+                                </label>
+                                <div id="uploaded-preview" style="display: ${uploadedBackground ? 'block' : 'none'}; margin-top: 12px;">
+                                    <div style="position: relative; display: inline-block;">
+                                        <img id="uploaded-image-preview" src="${uploadedBackground}" style="max-width: 200px; max-height: 120px; border-radius: 8px; border: 2px solid var(--color-primary); box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                                        <button id="remove-uploaded" style="position: absolute; top: -8px; right: -8px; background: var(--color-error-bg); color: var(--color-error-text); border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                            <i class="fas fa-times" style="font-size: 12px;"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="text" id="background-input" value="${currentBackground && !currentBackground.startsWith('data:') ? currentBackground : ''}" placeholder="Or enter image URL" style="flex: 1; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-primary); color: var(--color-text-primary); font-size: 14px; transition: all 0.2s;">
+                                <button class="button button-secondary" id="clear-background-button" style="white-space: nowrap; padding: 12px 20px;">
+                                    <i class="fas fa-times"></i> Clear
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--color-border-divider);">
+                            <button class="button button-secondary" id="cancel-theme-button" style="padding: 12px 24px;">
+                                Cancel
+                            </button>
+                            <button class="button" id="save-theme-button" style="padding: 12px 24px; background: var(--color-primary); color: white; font-weight: 500;">
+                                <i class="fas fa-check" style="margin-right: 8px;"></i>Save Changes
+                            </button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                
+                const colorPicker = modal.querySelector('#theme-color-picker');
+                const colorInput = modal.querySelector('#theme-color-input');
+                const colorSecondaryPicker = modal.querySelector('#theme-color-secondary-picker');
+                const colorSecondaryInput = modal.querySelector('#theme-color-secondary-input');
+                const backgroundInput = modal.querySelector('#background-input');
+                const clearBackgroundButton = modal.querySelector('#clear-background-button');
+                const backgroundUpload = modal.querySelector('#background-upload');
+                const uploadedPreview = modal.querySelector('#uploaded-preview');
+                const uploadedImagePreview = modal.querySelector('#uploaded-image-preview');
+                const removeUploaded = modal.querySelector('#remove-uploaded');
+                const closeModalButton = modal.querySelector('#close-modal-button');
+                
+                // Close modal handlers
+                closeModalButton.addEventListener('click', () => {
+                    document.body.removeChild(modal);
+                });
+                closeModalButton.addEventListener('mouseenter', () => {
+                    closeModalButton.style.background = 'var(--color-bg-hover)';
+                    closeModalButton.style.color = 'var(--color-text-primary)';
+                });
+                closeModalButton.addEventListener('mouseleave', () => {
+                    closeModalButton.style.background = 'none';
+                    closeModalButton.style.color = 'var(--color-text-icon)';
+                });
+                
+                // Primary color handlers
+                colorPicker.addEventListener('input', (e) => {
+                    colorInput.value = e.target.value;
+                });
+                
+                colorInput.addEventListener('input', (e) => {
+                    if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+                        colorPicker.value = e.target.value;
+                    }
+                });
+                
+                // Secondary color handlers
+                colorSecondaryPicker.addEventListener('input', (e) => {
+                    colorSecondaryInput.value = e.target.value;
+                });
+                
+                colorSecondaryInput.addEventListener('input', (e) => {
+                    if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+                        colorSecondaryPicker.value = e.target.value;
+                    }
+                });
+                
+                // Handle file upload
+                backgroundUpload.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (file && file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const base64 = event.target.result;
+                            localStorage.setItem('uploadedBackground', base64);
+                            uploadedImagePreview.src = base64;
+                            uploadedPreview.style.display = 'block';
+                            backgroundInput.value = ''; // Clear URL input
+                            // Clear wallpaper selection
+                            modal.querySelectorAll('.wallpaper-thumb').forEach(t => {
+                                t.style.borderColor = 'transparent';
+                                t.removeAttribute('data-selected');
+                                const check = t.querySelector('div');
+                                if (check && check.querySelector('i.fa-check')) check.remove();
+                            });
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+                
+                // Remove uploaded image
+                removeUploaded.addEventListener('click', () => {
+                    localStorage.removeItem('uploadedBackground');
+                    uploadedPreview.style.display = 'none';
+                    backgroundUpload.value = '';
+                });
+                
+                // Handle wallpaper selection
+                modal.querySelectorAll('.wallpaper-thumb').forEach(thumb => {
+                    thumb.addEventListener('click', () => {
+                        // Remove selection from all thumbs
+                        modal.querySelectorAll('.wallpaper-thumb').forEach(t => {
+                            t.style.borderColor = 'transparent';
+                            t.removeAttribute('data-selected');
+                            const overlay = t.querySelector('div[style*="position: absolute; inset"]');
+                            if (overlay) overlay.style.background = 'transparent';
+                            const check = t.querySelector('div[style*="top: 8px"]');
+                            if (check) check.remove();
+                        });
+                        
+                        // Select clicked wallpaper
+                        const wallpaper = thumb.dataset.wallpaper;
+                        const wallpaperUrl = `/wallpapers/${wallpaper}`;
+                        backgroundInput.value = wallpaperUrl;
+                        // Clear uploaded image
+                        localStorage.removeItem('uploadedBackground');
+                        uploadedPreview.style.display = 'none';
+                        backgroundUpload.value = '';
+                        
+                        thumb.style.borderColor = 'var(--color-primary)';
+                        thumb.setAttribute('data-selected', 'true');
+                        const overlay = thumb.querySelector('div[style*="position: absolute; inset"]');
+                        if (overlay) overlay.style.background = 'rgba(0,0,0,0.1)';
+                        thumb.innerHTML = '<div style="position: absolute; inset: 0; background: rgba(0,0,0,0.1); transition: background 0.3s;"></div><div style="position: absolute; top: 8px; right: 8px; background: var(--color-primary); color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 1;"><i class="fas fa-check"></i></div>';
+                    });
+                    
+                    // Add hover effect
+                    thumb.addEventListener('mouseenter', () => {
+                        if (!thumb.hasAttribute('data-selected')) {
+                            thumb.style.borderColor = 'var(--color-primary)';
+                            thumb.style.transform = 'scale(1.05)';
+                            const overlay = thumb.querySelector('div[style*="position: absolute; inset"]');
+                            if (overlay) overlay.style.background = 'rgba(0,0,0,0.05)';
+                        }
+                    });
+                    thumb.addEventListener('mouseleave', () => {
+                        if (!thumb.hasAttribute('data-selected')) {
+                            thumb.style.borderColor = 'transparent';
+                            thumb.style.transform = 'scale(1)';
+                            const overlay = thumb.querySelector('div[style*="position: absolute; inset"]');
+                            if (overlay) overlay.style.background = 'transparent';
+                        }
+                    });
+                });
+                
+                clearBackgroundButton.addEventListener('click', () => {
+                    backgroundInput.value = '';
+                    localStorage.removeItem('uploadedBackground');
+                    uploadedPreview.style.display = 'none';
+                    backgroundUpload.value = '';
+                    modal.querySelectorAll('.wallpaper-thumb').forEach(t => {
+                        t.style.borderColor = 'transparent';
+                        t.removeAttribute('data-selected');
+                        const overlay = t.querySelector('div[style*="position: absolute; inset"]');
+                        if (overlay) overlay.style.background = 'transparent';
+                        const check = t.querySelector('div[style*="top: 8px"]');
+                        if (check) check.remove();
+                    });
+                });
+                
+                modal.querySelector('#save-theme-button').addEventListener('click', () => {
+                    const themeColor = colorInput.value;
+                    const themeColorSecondary = colorSecondaryInput.value;
+                    const background = backgroundInput.value.trim();
+                    const uploadedBg = localStorage.getItem('uploadedBackground') || '';
+                    
+                    if (/^#[0-9A-F]{6}$/i.test(themeColor) && /^#[0-9A-F]{6}$/i.test(themeColorSecondary)) {
+                        localStorage.setItem('themeColor', themeColor);
+                        localStorage.setItem('themeColorSecondary', themeColorSecondary);
+                        
+                        // Priority: uploaded image > URL input > nothing
+                        if (uploadedBg) {
+                            localStorage.setItem('newTabBackground', uploadedBg);
+                        } else if (background) {
+                            localStorage.setItem('newTabBackground', background);
+                        } else {
+                            localStorage.removeItem('newTabBackground');
+                        }
+                        
+                        // Apply theme colors to CSS variables
+                        document.documentElement.style.setProperty('--color-primary', themeColor);
+                        document.documentElement.style.setProperty('--color-link', themeColor);
+                        document.documentElement.style.setProperty('--color-primary-secondary', themeColorSecondary);
+                        
+                        // Update new tab background if we're on it
+                        if (activeTabId) {
+                            const tab = tabs.find(t => t.id === activeTabId);
+                            if (tab && tab.url === 'jq://newtab/') {
+                                loadTabContent(activeTabId, 'jq://newtab/');
+                            }
+                        }
+                        
+                        document.body.removeChild(modal);
+                    } else {
+                        alert('Please enter valid hex colors for both primary and secondary colors (e.g., #1a73e8)');
+                    }
+                });
+                
+                modal.querySelector('#cancel-theme-button').addEventListener('click', () => {
+                    document.body.removeChild(modal);
+                });
+                
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        document.body.removeChild(modal);
+                    }
                 });
             }
 
             function getNewTabHTML() {
                 const pageTitle = localStorage.getItem('pageTitle') || 'Unlinewize';
                 const savedFavicon = localStorage.getItem('faviconData') || 'favicon.png';
+                const background = localStorage.getItem('newTabBackground') || '';
+                const backgroundStyle = background ? `background-image: url('${background}'); background-size: cover; background-position: center; background-repeat: no-repeat;` : '';
                 return `
-                    <div class="new-tab-content">
+                    <div class="new-tab-content" style="${backgroundStyle}">
                         <div class="new-tab-logo-container">
                             <img class="favicon-logo" src="${savedFavicon}" alt="${pageTitle}" />
             </div>
@@ -2007,8 +2406,8 @@ body {
                                 <input type="text" class="search-input" id="newtab-search-input" placeholder="Search or type a URL" autocomplete="off" />
                 </div>
                             <div class="search-buttons">
-                                <button class="search-button" id="newtab-go-button">Search</button>
-                                <button class="search-button" id="newtab-lucky-button">I'm Feeling Lucky</button>
+                                <button class="search-button" id="newtab-go-button">Open</button>
+                                <button class="search-button" id="newtab-lucky-button">Search</button>
             </div>
         </div>
                         <div class="generate-link-section">
@@ -2088,11 +2487,6 @@ body {
                             <button class="button" id="save-favicon-button">Save Favicon</button>
                         </div>
                         <div class="settings-section">
-                            <h2>Reset Settings</h2>
-                            <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Reset all settings to their default values.</p>
-                            <button class="button button-secondary" id="reset-settings-button">Reset All Settings</button>
-                        </div>
-                        <div class="settings-section">
                             <h2>Search Engine</h2>
                             <div class="form-group">
                                 <label for="search-engine-select">Default Search Engine</label>
@@ -2103,6 +2497,88 @@ body {
                                 </select>
                             </div>
                             <button class="button" id="save-search-engine-button">Save</button>
+                        </div>
+                        <div class="settings-section">
+                            <h2><i class="fas fa-shield-alt"></i> Privacy & Security</h2>
+                            <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Manage your privacy and security settings</p>
+                            <div class="action-buttons">
+                                <button class="button button-secondary" id="settings-clear-cookies-button"><i class="fas fa-cookie"></i> Clear Cookies</button>
+                                <button class="button button-secondary" id="settings-clear-cache-button"><i class="fas fa-broom"></i> Clear Cache</button>
+                                <button class="button button-secondary" id="settings-clear-storage-button"><i class="fas fa-database"></i> Clear Storage</button>
+                                <button class="button button-secondary" id="settings-clear-all-button"><i class="fas fa-trash-alt"></i> Clear All Data</button>
+                            </div>
+                            <div style="margin-top: 16px;">
+                                <button class="button button-secondary" id="settings-view-cookies-button"><i class="fas fa-eye"></i> View Cookies</button>
+                                <div id="settings-cookies-display" style="margin-top: 16px;"></div>
+                            </div>
+                            <div class="form-group" style="margin-top: 20px;">
+                                <label for="settings-user-agent-input">Custom User Agent</label>
+                                <input type="text" id="settings-user-agent-input" class="form-control" 
+                                    value="${localStorage.getItem('userAgent') || navigator.userAgent}" 
+                                    placeholder="User agent string" />
+                            </div>
+                            <button class="button" id="settings-save-user-agent-button">Save User Agent</button>
+                        </div>
+                        <div class="settings-section">
+                            <h2><i class="fas fa-chart-bar"></i> Statistics</h2>
+                            <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Your browsing statistics</p>
+                            ${(() => {
+                                const stats = getStats();
+                                const daysSinceStart = Math.floor((Date.now() - stats.startDate) / (1000 * 60 * 60 * 24));
+                                return `
+                                    <div class="stats-grid" style="margin-top: 16px;">
+                                        <div class="stat-card">
+                                            <div class="stat-value">${stats.sitesVisited}</div>
+                                            <div class="stat-label">Sites Visited</div>
+                                        </div>
+                                        <div class="stat-card">
+                                            <div class="stat-value">${getHistory().length}</div>
+                                            <div class="stat-label">History Entries</div>
+                                        </div>
+                                        <div class="stat-card">
+                                            <div class="stat-value">${getBookmarks().length}</div>
+                                            <div class="stat-label">Bookmarks</div>
+                                        </div>
+                                        <div class="stat-card">
+                                            <div class="stat-value">${daysSinceStart}</div>
+                                            <div class="stat-label">Days Active</div>
+                                        </div>
+                                    </div>
+                                    <div style="margin-top: 24px;">
+                                        <h3 style="font-size: 16px; margin-bottom: 12px;">Most Visited Sites</h3>
+                                        ${(() => {
+                                            const history = getHistory();
+                                            const siteCounts = {};
+                                            history.forEach(item => {
+                                                try {
+                                                    const url = new URL(item.url);
+                                                    const domain = url.hostname.replace('www.', '');
+                                                    siteCounts[domain] = (siteCounts[domain] || 0) + 1;
+                                                } catch (e) {}
+                                            });
+                                            const mostVisited = Object.entries(siteCounts)
+                                                .sort((a, b) => b[1] - a[1])
+                                                .slice(0, 10);
+                                            if (mostVisited.length === 0) {
+                                                return '<p style="color: var(--color-text-secondary);">No sites visited yet.</p>';
+                                            }
+                                            return '<table class="data-table"><thead><tr><th>Site</th><th>Visits</th><th>Action</th></tr></thead><tbody>' +
+                                                mostVisited.map(([domain, count]) => 
+                                                    `<tr><td>${domain}</td><td>${count}</td><td><button class="button button-secondary" onclick="createTab('https://${domain}')"><i class="fas fa-external-link-alt"></i></button></td></tr>`
+                                                ).join('') +
+                                                '</tbody></table>';
+                                        })()}
+                                    </div>
+                                    <div style="margin-top: 24px;">
+                                        <button class="button button-secondary" id="clear-statistics-button"><i class="fas fa-trash-alt"></i> Clear Statistics</button>
+                                    </div>
+                                `;
+                            })()}
+                        </div>
+                        <div class="settings-section">
+                            <h2>Reset Settings</h2>
+                            <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Reset all settings to their default values.</p>
+                            <button class="button button-secondary" id="reset-settings-button">Reset All Settings</button>
                         </div>
                         <div class="success-message" id="settings-success-message"></div>
                         <div class="error-message" id="settings-error-message"></div>
@@ -2194,7 +2670,8 @@ body {
                                                     <td>${item.title}</td>
                                                     <td><a href="${item.url}" style="color: var(--color-link);">${item.url}</a></td>
                                                     <td>
-                                                        <button class="button button-secondary" onclick="openHistoryItem('${item.url}')"><i class="fas fa-external-link-alt"></i></button>
+                                                        <button class="button button-secondary" onclick="openHistoryItem('${item.url}')" title="Open"><i class="fas fa-external-link-alt"></i></button>
+                                                        <button class="button button-secondary" onclick="deleteHistoryItem('${item.url}', ${item.timestamp})" title="Delete" style="margin-left: 8px;"><i class="fas fa-trash"></i></button>
                                                     </td>
                                                 </tr>
                                             `).join('')}
@@ -2307,10 +2784,6 @@ body {
                                 <div class="stat-value">${daysSinceStart}</div>
                                 <div class="stat-label">Days Active</div>
                             </div>
-                        </div>
-                        <div class="settings-section" style="margin-top: 24px;">
-                            <h2>Most Visited Sites</h2>
-                            <p style="color: var(--color-text-secondary);">Coming soon...</p>
                         </div>
                     </div>
                 `;
@@ -2514,11 +2987,44 @@ body {
             }
 
             function updateNavigationButtons(tab) {
+                if (!tab) {
+                    backButton.disabled = true;
+                    forwardButton.disabled = true;
+                    return;
+                }
+                tab.canGoBack = tab.historyIndex > 0;
+                tab.canGoForward = tab.historyIndex < tab.history.length - 1;
                 backButton.disabled = !tab.canGoBack;
                 forwardButton.disabled = !tab.canGoForward;
             }
+            
+            function goBack() {
+                if (!activeTabId) return;
+                const tab = tabs.find(t => t.id === activeTabId);
+                if (!tab || tab.historyIndex <= 0) return;
+                
+                tab.historyIndex--;
+                const url = tab.history[tab.historyIndex];
+                tab.url = url;
+                urlInput.value = url;
+                loadTabContent(activeTabId, url, false); // false = don't add to history
+                updateNavigationButtons(tab);
+            }
+            
+            function goForward() {
+                if (!activeTabId) return;
+                const tab = tabs.find(t => t.id === activeTabId);
+                if (!tab || tab.historyIndex >= tab.history.length - 1) return;
+                
+                tab.historyIndex++;
+                const url = tab.history[tab.historyIndex];
+                tab.url = url;
+                urlInput.value = url;
+                loadTabContent(activeTabId, url, false); // false = don't add to history
+                updateNavigationButtons(tab);
+            }
 
-            function navigateToUrl(url) {
+            function navigateToUrl(url, addToHistory = true) {
                 if (!activeTabId) return;
                 const tab = tabs.find(t => t.id === activeTabId);
                 if (!tab) return;
@@ -2527,7 +3033,18 @@ body {
                 const finalUrl = url.startsWith('jq://') ? url : normalizeUrl(url);
                 tab.url = finalUrl;
                 urlInput.value = finalUrl;
-                loadTabContent(activeTabId, finalUrl);
+                
+                // Add to history if this is a new navigation (not back/forward)
+                if (addToHistory) {
+                    // Remove any forward history
+                    tab.history = tab.history.slice(0, tab.historyIndex + 1);
+                    // Add new URL
+                    tab.history.push(finalUrl);
+                    tab.historyIndex = tab.history.length - 1;
+                }
+                
+                loadTabContent(activeTabId, finalUrl, addToHistory);
+                updateNavigationButtons(tab);
             }
 
             // Initialize new tab page handlers
@@ -2647,9 +3164,12 @@ body {
             refreshButton.addEventListener('click', () => {
                 if (activeTabId) {
                     const tab = tabs.find(t => t.id === activeTabId);
-                    if (tab) loadTabContent(activeTabId, tab.url);
+                    if (tab) loadTabContent(activeTabId, tab.url, false);
                 }
             });
+            
+            backButton.addEventListener('click', goBack);
+            forwardButton.addEventListener('click', goForward);
 
             // Load saved settings on page load
             function loadSavedSettings() {
@@ -2820,6 +3340,16 @@ body {
                 location.reload();
             };
             window.openHistoryItem = (url) => createTab(url);
+            window.deleteHistoryItem = (url, timestamp) => {
+                removeHistoryItem(url, timestamp);
+                // Reload the history page if we're on it
+                if (activeTabId) {
+                    const tab = tabs.find(t => t.id === activeTabId);
+                    if (tab && tab.url === 'jq://history/') {
+                        loadTabContent(activeTabId, 'jq://history/');
+                    }
+                }
+            };
             
             // Menu and UI Event Handlers
             function initUIHandlers() {
@@ -2852,7 +3382,10 @@ body {
                 document.querySelectorAll('.menu-item').forEach(item => {
                     item.addEventListener('click', () => {
                         const action = item.dataset.action;
-                        menuDropdown.style.display = 'none';
+                        const menuDropdown = document.getElementById('menu-dropdown');
+                        if (menuDropdown) {
+                            menuDropdown.style.display = 'none';
+                        }
                         
                         switch(action) {
                             case 'new-tab':
@@ -2866,12 +3399,6 @@ body {
                                 break;
                             case 'history':
                                 createTab('jq://history/');
-                                break;
-                            case 'downloads':
-                                createTab('jq://downloads/');
-                                break;
-                            case 'privacy':
-                                createTab('jq://privacy/');
                                 break;
                             case 'settings':
                                 createTab('jq://settings/');
@@ -2917,15 +3444,32 @@ body {
                     }
                 }
                 
-                // Home button
+                // Home button - navigate current tab instead of creating new
                 document.getElementById('home-button')?.addEventListener('click', () => {
-                    createTab('jq://home/');
+                    if (activeTabId) {
+                        navigateToUrl('jq://home/');
+                    } else {
+                        createTab('jq://home/');
+                    }
                 });
                 
-                // DevTools button
-                document.getElementById('devtools-button')?.addEventListener('click', () => {
-                    toggleDevTools();
+                // Downloads button
+                document.getElementById('downloads-button')?.addEventListener('click', () => {
+                    createTab('jq://downloads/');
                 });
+                
+                // Update downloads badge - make it global
+                window.updateDownloadsBadge = function() {
+                    const badge = document.getElementById('download-badge');
+                    const downloads = getDownloads();
+                    if (badge && downloads.length > 0) {
+                        badge.textContent = downloads.length;
+                        badge.style.display = 'flex';
+                    } else if (badge) {
+                        badge.style.display = 'none';
+                    }
+                };
+                window.updateDownloadsBadge();
                 
                 // DevTools toggle
                 function toggleDevTools() {
@@ -3046,7 +3590,7 @@ body {
                 // This is done by wrapping the switchToTab calls
             }
             
-            // Update settings page to include search engine save
+            // Update settings page to include all features
             const originalInitSettings = initSettingsPage;
             initSettingsPage = function() {
                 originalInitSettings();
@@ -3054,6 +3598,80 @@ body {
                     const engine = document.getElementById('search-engine-select').value;
                     setSearchEngine(engine);
                     alert('Search engine saved');
+                });
+                
+                // Privacy controls in settings
+                document.getElementById('settings-clear-cookies-button')?.addEventListener('click', () => {
+                    if (confirm('Clear all cookies?')) {
+                        document.cookie.split(";").forEach(c => {
+                            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                        });
+                        alert('Cookies cleared');
+                    }
+                });
+                
+                document.getElementById('settings-clear-cache-button')?.addEventListener('click', () => {
+                    if (confirm('Clear cache?')) {
+                        caches.keys().then(names => {
+                            names.forEach(name => caches.delete(name));
+                            alert('Cache cleared');
+                        });
+                    }
+                });
+                
+                document.getElementById('settings-clear-storage-button')?.addEventListener('click', () => {
+                    if (confirm('Clear all localStorage data? This will reset all settings.')) {
+                        localStorage.clear();
+                        location.reload();
+                    }
+                });
+                
+                document.getElementById('settings-clear-all-button')?.addEventListener('click', () => {
+                    if (confirm('Clear ALL browsing data? This cannot be undone.')) {
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        document.cookie.split(";").forEach(c => {
+                            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                        });
+                        caches.keys().then(names => {
+                            names.forEach(name => caches.delete(name));
+                        });
+                        location.reload();
+                    }
+                });
+                
+                document.getElementById('settings-view-cookies-button')?.addEventListener('click', () => {
+                    const cookies = document.cookie.split(';').map(c => c.trim());
+                    const display = document.getElementById('settings-cookies-display');
+                    if (cookies.length === 0 || (cookies.length === 1 && cookies[0] === '')) {
+                        display.innerHTML = '<p style="color: var(--color-text-secondary);">No cookies found</p>';
+                    } else {
+                        display.innerHTML = '<table class="data-table"><thead><tr><th>Cookie</th></tr></thead><tbody>' +
+                            cookies.map(c => `<tr><td>${c}</td></tr>`).join('') +
+                            '</tbody></table>';
+                    }
+                });
+                
+                document.getElementById('settings-save-user-agent-button')?.addEventListener('click', () => {
+                    const ua = document.getElementById('settings-user-agent-input').value;
+                    localStorage.setItem('userAgent', ua);
+                    alert('User agent saved');
+                });
+                
+                document.getElementById('clear-statistics-button')?.addEventListener('click', () => {
+                    if (confirm('Clear all statistics? This cannot be undone.')) {
+                        const stats = getStats();
+                        stats.sitesVisited = 0;
+                        stats.startDate = Date.now();
+                        saveStats(stats);
+                        // Reload settings page to show updated stats
+                        if (activeTabId) {
+                            const tab = tabs.find(t => t.id === activeTabId);
+                            if (tab && tab.url === 'jq://settings/') {
+                                loadTabContent(activeTabId, 'jq://settings/');
+                            }
+                        }
+                    }
                 });
             };
             
@@ -3066,6 +3684,10 @@ body {
                     addToHistory(url, tab.title);
                     updateStats(url);
                 }
+                // Update downloads badge
+                if (typeof window.updateDownloadsBadge === 'function') {
+                    window.updateDownloadsBadge();
+                }
             };
             
             // Load settings immediately
@@ -3074,8 +3696,22 @@ body {
             // Initialize theme
             setTheme(getTheme());
             
+            // Apply custom theme color if set
+            const savedThemeColor = localStorage.getItem('themeColor');
+            const savedThemeColorSecondary = localStorage.getItem('themeColorSecondary');
+            if (savedThemeColor && /^#[0-9A-F]{6}$/i.test(savedThemeColor)) {
+                document.documentElement.style.setProperty('--color-primary', savedThemeColor);
+                document.documentElement.style.setProperty('--color-link', savedThemeColor);
+            }
+            if (savedThemeColorSecondary && /^#[0-9A-F]{6}$/i.test(savedThemeColorSecondary)) {
+                document.documentElement.style.setProperty('--color-primary-secondary', savedThemeColorSecondary);
+            }
+            
             // Initialize UI handlers
             initUIHandlers();
+            
+            // Initialize navigation buttons (disabled until first tab is created)
+            updateNavigationButtons(null);
             
             // Update bookmark bar
             updateBookmarkBar();

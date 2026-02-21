@@ -13,6 +13,10 @@
     }
 
     function main() {
+        // Store original localStorage before it gets replaced by fixCrossWindowLocalStorage
+        // We need this to access internal.nativeStorage for the real storage
+        var originalProxiedLocalStorage = localStorage;
+        
         fixUrlRewrite();
         fixElementGetter();
         fixCrossWindowLocalStorage();
@@ -44,8 +48,16 @@
         var updateInterval = 5000;
         var isSyncing = false;
 
+        // Use current localStorage (after Proxy replacement) - the Proxy forwards methods like addChangeEventListener
         var proxiedLocalStorage = localStorage;
-        var realLocalStorage = proxiedLocalStorage.internal.nativeStorage;
+        // Check if localStorage has been proxied by hammerhead
+        // Use originalProxiedLocalStorage for checking internal structure since it has the original Hammerhead proxy
+        if (!originalProxiedLocalStorage || !originalProxiedLocalStorage.internal || !originalProxiedLocalStorage.internal.nativeStorage) {
+            // localStorage not properly proxied, skip sync
+            console.warn('rammerhead: localStorage not properly proxied, skipping sync');
+            return;
+        }
+        var realLocalStorage = originalProxiedLocalStorage.internal.nativeStorage;
         var sessionId = hammerhead.settings._settings.sessionId;
         var origin = window.__get$(window, 'location').origin;
         var keyChanges = [];
@@ -58,10 +70,19 @@
             }
             return;
         }
-        proxiedLocalStorage.addChangeEventListener(function (event) {
-            if (isSyncing) return;
-            if (keyChanges.indexOf(event.key) === -1) keyChanges.push(event.key);
-        });
+        // Check if addChangeEventListener exists on the current localStorage (Proxy forwards it from original)
+        if (proxiedLocalStorage && typeof proxiedLocalStorage.addChangeEventListener === 'function') {
+            proxiedLocalStorage.addChangeEventListener(function (event) {
+                if (isSyncing) return;
+                if (keyChanges.indexOf(event.key) === -1) keyChanges.push(event.key);
+            });
+        } else {
+            // Fallback: use storage event listener if addChangeEventListener is not available
+            window.addEventListener('storage', function (event) {
+                if (isSyncing) return;
+                if (keyChanges.indexOf(event.key) === -1) keyChanges.push(event.key);
+            });
+        }
         setInterval(function () {
             var update = compileUpdate();
             if (!update) return;
@@ -390,25 +411,38 @@
 
         const replaceStorageInstance = (storageProp, realStorage) => {
             const reservedProps = ['internal', 'clear', 'key', 'getItem', 'setItem', 'removeItem', 'length'];
+            const originalStorage = window[storageProp];
             Object.defineProperty(window, storageProp, {
                 // define a value-based instead of getter-based property, since with this localStorage implementation,
                 // we don't need to rely on sharing a single memory-based storage across frames, unlike hammerhead
                 configurable: true,
                 writable: true,
                 // still use window[storageProp] as basis to allow scripts to access localStorage.internal
-                value: new Proxy(window[storageProp], {
+                value: new Proxy(originalStorage, {
                     get(target, prop, receiver) {
+                        // Handle reserved properties first
                         if (reservedProps.includes(prop) && prop !== 'length') {
                             return Reflect.get(target, prop, receiver);
-                        } else if (prop === 'length') {
+                        }
+                        if (prop === 'length') {
                             let len = 0;
                             for (const [key] of Object.entries(realStorage)) {
                                 if (fromRealStorageKey(key)) len++;
                             }
                             return len;
-                        } else {
-                            return realStorage[toRealStorageKey(prop)];
                         }
+                        // For all other properties, first check if they exist on the target (original storage)
+                        // This forwards methods like addChangeEventListener from Hammerhead's proxy
+                        if (prop in target) {
+                            const value = Reflect.get(target, prop, receiver);
+                            // If it's a function, bind it to the target so 'this' works correctly
+                            if (typeof value === 'function') {
+                                return value.bind(target);
+                            }
+                            return value;
+                        }
+                        // If not found on target, treat it as a storage key
+                        return realStorage[toRealStorageKey(prop)];
                     },
                     set(_, prop, value) {
                         if (!reservedProps.includes(prop)) {
