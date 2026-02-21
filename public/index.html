@@ -2058,14 +2058,15 @@ body {
                 const uploadedBackground = localStorage.getItem('uploadedBackground') || '';
                 
                 // Generate wallpaper gallery HTML with refined design
-                const wallpaperNumbers = Array.from({length: 34}, (_, i) => i + 1);
+                const wallpaperBaseUrl = 'https://jimmyqrg.github.io/unlinewize/assets/wallpapers';
+                const wallpaperNumbers = Array.from({length: 50}, (_, i) => i + 1);
                 const wallpaperGallery = wallpaperNumbers.map(num => {
-                    const isSelected = currentBackground.includes(`/wallpapers/${num}.jpg`);
+                    const isSelected = currentBackground.includes(`wallpapers/${num}.jpg`) || currentBackground.includes(`/wallpapers/${num}.jpg`);
                     return `
                         <div class="wallpaper-thumb" data-wallpaper="${num}.jpg" style="
                             width: 140px; 
                             height: 90px; 
-                            background-image: url('/wallpapers/${num}.jpg'); 
+                            background-image: url('${wallpaperBaseUrl}/${num}.jpg'); 
                             background-size: cover; 
                             background-position: center; 
                             border: 3px solid ${isSelected ? 'var(--color-primary)' : 'transparent'}; 
@@ -2289,7 +2290,7 @@ body {
                         
                         // Select clicked wallpaper
                         const wallpaper = thumb.dataset.wallpaper;
-                        const wallpaperUrl = `/wallpapers/${wallpaper}`;
+                        const wallpaperUrl = `${wallpaperBaseUrl}/${wallpaper}`;
                         backgroundInput.value = wallpaperUrl;
                         // Clear uploaded image
                         localStorage.removeItem('uploadedBackground');

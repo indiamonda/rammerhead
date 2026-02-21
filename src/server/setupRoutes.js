@@ -6,7 +6,7 @@ const StrShuffler = require('../util/StrShuffler');
 const RammerheadSession = require('../classes/RammerheadSession');
 const fs = require('fs');
 const path = require('path');
-const mime = require('mime');
+
 
 /**
  *
@@ -311,52 +311,4 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/generatelink', handleGenerateLink);
     proxyServer.GET('/rammerhead/generatelink', handleGenerateLink);
     
-    // Serve wallpapers from public/wallpapers or assets/wallpapers directory
-    // Try public first, then fallback to assets
-    const publicWallpapersDir = config.publicDir ? path.join(config.publicDir, 'wallpapers') : null;
-    const assetsWallpapersDir = path.join(__dirname, '../../assets/wallpapers');
-    
-    let wallpapersDir = null;
-    if (publicWallpapersDir && fs.existsSync(publicWallpapersDir)) {
-        wallpapersDir = publicWallpapersDir;
-        logger.info(`(setupRoutes) Using wallpapers from: ${wallpapersDir}`);
-    } else if (fs.existsSync(assetsWallpapersDir)) {
-        wallpapersDir = assetsWallpapersDir;
-        logger.info(`(setupRoutes) Using wallpapers from: ${wallpapersDir}`);
-    }
-    
-    if (wallpapersDir) {
-        const wallpaperFiles = fs.readdirSync(wallpapersDir).filter(f => f.endsWith('.jpg') || f.endsWith('.png'));
-        wallpaperFiles.forEach(file => {
-            const serveWallpaper = (req, res) => {
-                try {
-                    const filePath = path.join(wallpapersDir, file);
-                    if (!fs.existsSync(filePath)) {
-                        logger.warn(`(wallpapers) File not found: ${filePath}`);
-                        res.writeHead(404);
-                        res.end('Not Found');
-                        return;
-                    }
-                    const content = fs.readFileSync(filePath);
-                    res.writeHead(200, {
-                        'Content-Type': mime.getType(file) || 'image/jpeg',
-                        'Cache-Control': 'public, max-age=31536000', // Cache wallpapers for 1 year
-                        'ETag': `"${file}-${fs.statSync(filePath).mtime.getTime()}"` // Add ETag for cache validation
-                    });
-                    res.end(content);
-                } catch (error) {
-                    logger.error(`(wallpapers) Error serving wallpaper ${file}: ${error.message}`);
-                    res.writeHead(500);
-                    res.end('Internal Server Error');
-                }
-            };
-            
-            // Register both paths to handle with or without base path
-            proxyServer.GET(`/wallpapers/${file}`, serveWallpaper);
-            proxyServer.GET(`/rammerhead/wallpapers/${file}`, serveWallpaper);
-        });
-        logger.info(`(setupRoutes) Registered ${wallpaperFiles.length} wallpaper routes (both /wallpapers/ and /rammerhead/wallpapers/)`);
-    } else {
-        logger.warn(`(setupRoutes) Wallpapers directory not found in public or assets`);
-    }
 };
