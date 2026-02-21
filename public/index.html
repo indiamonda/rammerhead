@@ -113,7 +113,7 @@ body {
 }
 
 /* ============================================
-   Tab Bar
+   Tab Bar - Chrome-like
    ============================================ */
 .tab-bar {
     background: var(--color-bg-secondary);
@@ -124,7 +124,8 @@ body {
     overflow-x: auto;
     overflow-y: hidden;
     flex-shrink: 0;
-    min-height: 41px;
+    min-height: 36px;
+    height: 36px;
 }
 
 .tab-bar::-webkit-scrollbar {
@@ -141,22 +142,21 @@ body {
     background: var(--color-bg-tab-inactive);
     border: 1px solid var(--color-border);
     border-bottom: none;
-    border-radius: 0;
-    padding: 0 24px 0 16px;
-    margin-right: -1px;
-    margin-top: 8px;
+    border-radius: 8px 8px 0 0;
+    padding: 0 20px 0 16px;
+    margin-right: 1px;
+    margin-top: 7px;
     cursor: pointer;
     user-select: none;
-    min-width: 72px;
+    min-width: 80px;
     max-width: 240px;
-    height: 32px;
+    height: 28px;
     display: flex;
     align-items: center;
     gap: 8px;
-    transition: background var(--transition-fast);
+    transition: all 0.2s ease;
     white-space: nowrap;
     overflow: hidden;
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
 }
 
 .tab:hover {
@@ -169,8 +169,8 @@ body {
     border-bottom: 1px solid var(--color-bg-tab-active);
     margin-bottom: -1px;
     margin-top: 0;
-    height: 33px;
-    box-shadow: none;
+    height: 29px;
+    box-shadow: 0 -1px 0 var(--color-bg-tab-active);
 }
 
 .tab-title {
@@ -228,35 +228,38 @@ body {
 }
 
 /* ============================================
-   Browser Chrome (Top Bar)
+   Browser Chrome (Top Bar) - Modern Chrome-like
    ============================================ */
 .browser-chrome {
     background: var(--color-bg-primary);
     border-bottom: 1px solid var(--color-border);
-    padding: 6px 12px;
+    padding: 8px 12px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-shrink: 0;
-    height: 48px;
+    height: 56px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .browser-button {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border: none;
     background: transparent;
-    border-radius: 4px;
+    border-radius: 50%;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--color-text-muted);
-    transition: background var(--transition-fast);
+    color: var(--color-text-icon);
+    transition: all 0.2s ease;
+    position: relative;
 }
 
 .browser-button:hover {
     background: var(--color-bg-hover);
+    color: var(--color-text-primary);
 }
 
 .browser-button:active {
@@ -277,23 +280,25 @@ body {
     flex: 1;
     display: flex;
     align-items: center;
-    background: var(--color-bg-primary);
-    border: 1px solid var(--color-border);
-    border-radius: 20px;
-    padding: 0 12px;
+    background: var(--color-bg-secondary);
+    border: 1px solid transparent;
+    border-radius: 24px;
+    padding: 0 16px;
     margin: 0 8px;
-    height: 36px;
-    transition: all var(--transition-fast);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    height: 40px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .url-bar-wrapper:hover {
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    background: var(--color-bg-primary);
 }
 
 .url-bar-wrapper:focus-within {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 8px rgba(26, 115, 232, 0.2);
     border-color: var(--color-primary);
+    background: var(--color-bg-primary);
     outline: 2px solid var(--color-primary-light);
     outline-offset: -2px;
 }
@@ -959,20 +964,19 @@ body {
 }
 
 /* ============================================
-   Menu Dropdown
+   Menu Dropdown - Chrome-like
    ============================================ */
 .menu-dropdown {
-    position: absolute;
-    top: 100%;
-    right: 8px;
+    position: fixed;
     background: var(--color-bg-primary);
     border: 1px solid var(--color-border);
     border-radius: 8px;
-    box-shadow: var(--shadow-lg);
-    min-width: 200px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 0 4px 16px rgba(0, 0, 0, 0.1);
+    min-width: 220px;
     z-index: 10000;
-    padding: 8px 0;
+    padding: 6px 0;
     margin-top: 4px;
+    display: none;
 }
 
 .menu-item {
@@ -1567,6 +1571,10 @@ body {
             // URL normalization function
             function normalizeUrl(url) {
                 url = url.trim();
+                // Preserve special jq:// URLs
+                if (url.startsWith('jq://')) {
+                    return url;
+                }
                 // Check if it looks like a URL
                 if (url.match(/^https?:\/\//i) || url.match(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}/)) {
                     if (!url.match(/^https?:\/\//i)) {
@@ -2316,6 +2324,7 @@ body {
                                 <button class="devtools-tab active" data-tab="console">Console</button>
                                 <button class="devtools-tab" data-tab="network">Network</button>
                                 <button class="devtools-tab" data-tab="storage">Storage</button>
+                                <button class="devtools-tab" data-tab="source">Source</button>
                             </div>
                             <button class="devtools-close" id="devtools-close"><i class="fas fa-times"></i></button>
                         </div>
@@ -2343,6 +2352,10 @@ body {
                             <div id="devtools-storage" class="devtools-tab-content" style="display: none;">
                                 <h3>Local Storage</h3>
                                 <div id="storage-display"></div>
+                            </div>
+                            <div id="devtools-source" class="devtools-tab-content" style="display: none;">
+                                <h3>Page Source</h3>
+                                <div id="source-display" style="font-family: var(--font-family-mono); font-size: 12px; white-space: pre-wrap; background: var(--color-bg-secondary); padding: 16px; border-radius: 4px; overflow: auto; max-height: 600px;"></div>
                             </div>
                         </div>
                     </div>
@@ -2810,17 +2823,27 @@ body {
             
             // Menu and UI Event Handlers
             function initUIHandlers() {
-                // Menu button
-                const menuButton = document.getElementById('menu-button');
-                const menuDropdown = document.getElementById('menu-dropdown');
-                
-                menuButton?.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    menuDropdown.style.display = menuDropdown.style.display === 'none' ? 'block' : 'none';
-                });
-                
+                // Menu button - use event delegation to handle dynamically
                 document.addEventListener('click', (e) => {
-                    if (!menuDropdown?.contains(e.target) && !menuButton?.contains(e.target)) {
+                    const menuButton = document.getElementById('menu-button');
+                    const menuDropdown = document.getElementById('menu-dropdown');
+                    
+                    if (menuButton && (menuButton.contains(e.target) || menuButton === e.target)) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        if (menuDropdown) {
+                            const isVisible = menuDropdown.style.display !== 'none' && menuDropdown.style.display !== '';
+                            if (isVisible) {
+                                menuDropdown.style.display = 'none';
+                            } else {
+                                // Position dropdown relative to button
+                                const rect = menuButton.getBoundingClientRect();
+                                menuDropdown.style.top = (rect.bottom + 4) + 'px';
+                                menuDropdown.style.right = (window.innerWidth - rect.right) + 'px';
+                                menuDropdown.style.display = 'block';
+                            }
+                        }
+                    } else if (menuDropdown && !menuDropdown.contains(e.target) && !menuButton?.contains(e.target)) {
                         menuDropdown.style.display = 'none';
                     }
                 });
@@ -2928,6 +2951,7 @@ body {
                                 content.style.display = 'block';
                                 if (tabName === 'network') updateNetworkTab();
                                 if (tabName === 'storage') updateStorageTab();
+                                if (tabName === 'source') updateSourceTab();
                             }
                         });
                     });
@@ -2976,6 +3000,45 @@ body {
                             }).join('') +
                             '</tbody></table>';
                     }
+                }
+                
+                function updateSourceTab() {
+                    const display = document.getElementById('source-display');
+                    const activeTab = tabs.find(t => t.id === activeTabId);
+                    if (!activeTab || activeTab.url.startsWith('jq://')) {
+                        display.textContent = 'Source view is only available for web pages.';
+                        return;
+                    }
+                    const contentElement = document.getElementById(`content-${activeTabId}`);
+                    const iframe = contentElement?.querySelector('iframe');
+                    if (iframe) {
+                        try {
+                            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                            const html = iframeDoc.documentElement.outerHTML;
+                            // Format HTML with basic indentation
+                            display.textContent = formatHTML(html);
+                        } catch (e) {
+                            display.textContent = 'Cannot access iframe content due to cross-origin restrictions.\n\nThis is normal for most websites due to browser security policies.';
+                        }
+                    } else {
+                        display.textContent = 'No content available.';
+                    }
+                }
+                
+                function formatHTML(html) {
+                    // Basic HTML formatting
+                    let formatted = '';
+                    let indent = 0;
+                    const indentSize = 2;
+                    html = html.replace(/></g, '>\n<');
+                    html.split('\n').forEach(line => {
+                        line = line.trim();
+                        if (!line) return;
+                        if (line.startsWith('</')) indent--;
+                        formatted += ' '.repeat(indent * indentSize) + line + '\n';
+                        if (line.startsWith('<') && !line.startsWith('</') && !line.endsWith('/>')) indent++;
+                    });
+                    return formatted;
                 }
                 
                 // Hook into tab switching to update bookmark button
