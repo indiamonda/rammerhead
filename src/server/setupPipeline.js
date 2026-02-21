@@ -2,6 +2,7 @@ const config = require('../config');
 const getSessionId = require('../util/getSessionId');
 const fs = require('fs');
 const path = require('path');
+const mime = require('mime');
 
 /**
  * @param {import('../classes/RammerheadProxy')} proxyServer
@@ -39,6 +40,50 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 console.error('[Pipeline] Error serving styles.css:', error);
             }
         }
+        
+        // Handle wallpaper requests - serve from public/wallpapers or assets/wallpapers directory
+        if (urlPath.startsWith('/wallpapers/') || urlPath.startsWith('/rammerhead/wallpapers/')) {
+            try {
+                // Remove /rammerhead prefix if present
+                const cleanPath = urlPath.replace(/^\/rammerhead/, '');
+                const fileName = cleanPath.replace('/wallpapers/', '');
+                
+                // Only allow .jpg and .png files for security
+                if (!fileName.match(/^[0-9]+\.(jpg|png)$/i)) {
+                    return false; // Let other handlers process invalid filenames
+                }
+                
+                // Try public/wallpapers first (preferred location)
+                let filePath = null;
+                if (config.publicDir) {
+                    const publicWallpaperPath = path.join(config.publicDir, 'wallpapers', fileName);
+                    if (fs.existsSync(publicWallpaperPath)) {
+                        filePath = publicWallpaperPath;
+                    }
+                }
+                
+                // Fallback to assets/wallpapers if not in public
+                if (!filePath) {
+                    const assetsWallpaperPath = path.join(__dirname, '../../assets/wallpapers', fileName);
+                    if (fs.existsSync(assetsWallpaperPath)) {
+                        filePath = assetsWallpaperPath;
+                    }
+                }
+                
+                if (filePath && fs.existsSync(filePath)) {
+                    const content = fs.readFileSync(filePath);
+                    res.writeHead(200, {
+                        'Content-Type': mime.getType(fileName) || 'image/jpeg',
+                        'Cache-Control': 'public, max-age=31536000' // Cache wallpapers for 1 year
+                    });
+                    res.end(content);
+                    return true; // Signal that we handled this request
+                }
+            } catch (error) {
+                console.error(`[Pipeline] Error serving wallpaper: ${error.message}`);
+            }
+        }
+        
         return false; // Let other handlers process
     }, true); // beginning=true to add to the START of the pipeline
     // remove headers defined in config.js

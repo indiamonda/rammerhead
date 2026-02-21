@@ -312,14 +312,16 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/rammerhead/generatelink', handleGenerateLink);
     
     // Serve wallpapers from assets/wallpapers directory
+    // Register both /wallpapers/ and /rammerhead/wallpapers/ routes to handle base path
     const wallpapersDir = path.join(__dirname, '../../assets/wallpapers');
     if (fs.existsSync(wallpapersDir)) {
         const wallpaperFiles = fs.readdirSync(wallpapersDir).filter(f => f.endsWith('.jpg') || f.endsWith('.png'));
         wallpaperFiles.forEach(file => {
-            proxyServer.GET(`/wallpapers/${file}`, (req, res) => {
+            const serveWallpaper = (req, res) => {
                 try {
                     const filePath = path.join(wallpapersDir, file);
                     if (!fs.existsSync(filePath)) {
+                        logger.warn(`(wallpapers) File not found: ${filePath}`);
                         res.writeHead(404);
                         res.end('Not Found');
                         return;
@@ -331,12 +333,18 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                     });
                     res.end(content);
                 } catch (error) {
-                    logger.error(`Error serving wallpaper ${file}: ${error.message}`);
+                    logger.error(`(wallpapers) Error serving wallpaper ${file}: ${error.message}`);
                     res.writeHead(500);
                     res.end('Internal Server Error');
                 }
-            });
+            };
+            
+            // Register both paths to handle with or without base path
+            proxyServer.GET(`/wallpapers/${file}`, serveWallpaper);
+            proxyServer.GET(`/rammerhead/wallpapers/${file}`, serveWallpaper);
         });
-        logger.info(`(setupRoutes) Registered ${wallpaperFiles.length} wallpaper routes`);
+        logger.info(`(setupRoutes) Registered ${wallpaperFiles.length} wallpaper routes (both /wallpapers/ and /rammerhead/wallpapers/)`);
+    } else {
+        logger.warn(`(setupRoutes) Wallpapers directory not found: ${wallpapersDir}`);
     }
 };
