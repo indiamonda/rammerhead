@@ -48,8 +48,11 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 const cleanPath = urlPath.replace(/^\/rammerhead/, '');
                 const fileName = cleanPath.replace('/wallpapers/', '');
                 
+                console.log(`[Pipeline] Wallpaper request: ${urlPath}, fileName: ${fileName}`);
+                
                 // Only allow .jpg and .png files for security
                 if (!fileName.match(/^[0-9]+\.(jpg|png)$/i)) {
+                    console.log(`[Pipeline] Invalid wallpaper filename: ${fileName}`);
                     return false; // Let other handlers process invalid filenames
                 }
                 
@@ -57,6 +60,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 let filePath = null;
                 if (config.publicDir) {
                     const publicWallpaperPath = path.join(config.publicDir, 'wallpapers', fileName);
+                    console.log(`[Pipeline] Checking public path: ${publicWallpaperPath}, exists: ${fs.existsSync(publicWallpaperPath)}`);
                     if (fs.existsSync(publicWallpaperPath)) {
                         filePath = publicWallpaperPath;
                     }
@@ -65,12 +69,14 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 // Fallback to assets/wallpapers if not in public
                 if (!filePath) {
                     const assetsWallpaperPath = path.join(__dirname, '../../assets/wallpapers', fileName);
+                    console.log(`[Pipeline] Checking assets path: ${assetsWallpaperPath}, exists: ${fs.existsSync(assetsWallpaperPath)}`);
                     if (fs.existsSync(assetsWallpaperPath)) {
                         filePath = assetsWallpaperPath;
                     }
                 }
                 
                 if (filePath && fs.existsSync(filePath)) {
+                    console.log(`[Pipeline] Serving wallpaper from: ${filePath}`);
                     const content = fs.readFileSync(filePath);
                     res.writeHead(200, {
                         'Content-Type': mime.getType(fileName) || 'image/jpeg',
@@ -78,9 +84,12 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                     });
                     res.end(content);
                     return true; // Signal that we handled this request
+                } else {
+                    console.log(`[Pipeline] Wallpaper file not found: ${fileName}`);
                 }
             } catch (error) {
                 console.error(`[Pipeline] Error serving wallpaper: ${error.message}`);
+                console.error(error.stack);
             }
         }
         
