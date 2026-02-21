@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: rammerhead-proxy
+    name: unlinewize-proxy
     env: node
     plan: free
     buildCommand: npm install && npm run build

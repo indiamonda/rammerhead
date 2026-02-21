@@ -2,7 +2,7 @@
 
 # Script to help fix firewall issues on macOS
 
-echo "=== Rammerhead Firewall Fix ==="
+echo "=== Unlinewize Firewall Fix ==="
 echo ""
 
 # Check if server is running

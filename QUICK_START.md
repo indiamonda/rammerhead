@@ -1,13 +1,13 @@
 # Quick Start Guide
 
-Get up and running with Rammerhead in minutes!
+Get up and running with Unlinewize in minutes!
 
 ## 🚀 Installation
 
 ```bash
 # Clone the repository
 git clone <your-repo-url>
-cd rammerhead
+cd unlinewize
 
 # Install dependencies
 npm install

@@ -10,7 +10,7 @@
 ```bash
 # Kill existing processes
 pkill -9 -f "node.*server"
-pkill -9 -f "rammerhead"
+pkill -9 -f "unlinewize"
 
 # Wait a moment, then restart
 npm run start

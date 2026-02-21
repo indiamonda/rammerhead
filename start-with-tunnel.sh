@@ -1,7 +1,7 @@
 #!/bin/bash
-# Start Rammerhead server with tunnel for remote access
+# Start Unlinewize server with tunnel for remote access
 
-echo "🚀 Starting Rammerhead with Tunnel..."
+echo "🚀 Starting Unlinewize with Tunnel..."
 echo ""
 
 # Check if server is already running

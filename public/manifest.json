@@ -1,6 +1,6 @@
 {
-  "name": "Rammerhead Proxy",
-  "short_name": "Rammerhead",
+  "name": "Unlinewize",
+  "short_name": "Unlinewize",
   "description": "Fast, secure web proxy powered by Hammerhead",
   "start_url": "/rammerhead/",
   "display": "standalone",

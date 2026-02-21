@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title id="page-title">Rammerhead</title>
+    <title id="page-title">Unlinewize</title>
     <link rel="icon" type="image/png" id="favicon" href="favicon.png" />
     <link rel="manifest" href="manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -356,9 +356,10 @@ body {
     margin-bottom: 24px;
 }
 
-.bing-logo {
+.favicon-logo {
     width: 72px;
     height: 72px;
+    object-fit: contain;
 }
 
 .new-tab-logo {
@@ -918,7 +919,7 @@ body {
                     type="text" 
                     id="url-input" 
                     class="url-input" 
-                    placeholder="Search Bing or type a URL"
+                    placeholder="Search or type a URL"
                     autocomplete="off"
                 />
                 <button class="page-action" id="clear-button" style="display: none;">
@@ -1381,14 +1382,12 @@ body {
             }
 
             function getNewTabHTML() {
-                const pageTitle = localStorage.getItem('pageTitle') || 'Rammerhead Proxy';
+                const pageTitle = localStorage.getItem('pageTitle') || 'Unlinewize';
+                const savedFavicon = localStorage.getItem('faviconData') || 'favicon.png';
                 return `
                     <div class="new-tab-content">
                         <div class="new-tab-logo-container">
-                            <svg class="bing-logo" viewBox="0 0 200 200" fill="#008373">
-                                <path d="M100 50c-27.6 0-50 22.4-50 50s22.4 50 50 50 50-22.4 50-50-22.4-50-50-50zm0 80c-16.6 0-30-13.4-30-30s13.4-30 30-30 30 13.4 30 30-13.4 30-30 30z"/>
-                                <path d="M100 70l20 20-20 20-20-20 20-20z"/>
-                            </svg>
+                            <img class="favicon-logo" src="${savedFavicon}" alt="${pageTitle}" />
             </div>
                         <div class="new-tab-title">${pageTitle}</div>
                         <div class="new-tab-subtitle">Fast, secure web browsing</div>
@@ -1397,10 +1396,10 @@ body {
                                 <svg class="search-icon" viewBox="0 0 24 24" fill="currentColor">
                                     <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                                 </svg>
-                                <input type="text" class="search-input" id="newtab-search-input" placeholder="Search Bing or type a URL" autocomplete="off" />
+                                <input type="text" class="search-input" id="newtab-search-input" placeholder="Search or type a URL" autocomplete="off" />
                 </div>
                             <div class="search-buttons">
-                                <button class="search-button" id="newtab-go-button">Bing Search</button>
+                                <button class="search-button" id="newtab-go-button">Search</button>
                                 <button class="search-button" id="newtab-lucky-button">I'm Feeling Lucky</button>
             </div>
         </div>
@@ -1455,7 +1454,7 @@ body {
             }
 
             function getSettingsPageHTML() {
-                const pageTitle = localStorage.getItem('pageTitle') || 'Rammerhead Proxy';
+                const pageTitle = localStorage.getItem('pageTitle') || 'Unlinewize';
                 const faviconData = localStorage.getItem('faviconData');
                 return `
                     <div class="settings-page">
@@ -1525,7 +1524,7 @@ body {
                 const errorMsg = document.getElementById('settings-error-message');
 
                 saveTitleButton?.addEventListener('click', () => {
-                    const title = titleInput.value.trim() || 'Rammerhead Proxy';
+                    const title = titleInput.value.trim() || 'Unlinewize';
                     localStorage.setItem('pageTitle', title);
                     const titleElement = document.getElementById('page-title');
                     if (titleElement) {

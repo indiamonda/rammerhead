@@ -1,8 +1,8 @@
 #!/bin/bash
-# Script to start Rammerhead with a public tunnel
+# Script to start Unlinewize with a public tunnel
 # This allows access from any network
 
-echo "Starting Rammerhead server..."
+echo "Starting Unlinewize server..."
 cd "$(dirname "$0")"
 npm run start > /dev/null 2>&1 &
 SERVER_PID=$!

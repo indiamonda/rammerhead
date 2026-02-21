@@ -1,7 +1,7 @@
 {
-  "name": "rammerhead",
+  "name": "unlinewize",
   "version": "1.2.64",
-  "description": "User friendly web proxy powered by testcafe-hammerhead",
+  "description": "Unlinewize - User friendly web proxy powered by testcafe-hammerhead",
   "main": "src/index.js",
   "scripts": {
     "preinstall": "npm install --package-lock-only --ignore-scripts && npx npm-force-resolutions",

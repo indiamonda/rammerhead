@@ -1,8 +1,8 @@
-# Rammerhead Proxy
+# Unlinewize
 
 > A modern, browser-like web proxy based on testcafe-hammerhead with a beautiful Chrome-inspired interface.
 
-![Rammerhead](https://img.shields.io/badge/Node.js-v16+-green) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Unlinewize](https://img.shields.io/badge/Node.js-v16+-green) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ## 🌟 Features
 
@@ -186,7 +186,7 @@ Settings are stored in browser localStorage and persist across sessions.
 
 ## 🤝 Contributing
 
-This is a customized version of Rammerhead. Original project: https://github.com/binary-person/rammerhead
+This is a customized version of Rammerhead, rebranded as Unlinewize. Original project: https://github.com/binary-person/rammerhead
 
 ## 📄 License
 
@@ -202,6 +202,7 @@ MIT License - see LICENSE file for details
 
 - **Discord**: [Rammerhead Support Server](https://discord.gg/VNT4E7gN5Y)
 - **Original Repo**: https://github.com/binary-person/rammerhead
+- **Unlinewize**: Customized version of Rammerhead
 
 ---
 

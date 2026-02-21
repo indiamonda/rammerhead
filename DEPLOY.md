@@ -1,6 +1,6 @@
 # Cloud Deployment Guide
 
-Deploy Rammerhead to cloud platforms for permanent, always-on access from anywhere.
+Deploy Unlinewize to cloud platforms for permanent, always-on access from anywhere.
 
 ## 🌟 Why Deploy to Cloud?
 
@@ -29,7 +29,7 @@ Deploy Rammerhead to cloud platforms for permanent, always-on access from anywhe
    - Sign up/login (free)
    - Click "New +" → "Web Service"
    - Connect your GitHub repository
-   - Select the rammerhead repository
+   - Select the unlinewize repository
    - Render auto-detects settings from `render.yaml`:
      - **Build Command**: `npm install && npm run build`
      - **Start Command**: `npm start`
@@ -38,7 +38,7 @@ Deploy Rammerhead to cloud platforms for permanent, always-on access from anywhe
    - Wait 5-10 minutes for deployment
 
 3. **Access your proxy**:
-   - Render provides: `https://rammerhead-proxy.onrender.com`
+   - Render provides: `https://unlinewize-proxy.onrender.com`
    - Use this URL from anywhere!
 
 **Pros:**
@@ -138,7 +138,7 @@ Deploy Rammerhead to cloud platforms for permanent, always-on access from anywhe
    - Sign up/login (free)
    - Click "New +" → "Web Service"
    - Connect your GitHub repository
-   - Select the rammerhead repository
+   - Select the unlinewize repository
    - Render auto-detects settings from `render.yaml`:
      - **Build Command**: `npm install && npm run build`
      - **Start Command**: `npm start`
@@ -147,7 +147,7 @@ Deploy Rammerhead to cloud platforms for permanent, always-on access from anywhe
    - Wait 5-10 minutes for deployment
 
 3. **Access your proxy**:
-   - Render provides: `https://rammerhead-proxy.onrender.com`
+   - Render provides: `https://unlinewize-proxy.onrender.com`
    - Use this URL from anywhere!
 
 **Notes:**

@@ -1,6 +1,6 @@
-# Deploy Rammerhead on Replit
+# Deploy Unlinewize on Replit
 
-Replit is a cloud IDE that can host your Rammerhead proxy. This guide will help you deploy it.
+Replit is a cloud IDE that can host your Unlinewize proxy. This guide will help you deploy it.
 
 ## Quick Start
 
@@ -10,7 +10,7 @@ Replit is a cloud IDE that can host your Rammerhead proxy. This guide will help 
 2. **Import Your Project**
    - Click "Create Repl"
    - Choose "Import from GitHub"
-   - Enter your repository URL: `https://github.com/your-username/rammerhead`
+   - Enter your repository URL: `https://github.com/your-username/unlinewize`
    - Or click "Upload folder" and drag your project folder
 
 3. **Replit Will Auto-Configure**
@@ -147,7 +147,7 @@ Once deployed:
 
 - **Replit Docs**: [docs.replit.com](https://docs.replit.com)
 - **Replit Community**: [ask.replit.com](https://ask.replit.com)
-- **Rammerhead Issues**: Check the main README for troubleshooting
+- **Unlinewize Issues**: Check the main README for troubleshooting
 
 ---
 

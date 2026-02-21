@@ -1,6 +1,6 @@
 # Tunnel Setup Guide
 
-Access your Rammerhead proxy from **any network** using a tunnel service.
+Access your Unlinewize proxy from **any network** using a tunnel service.
 
 ## 🎯 Why Use a Tunnel?
 
@@ -113,7 +113,7 @@ ssh -R 80:localhost:8080 serveo.net
 ### Using a Custom Subdomain (localtunnel)
 
 ```bash
-npx --yes localtunnel --port 8080 --subdomain myrammerhead
+npx --yes localtunnel --port 8080 --subdomain unlinewize
 ```
 
 Note: Custom subdomains may require paid plans on some services.
