@@ -46,9 +46,7 @@ const sessionStore = new RammerheadSessionFileCache(fileCacheOptions);
 sessionStore.attachToProxy(proxyServer);
 
 setupPipeline(proxyServer, sessionStore);
-// Register static files FIRST
 if (config.publicDir) addStaticDirToProxy(proxyServer, config.publicDir);
-// Register routes AFTER static files - this allows us to override specific routes
 setupRoutes(proxyServer, sessionStore, logger);
 // Override style.css route AFTER everything to ensure it takes precedence
 const stylePath = path.join(config.publicDir, 'style.css');

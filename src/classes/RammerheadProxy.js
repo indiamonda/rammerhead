@@ -311,6 +311,7 @@ class RammerheadProxy extends Proxy {
         // https://github.com/DevExpress/testcafe-hammerhead/blob/47f8b6e370c37f2112fd7f56a3d493fbfcd7ec99/src/proxy/router.ts#L104
         const routerQuery = `${req.method} ${getPathname(req.url || '')}`;
         const route = this.routes.get(routerQuery);
+
         if (route) {
             return true;
         }
@@ -405,6 +406,7 @@ class RammerheadProxy extends Proxy {
                 return;
             }
         }
+
         // hammerhead's routing does not support websockets. Allowing it
         // will result in an error thrown
         if (isRoute && isWebsocket) {

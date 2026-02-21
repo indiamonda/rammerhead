@@ -61,20 +61,13 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
         // Use a handler function to read files on-demand instead of caching
         const handler = (req, res) => {
             try {
-                // Log wallpaper requests for debugging
-                if (route.includes('/wallpapers/')) {
-                    console.log(`[Static Handler] Handling request for: ${route}, file: ${pathToFile}`);
-                }
-                // Always read fresh from disk
                 if (!fs.existsSync(pathToFile)) {
-                    console.error(`[Static Handler] File not found: ${pathToFile}`);
                     res.writeHead(404);
                     res.end('Not Found');
                     return;
                 }
                 const content = fs.readFileSync(pathToFile);
                 const contentType = mime.getType(file) || 'application/octet-stream';
-                // Add cache-control headers to prevent caching during development
                 res.writeHead(200, { 
                     'Content-Type': contentType,
                     'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -82,21 +75,13 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
                     'Expires': '0'
                 });
                 res.end(content);
-                if (route.includes('/wallpapers/')) {
-                    console.log(`[Static Handler] Successfully served: ${route}`);
-                }
             } catch (error) {
-                console.error(`Error serving ${pathToFile}:`, error);
                 res.writeHead(500);
                 res.end('Internal Server Error');
             }
         };
 
         proxy.GET(route, handler);
-        // Log wallpaper routes for debugging
-        if (route.includes('/wallpapers/')) {
-            console.log(`[Static] Registered wallpaper route: ${route} -> ${pathToFile}`);
-        }
         if (file === 'index.html') {
             proxy.GET(rootPath, handler);
         }
