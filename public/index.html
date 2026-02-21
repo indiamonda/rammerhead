@@ -1433,7 +1433,7 @@ body {
                     <div class="sessions-page">
                         <div class="page-header">
                             <h1>Session Management</h1>
-                            <p>Manage your proxy session ID</p>
+                            <p>Manage your proxy session ID, your data is stored in the session ID, you can transfer the data between devices by sharing the session ID.</p>
                         </div>
                         <div class="sessions-section">
                             <h2>Current Session</h2>
@@ -1479,6 +1479,11 @@ body {
                             </div>
                             <button class="button" id="save-favicon-button">Save Favicon</button>
                         </div>
+                        <div class="settings-section">
+                            <h2>Reset Settings</h2>
+                            <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Reset all settings to their default values.</p>
+                            <button class="button button-secondary" id="reset-settings-button">Reset All Settings</button>
+                        </div>
                         <div class="success-message" id="settings-success-message"></div>
                         <div class="error-message" id="settings-error-message"></div>
     </div>
@@ -1518,6 +1523,7 @@ body {
             function initSettingsPage() {
                 const saveTitleButton = document.getElementById('save-title-button');
                 const saveFaviconButton = document.getElementById('save-favicon-button');
+                const resetButton = document.getElementById('reset-settings-button');
                 const titleInput = document.getElementById('page-title-input');
                 const faviconInput = document.getElementById('favicon-input');
                 const successMsg = document.getElementById('settings-success-message');
@@ -1565,6 +1571,54 @@ body {
                         showMessage(successMsg, 'Favicon saved successfully', 'success');
                     };
                     reader.readAsDataURL(file);
+                });
+
+                resetButton?.addEventListener('click', () => {
+                    // Remove saved settings from localStorage
+                    localStorage.removeItem('pageTitle');
+                    localStorage.removeItem('faviconData');
+                    
+                    // Reset to default values
+                    const defaultTitle = 'Unlinewize';
+                    const defaultFavicon = 'favicon.png';
+                    
+                    // Update input fields
+                    if (titleInput) {
+                        titleInput.value = defaultTitle;
+                    }
+                    
+                    // Clear favicon input and preview
+                    if (faviconInput) {
+                        faviconInput.value = '';
+                    }
+                    const preview = document.getElementById('favicon-preview');
+                    if (preview) {
+                        preview.remove();
+                    }
+                    
+                    // Update page title
+                    const titleElement = document.getElementById('page-title');
+                    if (titleElement) {
+                        titleElement.textContent = defaultTitle;
+                    }
+                    
+                    // Update favicon
+                    const favicon = document.getElementById('favicon');
+                    if (favicon) {
+                        favicon.href = defaultFavicon;
+                    }
+                    
+                    // Update all new tab pages
+                    document.querySelectorAll('.new-tab-title').forEach(el => {
+                        el.textContent = defaultTitle;
+                    });
+                    
+                    // Update favicon in new tab pages
+                    document.querySelectorAll('.favicon-logo').forEach(el => {
+                        el.src = defaultFavicon;
+                    });
+                    
+                    showMessage(successMsg, 'Settings reset to defaults successfully', 'success');
                 });
             }
 
