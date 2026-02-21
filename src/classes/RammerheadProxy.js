@@ -281,9 +281,9 @@ class RammerheadProxy extends Proxy {
      */
     addToOnRequestPipeline(onRequest, beginning = false) {
         if (beginning) {
-            this.onRequestPipeline.push(onRequest);
+            this.onRequestPipeline.unshift(onRequest); // Add to START to run FIRST
         } else {
-            this.onRequestPipeline.unshift(onRequest);
+            this.onRequestPipeline.push(onRequest); // Add to END to run LAST
         }
     }
     /**
