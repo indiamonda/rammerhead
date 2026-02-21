@@ -1407,6 +1407,8 @@ body {
             
             const basePath = getBasePath();
 
+            const _jqFooterHTML = '<footer style="text-align: center; padding: 24px 0 16px; color: var(--color-text-tertiary, #888); font-size: 13px; opacity: 0.7;">&copy; JimmyQrg 2026</footer>';
+
             // ============================================
             // URL Shuffler (client-side mirror of server StrShuffler)
             // ============================================
@@ -2155,9 +2157,7 @@ body {
                                 <div class="home-card-desc">Change theme colors and background</div>
                             </a>
             </div>
-                        <footer style="text-align: center; padding: 24px 0 16px; color: var(--color-text-tertiary, #888); font-size: 13px; opacity: 0.7;">
-                            &copy; JimmyQrg 2026
-                        </footer>
+                        ${_jqFooterHTML}
         </div>
                 `;
             }
@@ -2554,6 +2554,7 @@ body {
                                 Creating session...
             </div>
         </div>
+                        ${_jqFooterHTML}
     </div>
                 `;
             }
@@ -2580,6 +2581,7 @@ body {
                             <div class="success-message" id="session-success-message"></div>
                             <div class="error-message" id="session-error-message"></div>
                         </div>
+                        ${_jqFooterHTML}
                     </div>
                 `;
             }
@@ -2706,6 +2708,7 @@ body {
                         </div>
                         <div class="success-message" id="settings-success-message"></div>
                         <div class="error-message" id="settings-error-message"></div>
+                        ${_jqFooterHTML}
     </div>
                 `;
             }
@@ -2750,6 +2753,7 @@ body {
                                 </table>`
                             }
                         </div>
+                        ${_jqFooterHTML}
                     </div>
                 `;
             }
@@ -2804,6 +2808,7 @@ body {
                                 `).join('')
                             }
     </div>
+                        ${_jqFooterHTML}
                     </div>
                 `;
             }
@@ -2841,6 +2846,7 @@ body {
                                 </table>`
                             }
                         </div>
+                        ${_jqFooterHTML}
                     </div>
                 `;
             }
@@ -2878,6 +2884,7 @@ body {
                             </div>
                             <button class="button" id="save-user-agent-button">Save User Agent</button>
                         </div>
+                        ${_jqFooterHTML}
                     </div>
                 `;
             }
@@ -2909,6 +2916,7 @@ body {
                                 <div class="stat-label">Days Active</div>
                             </div>
                         </div>
+                        ${_jqFooterHTML}
                     </div>
                 `;
             }
