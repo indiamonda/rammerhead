@@ -9,12 +9,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style id="embedded-styles">
 /* ============================================
    CSS Variables & Reset
    ============================================ */
 :root {
-    /* Chrome-like colors */
+    /* Chrome-like colors - Light Mode */
     --color-white: #ffffff;
     --color-text-primary: #202124;
     --color-text-secondary: #3c4043;
@@ -50,6 +51,38 @@
     --shadow-sm: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
     --shadow-md: 0 1px 2px rgba(60, 64, 67, 0.3), 0 2px 6px 2px rgba(60, 64, 67, 0.15);
     --shadow-lg: 0 2px 4px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+}
+
+[data-theme="dark"] {
+    /* Dark Mode Colors */
+    --color-text-primary: #e8eaed;
+    --color-text-secondary: #bdc1c6;
+    --color-text-muted: #9aa0a6;
+    --color-text-placeholder: #80868b;
+    --color-text-icon: #5f6368;
+    --color-bg-primary: #202124;
+    --color-bg-secondary: #2d2e30;
+    --color-bg-tertiary: #35363a;
+    --color-bg-hover: rgba(255, 255, 255, 0.1);
+    --color-bg-active: rgba(255, 255, 255, 0.15);
+    --color-bg-tab-active: #2d2e30;
+    --color-bg-tab-hover: rgba(255, 255, 255, 0.08);
+    --color-bg-tab-inactive: #35363a;
+    --color-border: #3c4043;
+    --color-border-light: #5f6368;
+    --color-border-hover: #80868b;
+    --color-border-divider: #3c4043;
+    --color-primary: #8ab4f8;
+    --color-primary-hover: #aecbfa;
+    --color-primary-active: #669df6;
+    --color-primary-light: #1e3a5f;
+    --color-link: #8ab4f8;
+    --color-link-hover: #aecbfa;
+    --color-error-bg: #3c1e1e;
+    --color-error-border: #8b5a5a;
+    --color-error-text: #f28b82;
+    --color-success: #81c995;
+    --color-success-bg: #1e3a2e;
 }
 
 * {
@@ -704,6 +737,28 @@ body {
     border-color: var(--color-border-hover);
 }
 
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: var(--font-family);
+    color: var(--color-text-primary);
+    background: var(--color-bg-primary);
+    transition: all var(--transition-fast);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-light);
+}
+
+.form-control:hover {
+    border-color: var(--color-border-hover);
+}
+
 .button {
     background: var(--color-primary);
     border: none;
@@ -852,6 +907,292 @@ body {
     }
 }
 
+/* ============================================
+   Bookmark Bar
+   ============================================ */
+.bookmark-bar {
+    background: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--color-border);
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    flex-shrink: 0;
+}
+
+.bookmark-items {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.bookmark-item {
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bookmark-item:hover {
+    background: var(--color-bg-hover);
+}
+
+.bookmark-item i {
+    font-size: 12px;
+    color: var(--color-text-icon);
+}
+
+/* ============================================
+   Menu Dropdown
+   ============================================ */
+.menu-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 8px;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    box-shadow: var(--shadow-lg);
+    min-width: 200px;
+    z-index: 10000;
+    padding: 8px 0;
+    margin-top: 4px;
+}
+
+.menu-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--color-text-primary);
+    font-size: 14px;
+}
+
+.menu-item:hover {
+    background: var(--color-bg-hover);
+}
+
+.menu-item i {
+    width: 16px;
+    text-align: center;
+    color: var(--color-text-icon);
+}
+
+.menu-divider {
+    height: 1px;
+    background: var(--color-border-divider);
+    margin: 4px 0;
+}
+
+.browser-controls, .browser-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.browser-chrome {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+}
+
+/* ============================================
+   DevTools Panel
+   ============================================ */
+.devtools-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--color-bg-primary);
+    border-top: 1px solid var(--color-border);
+    height: 400px;
+    display: none;
+    flex-direction: column;
+    z-index: 10001;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.devtools-panel.active {
+    display: flex;
+}
+
+.devtools-header {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    border-bottom: 1px solid var(--color-border);
+    gap: 8px;
+}
+
+.devtools-tabs {
+    display: flex;
+    gap: 4px;
+}
+
+.devtools-tab {
+    padding: 6px 12px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.devtools-tab.active {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+}
+
+.devtools-content {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+}
+
+.devtools-close {
+    margin-left: auto;
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-icon);
+    cursor: pointer;
+}
+
+.network-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.network-table th,
+.network-table td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.network-table th {
+    background: var(--color-bg-secondary);
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+}
+
+/* ============================================
+   Additional Feature Styles
+   ============================================ */
+.feature-page {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.feature-card {
+    padding: 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-bg-primary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.feature-card:hover {
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.feature-card-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+    color: var(--color-primary);
+}
+
+.feature-card-title {
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.feature-card-desc {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+}
+
+.data-table th,
+.data-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.data-table th {
+    background: var(--color-bg-secondary);
+    font-weight: 500;
+}
+
+.data-table tr:hover {
+    background: var(--color-bg-hover);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-top: 24px;
+}
+
+.stat-card {
+    padding: 20px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-bg-primary);
+}
+
+.stat-value {
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--color-primary);
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    color: var(--color-text-secondary);
+    font-size: 14px;
+}
+
 </style>
 
     <script>
@@ -888,33 +1229,28 @@ body {
         <!-- Tab Bar -->
         <div class="tab-bar" id="tab-bar">
             <button class="new-tab-button" id="new-tab-button" title="New Tab">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                </svg>
+                <i class="fas fa-plus"></i>
             </button>
             </div>
 
         <!-- Browser Chrome -->
         <div class="browser-chrome">
-            <button class="browser-button" id="back-button" disabled>
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
-                </svg>
-            </button>
-            <button class="browser-button" id="forward-button" disabled>
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
-                </svg>
-            </button>
-            <button class="browser-button" id="refresh-button">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                </svg>
-            </button>
+            <div class="browser-controls">
+                <button class="browser-button" id="back-button" disabled title="Back">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <button class="browser-button" id="forward-button" disabled title="Forward">
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+                <button class="browser-button" id="refresh-button" title="Refresh">
+                    <i class="fas fa-redo"></i>
+                </button>
+                <button class="browser-button" id="home-button" title="Home">
+                    <i class="fas fa-home"></i>
+                </button>
+        </div>
             <div class="url-bar-wrapper">
-                <svg class="security-icon" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-                </svg>
+                <i class="fas fa-lock security-icon" id="security-icon"></i>
                 <input 
                     type="text" 
                     id="url-input" 
@@ -922,13 +1258,61 @@ body {
                     placeholder="Search or type a URL"
                     autocomplete="off"
                 />
-                <button class="page-action" id="clear-button" style="display: none;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                    </svg>
+                <button class="page-action" id="clear-button" style="display: none;" title="Clear">
+                    <i class="fas fa-times"></i>
                 </button>
-        </div>
+                <button class="page-action" id="bookmark-button" title="Bookmark this page">
+                    <i class="far fa-star"></i>
+                </button>
             </div>
+            <div class="browser-actions">
+                <button class="browser-button" id="menu-button" title="Menu">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <button class="browser-button" id="devtools-button" title="Developer Tools (F12)">
+                    <i class="fas fa-code"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Bookmark Bar -->
+        <div class="bookmark-bar" id="bookmark-bar" style="display: none;">
+            <div class="bookmark-items" id="bookmark-items"></div>
+            </div>
+        
+        <!-- Menu Dropdown -->
+        <div class="menu-dropdown" id="menu-dropdown" style="display: none;">
+            <div class="menu-item" data-action="new-tab">
+                <i class="fas fa-plus"></i> New Tab
+            </div>
+            <div class="menu-item" data-action="new-window">
+                <i class="fas fa-window-maximize"></i> New Window
+        </div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" data-action="bookmarks">
+                <i class="fas fa-bookmark"></i> Bookmarks
+            </div>
+            <div class="menu-item" data-action="history">
+                <i class="fas fa-history"></i> History
+                </div>
+            <div class="menu-item" data-action="downloads">
+                <i class="fas fa-download"></i> Downloads
+            </div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" data-action="privacy">
+                <i class="fas fa-shield-alt"></i> Privacy & Security
+        </div>
+            <div class="menu-item" data-action="settings">
+                <i class="fas fa-cog"></i> Settings
+    </div>
+            <div class="menu-item" data-action="devtools">
+                <i class="fas fa-code"></i> Developer Tools
+    </div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" data-action="theme">
+                <i class="fas fa-moon" id="theme-icon"></i> <span id="theme-text">Dark Mode</span>
+            </div>
+        </div>
 
         <!-- Browser Content -->
         <div class="browser-content" id="browser-content">
@@ -999,6 +1383,166 @@ body {
                 localStorage.setItem('deviceSessionId', sessionId);
             }
 
+            // ============================================
+            // Data Management Functions
+            // ============================================
+            
+            // Bookmarks
+            function getBookmarks() {
+                const bookmarks = localStorage.getItem('bookmarks');
+                return bookmarks ? JSON.parse(bookmarks) : [];
+            }
+            
+            function saveBookmarks(bookmarks) {
+                localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+            }
+            
+            function addBookmark(url, title) {
+                const bookmarks = getBookmarks();
+                if (!bookmarks.find(b => b.url === url)) {
+                    bookmarks.push({ url, title, id: Date.now().toString() });
+                    saveBookmarks(bookmarks);
+                    updateBookmarkBar();
+                    return true;
+                }
+                return false;
+            }
+            
+            function removeBookmark(url) {
+                const bookmarks = getBookmarks();
+                const filtered = bookmarks.filter(b => b.url !== url);
+                saveBookmarks(filtered);
+                updateBookmarkBar();
+            }
+            
+            function isBookmarked(url) {
+                return getBookmarks().some(b => b.url === url);
+            }
+            
+            // History
+            function getHistory() {
+                const history = localStorage.getItem('browserHistory');
+                return history ? JSON.parse(history) : [];
+            }
+            
+            function saveHistory(history) {
+                // Keep only last 1000 entries
+                const limited = history.slice(-1000);
+                localStorage.setItem('browserHistory', JSON.stringify(limited));
+            }
+            
+            function addToHistory(url, title) {
+                if (url.startsWith('jq://')) return;
+                const history = getHistory();
+                history.push({
+                    url,
+                    title: title || url,
+                    timestamp: Date.now()
+                });
+                saveHistory(history);
+            }
+            
+            function clearHistory() {
+                localStorage.removeItem('browserHistory');
+            }
+            
+            // Downloads
+            function getDownloads() {
+                const downloads = localStorage.getItem('downloads');
+                return downloads ? JSON.parse(downloads) : [];
+            }
+            
+            function saveDownloads(downloads) {
+                localStorage.setItem('downloads', JSON.stringify(downloads));
+            }
+            
+            function addDownload(url, filename) {
+                const downloads = getDownloads();
+                downloads.push({
+                    url,
+                    filename: filename || url.split('/').pop(),
+                    timestamp: Date.now(),
+                    status: 'completed'
+                });
+                saveDownloads(downloads);
+            }
+            
+            // Search Engines
+            const searchEngines = {
+                google: { name: 'Google', url: 'https://www.google.com/search?q=' },
+                bing: { name: 'Bing', url: 'https://www.bing.com/search?q=' },
+                duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
+                yahoo: { name: 'Yahoo', url: 'https://search.yahoo.com/search?p=' },
+                startpage: { name: 'Startpage', url: 'https://www.startpage.com/sp/search?query=' }
+            };
+            
+            function getSearchEngine() {
+                return localStorage.getItem('searchEngine') || 'bing';
+            }
+            
+            function setSearchEngine(engine) {
+                localStorage.setItem('searchEngine', engine);
+            }
+            
+            // Theme
+            function getTheme() {
+                return localStorage.getItem('theme') || 'light';
+            }
+            
+            function setTheme(theme) {
+                localStorage.setItem('theme', theme);
+                document.documentElement.setAttribute('data-theme', theme);
+                updateThemeUI();
+            }
+            
+            function updateThemeUI() {
+                const theme = getTheme();
+                const icon = document.getElementById('theme-icon');
+                const text = document.getElementById('theme-text');
+                if (icon) {
+                    icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+                }
+                if (text) {
+                    text.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+                }
+            }
+            
+            // Statistics
+            function getStats() {
+                const stats = localStorage.getItem('browserStats');
+                return stats ? JSON.parse(stats) : {
+                    sitesVisited: 0,
+                    dataUsed: 0,
+                    timeSpent: 0,
+                    startDate: Date.now()
+                };
+            }
+            
+            function saveStats(stats) {
+                localStorage.setItem('browserStats', JSON.stringify(stats));
+            }
+            
+            function updateStats(url) {
+                const stats = getStats();
+                stats.sitesVisited++;
+                saveStats(stats);
+            }
+            
+            // Network Inspector
+            let networkRequests = [];
+            
+            function addNetworkRequest(request) {
+                networkRequests.push({
+                    ...request,
+                    id: Date.now().toString() + Math.random(),
+                    timestamp: Date.now()
+                });
+                // Keep only last 500 requests
+                if (networkRequests.length > 500) {
+                    networkRequests = networkRequests.slice(-500);
+                }
+            }
+            
             // Tab Management
             let tabs = [];
             let activeTabId = null;
@@ -1022,8 +1566,9 @@ body {
                         url = 'https://' + url;
                     }
                 } else {
-                    // Treat as search query - use Bing
-                    url = 'https://www.bing.com/search?q=' + encodeURIComponent(url);
+                    // Treat as search query - use selected search engine
+                    const engine = searchEngines[getSearchEngine()];
+                    url = engine.url + encodeURIComponent(url);
                 }
                 return url;
             }
@@ -1045,10 +1590,8 @@ body {
                 tabElement.dataset.tabId = tabId;
                 tabElement.innerHTML = `
                     <span class="tab-title">${title}</span>
-                    <button class="tab-close" onclick="closeTab('${tabId}')">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
+                    <button class="tab-close" onclick="closeTab('${tabId}')" title="Close tab">
+                        <i class="fas fa-times"></i>
                     </button>
                 `;
                 tabElement.addEventListener('click', (e) => {
@@ -1123,6 +1666,11 @@ body {
                 if (tab) {
                     urlInput.value = tab.url;
                     updateNavigationButtons(tab);
+                }
+                
+                // Update bookmark button if function exists
+                if (typeof updateBookmarkButton === 'function') {
+                    setTimeout(updateBookmarkButton, 50);
                 }
             }
 
@@ -1338,6 +1886,26 @@ body {
                     contentElement.innerHTML = getSettingsPageHTML();
                     updateTabTitle(tabId, 'Settings');
                     initSettingsPage();
+                } else if (url === 'jq://bookmarks/') {
+                    contentElement.innerHTML = getBookmarksPageHTML();
+                    updateTabTitle(tabId, 'Bookmarks');
+                    initBookmarksPage();
+                } else if (url === 'jq://history/') {
+                    contentElement.innerHTML = getHistoryPageHTML();
+                    updateTabTitle(tabId, 'History');
+                    initHistoryPage();
+                } else if (url === 'jq://downloads/') {
+                    contentElement.innerHTML = getDownloadsPageHTML();
+                    updateTabTitle(tabId, 'Downloads');
+                    initDownloadsPage();
+                } else if (url === 'jq://privacy/') {
+                    contentElement.innerHTML = getPrivacyPageHTML();
+                    updateTabTitle(tabId, 'Privacy & Security');
+                    initPrivacyPage();
+                } else if (url === 'jq://stats/') {
+                    contentElement.innerHTML = getStatsPageHTML();
+                    updateTabTitle(tabId, 'Statistics');
+                    initStatsPage();
                 }
             }
 
@@ -1350,17 +1918,42 @@ body {
             </div>
                         <div class="home-grid">
                             <a href="jq://newtab/" class="home-card" data-url="jq://newtab/">
-                                <div class="home-card-icon">🔍</div>
+                                <div class="home-card-icon"><i class="fas fa-search"></i></div>
                                 <div class="home-card-title">New Tab</div>
                                 <div class="home-card-desc">Search and browse the web</div>
                             </a>
+                            <a href="jq://bookmarks/" class="home-card" data-url="jq://bookmarks/">
+                                <div class="home-card-icon"><i class="fas fa-bookmark"></i></div>
+                                <div class="home-card-title">Bookmarks</div>
+                                <div class="home-card-desc">Your saved bookmarks</div>
+                            </a>
+                            <a href="jq://history/" class="home-card" data-url="jq://history/">
+                                <div class="home-card-icon"><i class="fas fa-history"></i></div>
+                                <div class="home-card-title">History</div>
+                                <div class="home-card-desc">Browsing history</div>
+                            </a>
+                            <a href="jq://downloads/" class="home-card" data-url="jq://downloads/">
+                                <div class="home-card-icon"><i class="fas fa-download"></i></div>
+                                <div class="home-card-title">Downloads</div>
+                                <div class="home-card-desc">Download history</div>
+                            </a>
                             <a href="jq://sessions/" class="home-card" data-url="jq://sessions/">
-                                <div class="home-card-icon">🔐</div>
+                                <div class="home-card-icon"><i class="fas fa-key"></i></div>
                                 <div class="home-card-title">Sessions</div>
                                 <div class="home-card-desc">Manage your proxy session</div>
                             </a>
+                            <a href="jq://privacy/" class="home-card" data-url="jq://privacy/">
+                                <div class="home-card-icon"><i class="fas fa-shield-alt"></i></div>
+                                <div class="home-card-title">Privacy</div>
+                                <div class="home-card-desc">Privacy & security</div>
+                            </a>
+                            <a href="jq://stats/" class="home-card" data-url="jq://stats/">
+                                <div class="home-card-icon"><i class="fas fa-chart-bar"></i></div>
+                                <div class="home-card-title">Statistics</div>
+                                <div class="home-card-desc">Browsing statistics</div>
+                            </a>
                             <a href="jq://settings/" class="home-card" data-url="jq://settings/">
-                                <div class="home-card-icon">⚙️</div>
+                                <div class="home-card-icon"><i class="fas fa-cog"></i></div>
                                 <div class="home-card-title">Settings</div>
                                 <div class="home-card-desc">Customize your browser</div>
                             </a>
@@ -1410,11 +2003,11 @@ body {
                                 </svg>
                                 Generate never-expire link
                             </button>
-                            <div class="link-result" id="newtab-link-result">
+                            <div class="link-result" id="newtab-link-result" style="display: none;">
                                 <div class="link-result-label">Never-expire link:</div>
                                 <div class="link-display">
                                     <div class="link-url" id="newtab-link-url"></div>
-                                    <button class="copy-button" id="newtab-copy-button">Copy</button>
+                                    <button class="copy-button" id="newtab-copy-button" disabled>Copy</button>
     </div>
     </div>
                             <div class="error-message" id="newtab-error-message"></div>
@@ -1484,9 +2077,268 @@ body {
                             <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Reset all settings to their default values.</p>
                             <button class="button button-secondary" id="reset-settings-button">Reset All Settings</button>
                         </div>
+                        <div class="settings-section">
+                            <h2>Search Engine</h2>
+                            <div class="form-group">
+                                <label for="search-engine-select">Default Search Engine</label>
+                                <select id="search-engine-select" class="form-control">
+                                    ${Object.entries(searchEngines).map(([key, engine]) => 
+                                        `<option value="${key}" ${getSearchEngine() === key ? 'selected' : ''}>${engine.name}</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <button class="button" id="save-search-engine-button">Save</button>
+                        </div>
                         <div class="success-message" id="settings-success-message"></div>
                         <div class="error-message" id="settings-error-message"></div>
     </div>
+                `;
+            }
+
+            // New Page HTML Generators
+            function getBookmarksPageHTML() {
+                const bookmarks = getBookmarks();
+                return `
+                    <div class="feature-page">
+                        <div class="page-header">
+                            <h1><i class="fas fa-bookmark"></i> Bookmarks</h1>
+                            <p>Manage your saved bookmarks</p>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="button" id="bookmarks-import-button"><i class="fas fa-upload"></i> Import</button>
+                            <button class="button button-secondary" id="bookmarks-export-button"><i class="fas fa-download"></i> Export</button>
+                        </div>
+                        <div class="settings-section" style="margin-top: 24px;">
+                            <h2>Your Bookmarks (${bookmarks.length})</h2>
+                            ${bookmarks.length === 0 ? 
+                                '<p style="color: var(--color-text-secondary); padding: 24px; text-align: center;">No bookmarks yet. Click the star icon in the address bar to bookmark pages.</p>' :
+                                `<table class="data-table">
+            <thead>
+                <tr>
+                                            <th>Title</th>
+                                            <th>URL</th>
+                                            <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                                        ${bookmarks.map(bookmark => `
+                                            <tr>
+                                                <td>${bookmark.title}</td>
+                                                <td><a href="${bookmark.url}" style="color: var(--color-link);">${bookmark.url}</a></td>
+                                                <td>
+                                                    <button class="button button-secondary" onclick="openBookmark('${bookmark.url}')"><i class="fas fa-external-link-alt"></i></button>
+                                                    <button class="button button-secondary" onclick="deleteBookmark('${bookmark.url}')"><i class="fas fa-trash"></i></button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }
+
+            function getHistoryPageHTML() {
+                const history = getHistory();
+                const grouped = history.reduce((acc, item) => {
+                    const date = new Date(item.timestamp).toDateString();
+                    if (!acc[date]) acc[date] = [];
+                    acc[date].push(item);
+                    return acc;
+                }, {});
+                
+                return `
+                    <div class="feature-page">
+                        <div class="page-header">
+                            <h1><i class="fas fa-history"></i> History</h1>
+                            <p>Your browsing history (${history.length} entries)</p>
+                        </div>
+                        <div class="action-buttons">
+                            <button class="button button-secondary" id="clear-history-button"><i class="fas fa-trash"></i> Clear History</button>
+                            <input type="text" id="history-search" placeholder="Search history..." class="form-control" style="max-width: 300px; margin-left: auto;">
+                        </div>
+                        <div class="settings-section" style="margin-top: 24px;">
+                            ${history.length === 0 ? 
+                                '<p style="color: var(--color-text-secondary); padding: 24px; text-align: center;">No history yet.</p>' :
+                                Object.entries(grouped).reverse().map(([date, items]) => `
+                                    <h3 style="margin-top: 24px; margin-bottom: 12px;">${date}</h3>
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Time</th>
+                                                <th>Title</th>
+                                                <th>URL</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${items.reverse().map(item => `
+                                                <tr>
+                                                    <td>${new Date(item.timestamp).toLocaleTimeString()}</td>
+                                                    <td>${item.title}</td>
+                                                    <td><a href="${item.url}" style="color: var(--color-link);">${item.url}</a></td>
+                                                    <td>
+                                                        <button class="button button-secondary" onclick="openHistoryItem('${item.url}')"><i class="fas fa-external-link-alt"></i></button>
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+            </tbody>
+        </table>
+                                `).join('')
+                            }
+    </div>
+                    </div>
+                `;
+            }
+
+            function getDownloadsPageHTML() {
+                const downloads = getDownloads();
+                return `
+                    <div class="feature-page">
+                        <div class="page-header">
+                            <h1><i class="fas fa-download"></i> Downloads</h1>
+                            <p>Your download history</p>
+                        </div>
+                        <div class="settings-section" style="margin-top: 24px;">
+                            ${downloads.length === 0 ? 
+                                '<p style="color: var(--color-text-secondary); padding: 24px; text-align: center;">No downloads yet.</p>' :
+                                `<table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Filename</th>
+                                            <th>URL</th>
+                                            <th>Date</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${downloads.reverse().map(download => `
+                                            <tr>
+                                                <td>${download.filename}</td>
+                                                <td><a href="${download.url}" style="color: var(--color-link);">${download.url}</a></td>
+                                                <td>${new Date(download.timestamp).toLocaleString()}</td>
+                                                <td><span style="color: var(--color-success);">${download.status}</span></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }
+
+            function getPrivacyPageHTML() {
+                return `
+                    <div class="feature-page">
+                        <div class="page-header">
+                            <h1><i class="fas fa-shield-alt"></i> Privacy & Security</h1>
+                            <p>Manage your privacy and security settings</p>
+                        </div>
+                        <div class="settings-section">
+                            <h2>Clear Browsing Data</h2>
+                            <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Remove browsing data from this browser</p>
+                            <div class="action-buttons">
+                                <button class="button button-secondary" id="clear-cookies-button"><i class="fas fa-cookie"></i> Clear Cookies</button>
+                                <button class="button button-secondary" id="clear-cache-button"><i class="fas fa-broom"></i> Clear Cache</button>
+                                <button class="button button-secondary" id="clear-storage-button"><i class="fas fa-database"></i> Clear Storage</button>
+                                <button class="button button-secondary" id="clear-all-button"><i class="fas fa-trash-alt"></i> Clear All Data</button>
+                            </div>
+                        </div>
+                        <div class="settings-section">
+                            <h2>Cookie Manager</h2>
+                            <p style="color: var(--color-text-secondary); margin-bottom: 16px;">View and manage cookies</p>
+                            <button class="button" id="view-cookies-button"><i class="fas fa-eye"></i> View Cookies</button>
+                            <div id="cookies-display" style="margin-top: 16px;"></div>
+                        </div>
+                        <div class="settings-section">
+                            <h2>User Agent</h2>
+                            <div class="form-group">
+                                <label for="user-agent-input">Custom User Agent</label>
+                                <input type="text" id="user-agent-input" class="form-control" 
+                                    value="${localStorage.getItem('userAgent') || navigator.userAgent}" 
+                                    placeholder="User agent string" />
+                            </div>
+                            <button class="button" id="save-user-agent-button">Save User Agent</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function getStatsPageHTML() {
+                const stats = getStats();
+                const daysSinceStart = Math.floor((Date.now() - stats.startDate) / (1000 * 60 * 60 * 24));
+                return `
+                    <div class="feature-page">
+                        <div class="page-header">
+                            <h1><i class="fas fa-chart-bar"></i> Statistics</h1>
+                            <p>Your browsing statistics</p>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value">${stats.sitesVisited}</div>
+                                <div class="stat-label">Sites Visited</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">${getHistory().length}</div>
+                                <div class="stat-label">History Entries</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">${getBookmarks().length}</div>
+                                <div class="stat-label">Bookmarks</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">${daysSinceStart}</div>
+                                <div class="stat-label">Days Active</div>
+                            </div>
+                        </div>
+                        <div class="settings-section" style="margin-top: 24px;">
+                            <h2>Most Visited Sites</h2>
+                            <p style="color: var(--color-text-secondary);">Coming soon...</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function getDevToolsHTML() {
+                return `
+                    <div class="devtools-panel" id="devtools-panel">
+                        <div class="devtools-header">
+                            <div class="devtools-tabs">
+                                <button class="devtools-tab active" data-tab="console">Console</button>
+                                <button class="devtools-tab" data-tab="network">Network</button>
+                                <button class="devtools-tab" data-tab="storage">Storage</button>
+                            </div>
+                            <button class="devtools-close" id="devtools-close"><i class="fas fa-times"></i></button>
+                        </div>
+                        <div class="devtools-content">
+                            <div id="devtools-console" class="devtools-tab-content active">
+                                <h3>Console</h3>
+                                <p style="color: var(--color-text-secondary);">Console output will appear here</p>
+                            </div>
+                            <div id="devtools-network" class="devtools-tab-content" style="display: none;">
+                                <h3>Network Requests</h3>
+                                <table class="network-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Method</th>
+                                            <th>URL</th>
+                                            <th>Status</th>
+                                            <th>Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="network-table-body">
+                                        <tr><td colspan="4" style="text-align: center; color: var(--color-text-secondary);">No requests yet</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="devtools-storage" class="devtools-tab-content" style="display: none;">
+                                <h3>Local Storage</h3>
+                                <div id="storage-display"></div>
+                            </div>
+                        </div>
+                    </div>
                 `;
             }
 
@@ -1694,19 +2546,67 @@ body {
                         if (data.url) {
                             const linkResult = contentElement.querySelector('#newtab-link-result');
                             const linkUrl = contentElement.querySelector('#newtab-link-url');
-                            linkUrl.textContent = data.url;
-                            linkResult.classList.add('active');
+                            const copyBtn = contentElement.querySelector('#newtab-copy-button');
+                            if (linkUrl && linkResult && copyBtn) {
+                                linkUrl.textContent = data.url;
+                                linkResult.style.display = 'block';
+                                linkResult.classList.add('active');
+                                copyBtn.disabled = false;
+                            }
                         }
                     } catch (e) {
                         console.error('Failed to generate link', e);
                     }
                 });
 
-                copyButton?.addEventListener('click', () => {
+                copyButton?.addEventListener('click', async () => {
                     const linkUrl = contentElement.querySelector('#newtab-link-url');
-                    navigator.clipboard.writeText(linkUrl.textContent);
-                    copyButton.textContent = 'Copied!';
-                    setTimeout(() => copyButton.textContent = 'Copy', 2000);
+                    const linkText = linkUrl?.textContent?.trim();
+                    
+                    if (!linkText) {
+                        console.error('No link to copy');
+                        return;
+                    }
+                    
+                    try {
+                        // Try modern clipboard API first
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(linkText);
+                        } else {
+                            // Fallback for older browsers
+                            const textArea = document.createElement('textarea');
+                            textArea.value = linkText;
+                            textArea.style.position = 'fixed';
+                            textArea.style.left = '-999999px';
+                            textArea.style.top = '-999999px';
+                            document.body.appendChild(textArea);
+                            textArea.focus();
+                            textArea.select();
+                            try {
+                                document.execCommand('copy');
+                            } catch (err) {
+                                console.error('Fallback copy failed:', err);
+                            }
+                            document.body.removeChild(textArea);
+                        }
+                        
+                        // Update button to show success
+                        const originalText = copyButton.textContent;
+                        copyButton.textContent = 'Copied!';
+                        copyButton.classList.add('copied');
+                        setTimeout(() => {
+                            copyButton.textContent = originalText;
+                            copyButton.classList.remove('copied');
+                        }, 2000);
+                    } catch (err) {
+                        console.error('Failed to copy link:', err);
+                        // Show error to user
+                        const originalText = copyButton.textContent;
+                        copyButton.textContent = 'Failed!';
+                        setTimeout(() => {
+                            copyButton.textContent = originalText;
+                        }, 2000);
+                    }
                 });
             }
 
@@ -1749,8 +2649,366 @@ body {
                 }
             }
             
+            // ============================================
+            // Initialization Functions for New Pages
+            // ============================================
+            
+            function initBookmarksPage() {
+                document.getElementById('bookmarks-export-button')?.addEventListener('click', () => {
+                    const bookmarks = getBookmarks();
+                    const dataStr = JSON.stringify(bookmarks, null, 2);
+                    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                    const url = URL.createObjectURL(dataBlob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'bookmarks.json';
+                    link.click();
+                });
+                
+                document.getElementById('bookmarks-import-button')?.addEventListener('click', () => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'application/json';
+                    input.onchange = (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                                try {
+                                    const imported = JSON.parse(e.target.result);
+                                    if (Array.isArray(imported)) {
+                                        saveBookmarks(imported);
+                                        location.reload();
+                                    }
+                                } catch (err) {
+                                    alert('Invalid bookmarks file');
+                                }
+                            };
+                            reader.readAsText(file);
+                        }
+                    };
+                    input.click();
+                });
+            }
+            
+            function initHistoryPage() {
+                document.getElementById('clear-history-button')?.addEventListener('click', () => {
+                    if (confirm('Clear all browsing history?')) {
+                        clearHistory();
+                        location.reload();
+                    }
+                });
+                
+                document.getElementById('history-search')?.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase();
+                    document.querySelectorAll('.data-table tbody tr').forEach(row => {
+                        const text = row.textContent.toLowerCase();
+                        row.style.display = text.includes(query) ? '' : 'none';
+                    });
+                });
+            }
+            
+            function initDownloadsPage() {
+                // Downloads page is mostly read-only
+            }
+            
+            function initPrivacyPage() {
+                document.getElementById('clear-cookies-button')?.addEventListener('click', () => {
+                    if (confirm('Clear all cookies?')) {
+                        document.cookie.split(";").forEach(c => {
+                            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                        });
+                        alert('Cookies cleared');
+                    }
+                });
+                
+                document.getElementById('clear-cache-button')?.addEventListener('click', () => {
+                    if (confirm('Clear cache?')) {
+                        caches.keys().then(names => {
+                            names.forEach(name => caches.delete(name));
+                            alert('Cache cleared');
+                        });
+                    }
+                });
+                
+                document.getElementById('clear-storage-button')?.addEventListener('click', () => {
+                    if (confirm('Clear all localStorage data? This will reset all settings.')) {
+                        localStorage.clear();
+                        location.reload();
+                    }
+                });
+                
+                document.getElementById('clear-all-button')?.addEventListener('click', () => {
+                    if (confirm('Clear ALL browsing data? This cannot be undone.')) {
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        document.cookie.split(";").forEach(c => {
+                            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                        });
+                        caches.keys().then(names => {
+                            names.forEach(name => caches.delete(name));
+                        });
+                        location.reload();
+                    }
+                });
+                
+                document.getElementById('view-cookies-button')?.addEventListener('click', () => {
+                    const cookies = document.cookie.split(';').map(c => c.trim());
+                    const display = document.getElementById('cookies-display');
+                    if (cookies.length === 0 || (cookies.length === 1 && cookies[0] === '')) {
+                        display.innerHTML = '<p style="color: var(--color-text-secondary);">No cookies found</p>';
+                    } else {
+                        display.innerHTML = '<table class="data-table"><thead><tr><th>Cookie</th></tr></thead><tbody>' +
+                            cookies.map(c => `<tr><td>${c}</td></tr>`).join('') +
+                            '</tbody></table>';
+                    }
+                });
+                
+                document.getElementById('save-user-agent-button')?.addEventListener('click', () => {
+                    const ua = document.getElementById('user-agent-input').value;
+                    localStorage.setItem('userAgent', ua);
+                    alert('User agent saved');
+                });
+            }
+            
+            function initStatsPage() {
+                // Stats page is read-only
+            }
+            
+            // Bookmark Bar Functions
+            function updateBookmarkBar() {
+                const bookmarkBar = document.getElementById('bookmark-bar');
+                const bookmarkItems = document.getElementById('bookmark-items');
+                if (!bookmarkBar || !bookmarkItems) return;
+                
+                const bookmarks = getBookmarks();
+                const showBar = localStorage.getItem('showBookmarkBar') === 'true';
+                bookmarkBar.style.display = showBar ? 'flex' : 'none';
+                
+                bookmarkItems.innerHTML = bookmarks.slice(0, 10).map(bookmark => `
+                    <div class="bookmark-item" onclick="createTab('${bookmark.url}')">
+                        <i class="fas fa-bookmark"></i>
+                        <span>${bookmark.title}</span>
+                    </div>
+                `).join('');
+            }
+            
+            // Global functions for onclick handlers
+            window.openBookmark = (url) => createTab(url);
+            window.deleteBookmark = (url) => {
+                removeBookmark(url);
+                location.reload();
+            };
+            window.openHistoryItem = (url) => createTab(url);
+            
+            // Menu and UI Event Handlers
+            function initUIHandlers() {
+                // Menu button
+                const menuButton = document.getElementById('menu-button');
+                const menuDropdown = document.getElementById('menu-dropdown');
+                
+                menuButton?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    menuDropdown.style.display = menuDropdown.style.display === 'none' ? 'block' : 'none';
+                });
+                
+                document.addEventListener('click', (e) => {
+                    if (!menuDropdown?.contains(e.target) && !menuButton?.contains(e.target)) {
+                        menuDropdown.style.display = 'none';
+                    }
+                });
+                
+                // Menu items
+                document.querySelectorAll('.menu-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        const action = item.dataset.action;
+                        menuDropdown.style.display = 'none';
+                        
+                        switch(action) {
+                            case 'new-tab':
+                                createTab();
+                                break;
+                            case 'new-window':
+                                createTab();
+                                break;
+                            case 'bookmarks':
+                                createTab('jq://bookmarks/');
+                                break;
+                            case 'history':
+                                createTab('jq://history/');
+                                break;
+                            case 'downloads':
+                                createTab('jq://downloads/');
+                                break;
+                            case 'privacy':
+                                createTab('jq://privacy/');
+                                break;
+                            case 'settings':
+                                createTab('jq://settings/');
+                                break;
+                            case 'devtools':
+                                toggleDevTools();
+                                break;
+                            case 'theme':
+                                const currentTheme = getTheme();
+                                setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+                                break;
+                        }
+                    });
+                });
+                
+                // Bookmark button
+                const bookmarkButton = document.getElementById('bookmark-button');
+                bookmarkButton?.addEventListener('click', () => {
+                    const activeTab = tabs.find(t => t.id === activeTabId);
+                    if (activeTab && !activeTab.url.startsWith('jq://')) {
+                        const icon = bookmarkButton.querySelector('i');
+                        if (isBookmarked(activeTab.url)) {
+                            removeBookmark(activeTab.url);
+                            icon.className = 'far fa-star';
+                        } else {
+                            addBookmark(activeTab.url, activeTab.title);
+                            icon.className = 'fas fa-star';
+                        }
+                    }
+                });
+                
+                // Update bookmark button state
+                function updateBookmarkButton() {
+                    const activeTab = tabs.find(t => t.id === activeTabId);
+                    if (activeTab && bookmarkButton) {
+                        const icon = bookmarkButton.querySelector('i');
+                        if (activeTab.url.startsWith('jq://')) {
+                            bookmarkButton.style.display = 'none';
+                        } else {
+                            bookmarkButton.style.display = 'block';
+                            icon.className = isBookmarked(activeTab.url) ? 'fas fa-star' : 'far fa-star';
+                        }
+                    }
+                }
+                
+                // Home button
+                document.getElementById('home-button')?.addEventListener('click', () => {
+                    createTab('jq://home/');
+                });
+                
+                // DevTools button
+                document.getElementById('devtools-button')?.addEventListener('click', () => {
+                    toggleDevTools();
+                });
+                
+                // DevTools toggle
+                function toggleDevTools() {
+                    let panel = document.getElementById('devtools-panel');
+                    if (!panel) {
+                        document.body.insertAdjacentHTML('beforeend', getDevToolsHTML());
+                        panel = document.getElementById('devtools-panel');
+                        initDevTools();
+                    }
+                    panel.classList.toggle('active');
+                }
+                
+                function initDevTools() {
+                    // DevTools tabs
+                    document.querySelectorAll('.devtools-tab').forEach(tab => {
+                        tab.addEventListener('click', () => {
+                            document.querySelectorAll('.devtools-tab').forEach(t => t.classList.remove('active'));
+                            document.querySelectorAll('.devtools-tab-content').forEach(c => c.style.display = 'none');
+                            tab.classList.add('active');
+                            const tabName = tab.dataset.tab;
+                            const content = document.getElementById(`devtools-${tabName}`);
+                            if (content) {
+                                content.style.display = 'block';
+                                if (tabName === 'network') updateNetworkTab();
+                                if (tabName === 'storage') updateStorageTab();
+                            }
+                        });
+                    });
+                    
+                    // Close DevTools
+                    document.getElementById('devtools-close')?.addEventListener('click', () => {
+                        document.getElementById('devtools-panel')?.classList.remove('active');
+                    });
+                    
+                    // F12 shortcut
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === 'F12') {
+                            e.preventDefault();
+                            toggleDevTools();
+                        }
+                    });
+                }
+                
+                function updateNetworkTab() {
+                    const tbody = document.getElementById('network-table-body');
+                    if (networkRequests.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--color-text-secondary);">No requests yet</td></tr>';
+                    } else {
+                        tbody.innerHTML = networkRequests.slice(-50).reverse().map(req => `
+                            <tr>
+                                <td>${req.method || 'GET'}</td>
+                                <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis;">${req.url || ''}</td>
+                                <td>${req.status || '-'}</td>
+                                <td>${req.timestamp ? new Date(req.timestamp).toLocaleTimeString() : '-'}</td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+                
+                function updateStorageTab() {
+                    const display = document.getElementById('storage-display');
+                    const items = Object.entries(localStorage);
+                    if (items.length === 0) {
+                        display.innerHTML = '<p style="color: var(--color-text-secondary);">No localStorage items</p>';
+                    } else {
+                        display.innerHTML = '<table class="data-table"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>' +
+                            items.map(([key, value]) => {
+                                let displayValue = value;
+                                if (value.length > 100) displayValue = value.substring(0, 100) + '...';
+                                return `<tr><td>${key}</td><td style="max-width: 500px; overflow: hidden; text-overflow: ellipsis;">${displayValue}</td></tr>`;
+                            }).join('') +
+                            '</tbody></table>';
+                    }
+                }
+                
+                // Hook into tab switching to update bookmark button
+                // We'll call updateBookmarkButton after tab switches
+                // This is done by wrapping the switchToTab calls
+            }
+            
+            // Update settings page to include search engine save
+            const originalInitSettings = initSettingsPage;
+            initSettingsPage = function() {
+                originalInitSettings();
+                document.getElementById('save-search-engine-button')?.addEventListener('click', () => {
+                    const engine = document.getElementById('search-engine-select').value;
+                    setSearchEngine(engine);
+                    alert('Search engine saved');
+                });
+            };
+            
+            // Track history when pages load
+            const originalLoadTabContent = loadTabContent;
+            loadTabContent = async function(tabId, url) {
+                await originalLoadTabContent(tabId, url);
+                const tab = tabs.find(t => t.id === tabId);
+                if (tab && !url.startsWith('jq://')) {
+                    addToHistory(url, tab.title);
+                    updateStats(url);
+                }
+            };
+            
             // Load settings immediately
             loadSavedSettings();
+            
+            // Initialize theme
+            setTheme(getTheme());
+            
+            // Initialize UI handlers
+            initUIHandlers();
+            
+            // Update bookmark bar
+            updateBookmarkBar();
 
             // Create initial tab
             createTab('jq://home/');
