@@ -12,7 +12,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Intercept /styles.css requests (new path to bypass cache)
     // Use addToOnRequestPipeline with beginning=true to add it FIRST in the pipeline
     // This MUST run before hammerhead's static content cache
-    proxyServer.addToOnRequestPipeline(async (req, res, _serverInfo, isRoute) => {
+    proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
         // Handle /styles.css requests - check URL path directly (don't check isRoute, handle all requests to this path)
         const urlPath = req.url.split('?')[0];
         if (urlPath === '/styles.css' || urlPath.endsWith('/styles.css')) {

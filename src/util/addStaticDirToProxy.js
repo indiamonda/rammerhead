@@ -84,7 +84,12 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
             }
         };
 
-        proxy.GET(rootPath + file, handler);
+        const route = rootPath + file;
+        proxy.GET(route, handler);
+        // Log wallpaper routes for debugging
+        if (route.includes('/wallpapers/')) {
+            console.log(`[Static] Registered wallpaper route: ${route} -> ${pathToFile}`);
+        }
         if (file === 'index.html') {
             proxy.GET(rootPath, handler);
         }

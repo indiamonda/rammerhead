@@ -340,7 +340,8 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                     const content = fs.readFileSync(filePath);
                     res.writeHead(200, {
                         'Content-Type': mime.getType(file) || 'image/jpeg',
-                        'Cache-Control': 'public, max-age=31536000' // Cache wallpapers for 1 year
+                        'Cache-Control': 'public, max-age=31536000', // Cache wallpapers for 1 year
+                        'ETag': `"${file}-${fs.statSync(filePath).mtime.getTime()}"` // Add ETag for cache validation
                     });
                     res.end(content);
                 } catch (error) {
