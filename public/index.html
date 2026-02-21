@@ -635,21 +635,27 @@ body {
 
 .home-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 24px;
-    margin-top: 32px;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+    margin-top: 24px;
+    max-width: 100%;
 }
 
 .home-card {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
     background: var(--color-bg-primary);
     border: 1px solid var(--color-border);
     border-radius: 8px;
-    padding: 24px;
+    padding: 16px 12px;
     text-decoration: none;
     color: inherit;
     transition: all var(--transition-fast);
     cursor: pointer;
+    min-height: 140px;
+    justify-content: center;
 }
 
 .home-card:hover {
@@ -659,22 +665,23 @@ body {
 }
 
 .home-card-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+    font-size: 32px;
+    margin-bottom: 12px;
     line-height: 1;
+    color: var(--color-primary);
 }
 
 .home-card-title {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 500;
     color: var(--color-text-primary);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .home-card-desc {
-    font-size: 14px;
+    font-size: 12px;
     color: var(--color-text-muted);
-    line-height: 1.5;
+    line-height: 1.4;
 }
 
 .settings-section, .sessions-section {
