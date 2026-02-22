@@ -32,7 +32,7 @@
     --color-error-text: #c5221f;
     --color-success: #137333;
     --color-success-bg: #e6f4ea;
-    --font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --font-family: 'Red Hat Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
     --font-family-mono: 'Consolas', 'Courier New', monospace;
     --font-family-jq: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
     --transition-fast: 0.15s;
