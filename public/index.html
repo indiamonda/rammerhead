@@ -396,17 +396,9 @@ body {
     font-family: inherit;
 }
 
-/* Apply Lexend font to titles/headings in jq:// pages */
-.new-tab-content h1, .new-tab-content h2, .new-tab-content h3,
-.home-page h1, .home-page h2, .home-page h3,
-.feature-page h1, .feature-page h2, .feature-page h3,
-.sessions-page h1, .sessions-page h2, .sessions-page h3,
-.settings-page h1, .settings-page h2, .settings-page h3,
+/* Apply Lexend font to main page titles in jq:// pages */
 .new-tab-title,
-.home-card-title,
-.feature-card-title,
-.page-header h1,
-.page-header p {
+.page-header h1 {
     font-family: var(--font-family-jq-title) !important;
 }
 
@@ -518,7 +510,8 @@ body {
     display: flex;
     gap: 11px;
     justify-content: center;
-    margin-bottom: 32px;
+    margin-top: 16px;
+    margin-bottom: 16px;
 }
 
 .search-button {
