@@ -1336,28 +1336,25 @@ body {
             <div class="menu-item" data-action="new-tab">
                 <i class="fas fa-plus"></i> New Tab
             </div>
-            <div class="menu-item" data-action="new-window">
-                <i class="fas fa-window-maximize"></i> New Window
-        </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="bookmarks">
                 <i class="fas fa-bookmark"></i> Bookmarks
-            </div>
+        </div>
             <div class="menu-item" data-action="history">
                 <i class="fas fa-history"></i> History
-                </div>
+            </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="settings">
                 <i class="fas fa-cog"></i> Settings
-            </div>
+                </div>
             <div class="menu-item" data-action="devtools">
                 <i class="fas fa-code"></i> Developer Tools
-        </div>
+            </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="theme">
                 <i class="fas fa-moon" id="theme-icon"></i> <span id="theme-text">Dark Mode</span>
-    </div>
         </div>
+    </div>
 
         <!-- Browser Content -->
         <div class="browser-content" id="browser-content">
@@ -1407,7 +1404,7 @@ body {
             
             const basePath = getBasePath();
 
-            const _jqFooterHTML = '<footer style="text-align: center; padding: 24px 0 16px; color: var(--color-text-tertiary, #888); font-size: 13px; opacity: 0.7;">&copy; JimmyQrg 2026</footer>';
+            const _jqFooterHTML = '<footer style="text-align: center; padding: 24px 0 16px; color: #fff; font-size: 13px; text-shadow: 0 1px 4px rgba(0,0,0,0.6), 0 0 8px rgba(0,0,0,0.3);">&copy; JimmyQrg 2026</footer>';
 
             // ============================================
             // URL Shuffler (client-side mirror of server StrShuffler)
@@ -2214,17 +2211,17 @@ body {
                 modal.innerHTML = `
                     <div style="
                         background: var(--color-bg-primary); 
-                        padding: 32px; 
                         border-radius: 16px; 
                         max-width: 800px; 
                         width: 100%; 
                         max-height: 90vh; 
-                        overflow-y: auto; 
+                        display: flex;
+                        flex-direction: column;
                         box-shadow: 0 20px 60px rgba(0,0,0,0.3);
                         border: 1px solid var(--color-border);
                         animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                     ">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid var(--color-border-divider);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 32px 32px 20px; border-bottom: 2px solid var(--color-border-divider); flex-shrink: 0;">
                             <h2 style="margin: 0; font-size: 24px; font-weight: 600; color: var(--color-text-primary); display: flex; align-items: center; gap: 12px;">
                                 <i class="fas fa-palette" style="color: var(--color-primary);"></i> Customize Theme
                             </h2>
@@ -2232,6 +2229,7 @@ body {
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
+                        <div style="overflow-y: auto; flex: 1; padding: 28px 32px 0;">
                         
                         <div style="margin-bottom: 32px;">
                             <label style="display: block; margin-bottom: 16px; font-weight: 500; color: var(--color-text-primary); font-size: 14px;">
@@ -2311,7 +2309,8 @@ body {
                             </div>
                         </div>
                         
-                        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--color-border-divider);">
+                        </div>
+                        <div style="display: flex; gap: 12px; justify-content: flex-end; padding: 20px 32px; border-top: 2px solid var(--color-border-divider); flex-shrink: 0; background: var(--color-bg-primary); border-radius: 0 0 16px 16px;">
                             <button class="button button-secondary" id="cancel-theme-button" style="padding: 12px 24px;">
                                 Cancel
                             </button>
@@ -3201,6 +3200,11 @@ body {
                     }
                 }
 
+                // Auto-focus the search input when newtab is opened
+                if (searchInput) {
+                    setTimeout(() => searchInput.focus(), 50);
+                }
+
                 goButton?.addEventListener('click', handleNavigate);
                 searchInput?.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') handleNavigate();
@@ -3530,9 +3534,6 @@ body {
                         
                         switch(action) {
                             case 'new-tab':
-                                createTab();
-                                break;
-                            case 'new-window':
                                 createTab();
                                 break;
                             case 'bookmarks':
