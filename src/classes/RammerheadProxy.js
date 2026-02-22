@@ -181,7 +181,9 @@ class RammerheadProxy extends Proxy {
             'feature-policy': (headerValue) => headerValue && headerValue.replace(/sync-xhr/g, 'sync-yes'),
             'referrer-policy': () => 'no-referrer-when-downgrade',
             'report-to': () => undefined,
-            'cross-origin-embedder-policy': () => undefined
+            'cross-origin-embedder-policy': () => undefined,
+            'cross-origin-opener-policy': () => undefined,
+            'cross-origin-resource-policy': () => undefined
         };
 
         this.getServerInfo = getServerInfo;
