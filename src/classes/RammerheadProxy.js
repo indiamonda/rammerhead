@@ -375,7 +375,7 @@ class RammerheadProxy extends Proxy {
                             if (header in self.rewriteServerHeaders) {
                                 alreadyRewrittenHeaders.push(header);
                                 headers[header] =
-                                    self.rewriteServerHeaders[header] && self.rewriteServerHeaders[header]();
+                                    self.rewriteServerHeaders[header] && self.rewriteServerHeaders[header](headers[header]);
                                 if (!headers[header]) {
                                     delete headers[header];
                                 }
