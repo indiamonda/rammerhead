@@ -24,6 +24,9 @@
     "url": "https://github.com/binary-person/rammerhead/issues"
   },
   "homepage": "https://github.com/binary-person/rammerhead#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "async-exit-hook": "^2.0.1",
     "lru-cache": "^7.14.1",

@@ -1,6 +1,6 @@
 const cluster = require('cluster');
 if (cluster.isMaster) {
-    require('dotenv-flow').config();
+    try { require('dotenv-flow').config(); } catch (e) { /* dotenv-flow not available in production */ }
 }
 
 const exitHook = require('async-exit-hook');

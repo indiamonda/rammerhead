@@ -123,13 +123,13 @@ body {
     background: var(--color-bg-secondary);
     border-bottom: 1px solid var(--color-border);
     display: flex;
-    align-items: flex-end;
-    padding: 0;
+    align-items: center;
+    padding: 0 4px;
     overflow-x: auto;
     overflow-y: hidden;
     flex-shrink: 0;
-    min-height: 36px;
-    height: 36px;
+    min-height: 38px;
+    height: 38px;
     gap: 0;
 }
 
@@ -148,21 +148,22 @@ body {
     border: 1px solid var(--color-border);
     border-bottom: none;
     border-radius: 8px 8px 0 0;
-    padding: 0 32px 0 16px;
+    padding: 0 30px 0 12px;
     margin-right: -1px;
-    margin-top: 0;
+    margin-top: auto;
     cursor: pointer;
     user-select: none;
     min-width: 100px;
     max-width: 240px;
-    height: 36px;
+    height: 30px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     transition: all 0.2s ease;
     white-space: nowrap;
     overflow: hidden;
     flex-shrink: 0;
+    font-size: 12px;
 }
 
 .tab:hover {
@@ -174,8 +175,8 @@ body {
     z-index: 1;
     border-bottom: 1px solid var(--color-bg-tab-active);
     margin-bottom: -1px;
-    margin-top: 0;
-    height: 36px;
+    margin-top: auto;
+    height: 32px;
     box-shadow: 0 -1px 0 var(--color-bg-tab-active);
 }
 
@@ -183,15 +184,16 @@ body {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 13px;
+    font-size: 12px;
     color: var(--color-text-primary);
+    line-height: 1.2;
 }
 
 .tab-close {
     position: absolute;
-    right: 8px;
-    width: 18px;
-    height: 18px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
     border: none;
     background: transparent;
     cursor: pointer;
@@ -214,17 +216,19 @@ body {
 }
 
 .new-tab-button {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border: none;
     background: transparent;
     cursor: pointer;
-    border-radius: 50%;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 6px 8px;
+    margin: 0 4px;
+    flex-shrink: 0;
     color: var(--color-text-muted);
+    font-size: 12px;
     transition: all var(--transition-fast);
 }
 
@@ -239,28 +243,30 @@ body {
 .browser-chrome {
     background: var(--color-bg-primary);
     border-bottom: 1px solid var(--color-border);
-    padding: 8px 12px;
+    padding: 4px 8px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex-shrink: 0;
-    height: 56px;
+    height: 44px;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .browser-button {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     border: none;
     background: transparent;
-    border-radius: 50%;
+    border-radius: 8px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--color-text-icon);
+    font-size: 13px;
     transition: all 0.2s ease;
     position: relative;
+    flex-shrink: 0;
 }
 
 .browser-button:hover {
@@ -278,8 +284,8 @@ body {
 }
 
 .browser-button svg {
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    height: 14px;
 }
 
 .url-bar-wrapper {
@@ -288,10 +294,10 @@ body {
     align-items: center;
     background: var(--color-bg-secondary);
     border: 1px solid transparent;
-    border-radius: 24px;
-    padding: 0 16px;
-    margin: 0 8px;
-    height: 40px;
+    border-radius: 20px;
+    padding: 0 14px;
+    margin: 0 4px;
+    height: 34px;
     transition: all 0.2s ease;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
@@ -321,7 +327,7 @@ body {
     flex: 1;
     border: none;
     outline: none;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--color-text-primary);
     font-family: var(--font-family);
     background: transparent;
@@ -1053,7 +1059,7 @@ body {
 .browser-controls, .browser-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
 }
 
 .download-badge {
@@ -1079,8 +1085,8 @@ body {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px;
+    gap: 4px;
+    padding: 4px 8px;
 }
 
 /* ============================================

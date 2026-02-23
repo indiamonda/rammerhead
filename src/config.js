@@ -7,6 +7,16 @@ const RammerheadJSFileCache = require('./classes/RammerheadJSFileCache.js');
 // Disable workers for Node.js v24+ compatibility (sticky-session-custom has issues)
 const enableWorkers = false; // os.cpus().length !== 1;
 
+// Auto-detect cloud/reverse-proxy environments (Railway, Render, Fly.io, Heroku, etc.)
+const isCloudDeployment = !!(
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_PROJECT_ID ||
+    process.env.RENDER ||
+    process.env.FLY_APP_NAME ||
+    process.env.DYNO ||
+    process.env.CLOUD_DEPLOYMENT
+);
+
 module.exports = {
     //// HOSTING CONFIGURATION ////
 
@@ -105,9 +115,10 @@ module.exports = {
     generatePrefix: (level) => `[${new Date().toISOString()}] [${level.toUpperCase()}] `,
 
     // logger depends on this value
-    getIP: (req) => req.socket.remoteAddress
-    // use the example below if rammerhead is sitting behind a reverse proxy like nginx
-    // getIP: req => (req.headers['x-forwarded-for'] || req.connection.remoteAddress || '').split(',')[0].trim()
+    // Cloud deployments sit behind a reverse proxy, so use x-forwarded-for to get the real client IP
+    getIP: isCloudDeployment
+        ? (req) => (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim()
+        : (req) => req.socket.remoteAddress
 };
 
 if (fs.existsSync(path.join(__dirname, '../config.js'))) Object.assign(module.exports, require('../config'));
