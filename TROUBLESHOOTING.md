@@ -1,5 +1,40 @@
 # Troubleshooting Guide
 
+## Can't Access http://192.168.1.198:8080/
+
+**Run this on the machine where you start the server (your PC):**
+```bash
+chmod +x check-local-access.sh
+./check-local-access.sh
+```
+It will show your real IP, whether the server is listening on 8080, and what to do next.
+
+### If you see **ERR_CONNECTION_REFUSED**
+
+Usually means nothing is accepting connections on that address.
+
+1. **Start the server** (in the project folder):
+   ```bash
+   npm run build && npm start
+   ```
+   Leave this terminal open. You should see: `listening on http://0.0.0.0:8080`.
+
+2. **Use the correct IP**  
+   `192.168.1.198` might not be your PC’s IP. Run:
+   ```bash
+   ifconfig | grep "inet " | grep -v 127.0.0.1
+   ```
+   Use the address shown (e.g. `192.168.1.50`) in the browser: `http://THAT_IP:8080/`.
+
+3. **From the same PC**  
+   Try **http://localhost:8080/** first. If that works, the app is fine and the issue is the IP or firewall.
+
+### If you see **ERR_CONNECTION_TIMED_OUT**
+
+Server is running but something is blocking (e.g. firewall). See “Connection Timeout” below.
+
+---
+
 ## Server Won't Start
 
 ### Port Already in Use
