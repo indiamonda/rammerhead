@@ -3380,6 +3380,7 @@ body {
                     navigateToUrl(urlInput.value);
                 }
             });
+            urlInput.addEventListener('focus', () => urlInput.select());
             clearButton.addEventListener('click', () => {
                 urlInput.value = '';
                 clearButton.style.display = 'none';

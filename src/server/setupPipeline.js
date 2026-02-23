@@ -1,5 +1,6 @@
 const config = require('../config');
 const getSessionId = require('../util/getSessionId');
+const { injectBrowserLikeHeaders } = require('../util/browserLikeHeaders');
 const fs = require('fs');
 const path = require('path');
 
@@ -8,6 +9,26 @@ const path = require('path');
  * @param {import('../classes/RammerheadSessionAbstractStore')} sessionStore
  */
 module.exports = function setupPipeline(proxyServer, sessionStore) {
+    // Inject browser-like headers on proxied requests to bypass 403 (Discord, Poki, etc.)
+    proxyServer.addToOnRequestPipeline((req, _res, _serverInfo, isRoute) => {
+        injectBrowserLikeHeaders(req, isRoute);
+        return false;
+    }, true);
+
+    // jimmyqrg.github.io: root redirects via JS; rewrite to /page/?page=extend for direct iframe load
+    // (session proxy requests don't match explicit routes, so isRoute is false - check URL directly)
+    proxyServer.addToOnRequestPipeline((req, _res, _serverInfo) => {
+        if (!req.url) return false;
+        const pathOnly = req.url.split('?')[0];
+        const m = pathOnly.match(/^\/([a-z0-9]{32})\/(https?:\/\/jimmyqrg\.github\.io)\/?$/i);
+        if (m) {
+            const [, sessionId, origin] = m;
+            const qs = req.url.includes('?') ? '&' + req.url.split('?')[1] : '';
+            req.url = `/${sessionId}/${origin}/page/?page=extend${qs}`;
+        }
+        return false;
+    }, true);
+
     // Intercept /styles.css requests to bypass hammerhead's static content cache
     proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
         const urlPath = req.url.split('?')[0];
