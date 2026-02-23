@@ -86,8 +86,31 @@ module.exports = {
         'x-frame-options': null, // remove to allow loading in iframes
         'content-security-policy': (value) => {
             if (!value) return undefined;
-            // Remove frame-ancestors directive to allow iframe embedding
-            return value.replace(/frame-ancestors[^;]*(;|$)/gi, '').trim() || undefined;
+            let csp = value
+                // Remove frame-ancestors to allow iframe embedding
+                .replace(/frame-ancestors[^;]*(;|$)/gi, '')
+                // Relax for games (Poki, etc): ensure worker-src allows blob + self for Web Workers
+                .replace(/worker-src\s+([^;]*)(;|$)/gi, (m, sources) => {
+                    const s = sources.trim();
+                    if (/blob:/.test(s) && /'self'|self/.test(s)) return m;
+                    return `worker-src 'self' blob: ${s};`;
+                })
+                // Add 'unsafe-inline' 'unsafe-eval' to script-src if missing (helps Discord, Next.js, games)
+                .replace(/script-src\s+([^;]*)(;|$)/gi, (m, sources) => {
+                    let s = sources.trim();
+                    if (/'unsafe-inline'/.test(s) && /'unsafe-eval'/.test(s)) return m;
+                    if (!/'unsafe-inline'/.test(s)) s += " 'unsafe-inline'";
+                    if (!/'unsafe-eval'/.test(s)) s += " 'unsafe-eval'";
+                    return `script-src ${s};`;
+                })
+                // Relax connect-src for WebSockets, XHR (Discord, Netflix, etc)
+                .replace(/connect-src\s+([^;]*)(;|$)/gi, (m, sources) => {
+                    const s = sources.trim();
+                    if (/\*/.test(s) || /'unsafe-connect'/.test(s)) return m;
+                    return `connect-src ${s} blob: wss: ws:;`;
+                })
+                .trim();
+            return csp || undefined;
         },
     },
 

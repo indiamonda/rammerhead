@@ -463,10 +463,16 @@ class RammerheadProxy extends Proxy {
         });
         this.GET('/api/shuffleDict', (req, res) => {
             const { id } = new URLPath(req.url).getParams();
-            if (!id || !this.openSessions.has(id)) {
+            if (!id) {
                 return httpResponse.badRequest(this.logger, req, res, this.loggerGetIP(req), 'Invalid session id');
             }
-            res.end(JSON.stringify(this.openSessions.get(id).shuffleDict) || '');
+            // Load session from disk if not in memory (fixes 400 when session exists in file store but not yet cached)
+            const session = this.openSessions.get(id);
+            if (!session) {
+                return httpResponse.badRequest(this.logger, req, res, this.loggerGetIP(req), 'Invalid session id');
+            }
+            const shuffleDict = session.shuffleDict || (session.shuffleDict = require('../util/StrShuffler').generateDictionary());
+            res.end(JSON.stringify(shuffleDict) || '');
         });
     }
     /**
@@ -483,7 +489,11 @@ class RammerheadProxy extends Proxy {
             const respondJson = (obj) => res.end(JSON.stringify(obj));
             const { sessionId, origin } = new URLPath(req.url).getParams();
 
-            if (!sessionId || !this.openSessions.has(sessionId)) {
+            if (!sessionId) {
+                return badRequest('Invalid session id');
+            }
+            const session = this.openSessions.get(sessionId, false);
+            if (!session) {
                 return badRequest('Invalid session id');
             }
             if (!origin) {
@@ -498,7 +508,6 @@ class RammerheadProxy extends Proxy {
             }
 
             const now = Date.now();
-            const session = this.openSessions.get(sessionId, false);
             if (!session.data.localStorage) session.data.localStorage = {};
 
             switch (parsed.type) {

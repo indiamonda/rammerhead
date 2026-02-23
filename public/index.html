@@ -1771,10 +1771,12 @@ body {
                     url = url + '/';
                 }
                 const tabId = `tab-${++tabIdCounter}`;
+                const defaultFav = (localStorage.getItem('faviconData') || document.getElementById('favicon')?.getAttribute('href') || 'favicon.png');
                 const tab = {
                     id: tabId,
                     url: url,
                     title: title,
+                    favicon: url.startsWith('jq://') ? defaultFav : '',
                     history: [url],
                     historyIndex: 0,
                     canGoBack: false,
@@ -1782,11 +1784,12 @@ body {
                 };
                 tabs.push(tab);
 
-                // Create tab element
+                const tabFaviconSrc = tab.favicon || defaultFav;
                 const tabElement = document.createElement('div');
                 tabElement.className = 'tab';
                 tabElement.dataset.tabId = tabId;
                 tabElement.innerHTML = `
+                    <img class="tab-favicon" src="${tabFaviconSrc}" alt="" onerror="this.style.display='none'" />
                     <span class="tab-title">${title}</span>
                     <button class="tab-close" onclick="closeTab('${tabId}')" title="Close tab">
                         <i class="fas fa-times"></i>
@@ -1938,36 +1941,42 @@ body {
                 // Update tab title from iframe and intercept window.open/close
                 const iframe = contentElement.querySelector('iframe');
                 if (iframe) {
-                    // Track iframe URL changes for redirects
-                    let lastUrl = normalizedUrl;
+                    function syncUrlFromIframe() {
+                        try {
+                            const win = iframe.contentWindow;
+                            if (!win) return;
+                            const currentUrl = win.location.href;
+                            const destUrl = extractRealUrl(currentUrl, win);
+                            if (destUrl && destUrl !== tab.url && tabId === activeTabId) {
+                                tab.url = destUrl;
+                                urlInput.value = destUrl;
+                                if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
+                                    tab.history = tab.history.slice(0, tab.historyIndex + 1);
+                                    tab.history.push(destUrl);
+                                    tab.historyIndex = tab.history.length - 1;
+                                    updateNavigationButtons(tab);
+                                }
+                            }
+                        } catch (_) {}
+                    }
                     
                     iframe.onload = () => {
                         try {
                             const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                             const iframeWindow = iframe.contentWindow;
                             
-                            // Try to get current URL from iframe (for redirect tracking)
-                            try {
-                                const currentUrl = iframeWindow.location.href;
-                                const destUrl = extractRealUrl(currentUrl, iframeWindow);
-                                
-                                if (destUrl && destUrl !== lastUrl && destUrl !== normalizedUrl && tabId === activeTabId) {
-                                    lastUrl = destUrl;
-                                    urlInput.value = destUrl;
-                                    tab.url = destUrl;
-                                    if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
-                                        tab.history = tab.history.slice(0, tab.historyIndex + 1);
-                                        tab.history.push(destUrl);
-                                        tab.historyIndex = tab.history.length - 1;
-                                        updateNavigationButtons(tab);
-                                    }
-                                }
-                            } catch (e) {
-                                // Cross-origin or other error - can't read iframe URL
-                            }
+                            syncUrlFromIframe();
+                            iframeWindow.addEventListener('hashchange', syncUrlFromIframe);
+                            iframeWindow.addEventListener('popstate', syncUrlFromIframe);
                             
                             const title = iframeDoc.title || new URL(normalizedUrl).hostname;
                             updateTabTitle(tabId, title);
+                            const favLink = iframeDoc.querySelector('link[rel="icon"]') || iframeDoc.querySelector('link[rel="shortcut icon"]');
+                            const favHref = favLink?.getAttribute('href');
+                            if (favHref) {
+                                const favUrl = favHref.startsWith('http') || favHref.startsWith('data:') ? favHref : new URL(favHref, iframeWindow.location.href).href;
+                                updateTabFavicon(tabId, favUrl);
+                            }
                             
                             // === Tab-aware interception of all navigation inside proxied iframes ===
                             
@@ -2134,9 +2143,11 @@ body {
                     contentElement.style.backgroundImage = '';
                 }
                 
+                const defaultFav = localStorage.getItem('faviconData') || document.getElementById('favicon')?.getAttribute('href') || 'favicon.png';
                 if (url === 'jq://home/') {
                     contentElement.innerHTML = getHomePageHTML();
                     updateTabTitle(tabId, 'Home');
+                    updateTabFavicon(tabId, defaultFav);
                     initHomePage();
                 } else if (url === 'jq://newtab/') {
                     const bg = localStorage.getItem('newTabBackground') || '';
@@ -2150,25 +2161,31 @@ body {
                     }
                     contentElement.innerHTML = getNewTabHTML();
                     updateTabTitle(tabId, 'New Tab');
+                    updateTabFavicon(tabId, defaultFav);
                 } else if (url === 'jq://sessions/') {
                     contentElement.innerHTML = getSessionsPageHTML();
                     updateTabTitle(tabId, 'Sessions');
+                    updateTabFavicon(tabId, defaultFav);
                     initSessionsPage();
                 } else if (url === 'jq://settings/') {
                     contentElement.innerHTML = getSettingsPageHTML();
                     updateTabTitle(tabId, 'Settings');
+                    updateTabFavicon(tabId, defaultFav);
                     initSettingsPage();
                 } else if (url === 'jq://bookmarks/') {
                     contentElement.innerHTML = getBookmarksPageHTML();
                     updateTabTitle(tabId, 'Bookmarks');
+                    updateTabFavicon(tabId, defaultFav);
                     initBookmarksPage();
                 } else if (url === 'jq://history/') {
                     contentElement.innerHTML = getHistoryPageHTML();
                     updateTabTitle(tabId, 'History');
+                    updateTabFavicon(tabId, defaultFav);
                     initHistoryPage();
                 } else if (url === 'jq://downloads/') {
                     contentElement.innerHTML = getDownloadsPageHTML();
                     updateTabTitle(tabId, 'Downloads');
+                    updateTabFavicon(tabId, defaultFav);
                     initDownloadsPage();
                 }
             }
@@ -3161,6 +3178,22 @@ body {
                     if (tabElement) {
                         const titleElement = tabElement.querySelector('.tab-title');
                         if (titleElement) titleElement.textContent = title;
+                    }
+                }
+            }
+
+            function updateTabFavicon(tabId, faviconUrl) {
+                const tab = tabs.find(t => t.id === tabId);
+                if (tab) {
+                    tab.favicon = faviconUrl;
+                    const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+                    if (tabElement) {
+                        const favEl = tabElement.querySelector('.tab-favicon');
+                        if (favEl) {
+                            favEl.src = faviconUrl;
+                            favEl.style.display = '';
+                            favEl.onerror = () => { favEl.style.display = 'none'; };
+                        }
                     }
                 }
             }

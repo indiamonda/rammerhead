@@ -214,6 +214,25 @@ node --version  # Should be v16-v20 or v24+ (with workers disabled)
 
 ---
 
+## Browser Console Errors (404, 400, 403)
+
+### 404 Errors
+- **favicon.png** – Fixed: `public/favicon.png` is now included. If missing, ensure `npm run build` ran.
+- **Other 404s** – Check Network tab for the failing URL. May be a missing static file or a proxied resource the target site expects.
+
+### 400 Errors
+- **`/api/shuffleDict?id=...` returns 400** – Fixed: Session is now loaded from disk when not in memory. If it persists, the session may have expired (stale cleanup) or the session ID in the URL is invalid.
+- **`getproxiedurl` / `ensuresession` 400** – Ensure the frontend sends valid `id` and `url` parameters.
+
+### 403 Errors
+- **"Sessions must come from the same IP"** – `restrictSessionToIP` is enabled and the session was created from a different IP (e.g. VPN, mobile network switch). Device sessions (`ensuresession`) bypass this.
+
+### Site-Specific Issues
+- **Discord** – Blank page: Discord’s JS can fail under the proxy (e.g. `Cannot read properties of undefined (reading 'open')`). Often works better over HTTPS (e.g. Fly.io) than HTTP.
+- **jmail.world** – Next.js client error: The proxy’s JS rewriting can break Next.js hydration. Known limitation.
+- **Poki games** – Page loads but game frame is dark/empty: CSP and worker-src have been relaxed. Some games load from external CDNs that may still be blocked.
+- **Netflix** – May show errors or block access due to anti-bot and geo restrictions.
+
 ## Common Error Messages
 
 | Error | Cause | Solution |
