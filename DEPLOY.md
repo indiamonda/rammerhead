@@ -55,28 +55,51 @@ Deploy Unlinewize to cloud platforms for permanent, always-on access from anywhe
 
 ---
 
-### Option 2: Railway (Quick Setup - $5 Free Credit/Month)
+### Option 2: Fly.io (Global Edge - Free Tier)
 
-**Best for:** Quick deployment, $5 free credit/month
+**Best for:** Always-on free tier, global edge, WebSocket support
 
 **Steps:**
 
-1. Go to https://railway.app
-2. Sign up with GitHub
-3. Click "New Project" → "Deploy from GitHub repo"
-4. Select your repository
-5. Railway auto-detects Node.js
-6. Deploy! (takes 2-5 minutes)
+1. **Install Fly CLI**:
+   ```bash
+   curl -L https://fly.io/install.sh | sh
+   ```
+   Or on Windows (PowerShell): `iwr https://fly.io/install.ps1 -useb | iex`
+
+2. **Sign up / log in**:
+   ```bash
+   fly auth signup
+   ```
+   Or `fly auth login` if you already have an account.
+
+3. **Deploy from project directory**:
+   ```bash
+   cd /path/to/rammerhead
+   fly launch
+   ```
+   - Choose an app name (e.g. `unlinewize-proxy`) or leave blank for auto-generated
+   - Select a region
+   - Do **not** add a Postgres or Redis database when prompted
+   - Fly will use the included `Dockerfile` and `fly.toml`
+
+4. **Deploy updates later**:
+   ```bash
+   fly deploy
+   ```
+
+5. **Access your proxy**:
+   - Your app will be at `https://<your-app-name>.fly.dev`
 
 **Pros:**
-- ✅ $5 free credit per month
-- ✅ Very fast deployment
-- ✅ Always-on (no spin-down)
-- ✅ Easy setup
+- ✅ Free tier with always-on option (generous limits)
+- ✅ Global edge network
+- ✅ WebSockets supported
+- ✅ Automatic HTTPS (`*.fly.dev`)
 
 **Cons:**
-- ⚠️ Pay-as-you-go after free credit
-- ⚠️ Need to monitor usage
+- ⚠️ Requires CLI and Docker (or use GitHub + Fly’s GitHub integration)
+- ⚠️ Free tier has resource limits
 
 ---
 
@@ -120,99 +143,7 @@ Deploy Unlinewize to cloud platforms for permanent, always-on access from anywhe
 
 ---
 
-### Option 5: Fly.io (Global Edge - Free Tier)
-
-**Best for:** Beginners, free hosting
-
-**Steps:**
-
-1. **Push to GitHub**:
-   ```bash
-   git add .
-   git commit -m "Ready for deployment"
-   git push
-   ```
-
-2. **Deploy on Render**:
-   - Go to https://render.com
-   - Sign up/login (free)
-   - Click "New +" → "Web Service"
-   - Connect your GitHub repository
-   - Select the unlinewize repository
-   - Render auto-detects settings from `render.yaml`:
-     - **Build Command**: `npm install && npm run build`
-     - **Start Command**: `npm start`
-     - **Environment**: Node
-   - Click "Create Web Service"
-   - Wait 5-10 minutes for deployment
-
-3. **Access your proxy**:
-   - Render provides: `https://unlinewize-proxy.onrender.com`
-   - Use this URL from anywhere!
-
-**Notes:**
-- Free tier spins down after 15 minutes of inactivity
-- First request after spin-down takes ~30 seconds
-- Upgrade to paid ($7/month) for always-on service
-
----
-
-### Option 2: Railway
-
-**Best for:** Quick deployment, $5 free credit/month
-
-**Steps:**
-
-1. Go to https://railway.app
-2. Sign up with GitHub
-3. Click "New Project" → "Deploy from GitHub repo"
-4. Select your repository
-5. Railway auto-detects Node.js
-6. Deploy! (takes 2-5 minutes)
-
-**Notes:**
-- $5 free credit per month
-- Pay-as-you-go after credit
-- Very fast deployment
-
----
-
-### Option 3: Fly.io
-
-**Best for:** Global edge deployment, Docker support
-
-**Steps:**
-
-1. Install Fly CLI:
-   ```bash
-   curl -L https://fly.io/install.sh | sh
-   ```
-
-2. Sign up:
-   ```bash
-   fly auth signup
-   ```
-
-3. Deploy:
-   ```bash
-   cd /path/to/rammerhead
-   fly launch
-   ```
-   Follow the prompts.
-
-4. Deploy updates:
-   ```bash
-   fly deploy
-   ```
-
-**Notes:**
-- Free tier available
-- Global edge network
-- Good for international users
-
----
-
-### Option 6: Vercel
+### Option 5: Vercel
 
 **Best for:** Frontend-focused, may have WebSocket limitations
 
@@ -268,13 +199,13 @@ The project is already configured for cloud deployment:
 - ✅ Uses `process.env.PORT` automatically
 - ✅ `crossDomainPort` uses same port (cloud requirement)
 - ✅ Redirect logic supports deployed domains
-- ✅ All deployment files included (`render.yaml`, `Procfile`)
+- ✅ All deployment files included (`render.yaml`, `Procfile`, `fly.toml`, `Dockerfile`)
 
 ## 🔧 After Deployment
 
 ### 1. Update Redirect Logic (Optional)
 
-The proxy automatically detects deployed domains (`.onrender.com`, `.railway.app`, etc.) and won't redirect. No changes needed!
+The proxy automatically detects deployed domains (`.onrender.com`, `.fly.dev`, etc.) and won't redirect. No changes needed!
 
 ### 2. Test the Proxy
 
@@ -287,8 +218,7 @@ The proxy automatically detects deployed domains (`.onrender.com`, `.railway.app
 
 Most platforms allow custom domains:
 - **Render**: Settings → Custom Domains
-- **Railway**: Settings → Domains
-- **Fly.io**: `fly domains add yourdomain.com`
+- **Fly.io**: `fly certs add yourdomain.com` then add DNS CNAME
 
 ## 🐛 Troubleshooting
 
@@ -323,8 +253,7 @@ npm run build
 **Some platforms require special configuration:**
 
 - **Render**: WebSockets supported automatically
-- **Railway**: WebSockets supported automatically
-- **Fly.io**: May need `fly.toml` configuration
+- **Fly.io**: WebSockets supported (use included `fly.toml`)
 - **Vercel**: Limited WebSocket support
 
 ### Slow Performance
@@ -339,8 +268,7 @@ npm run build
 | Platform | Free Tier | Always-On | WebSocket | Ease of Use |
 |----------|-----------|-----------|-----------|-------------|
 | Render   | ✅ (spins down) | ❌ | ✅ | ⭐⭐⭐⭐⭐ |
-| Railway  | ✅ ($5 credit) | ✅ | ✅ | ⭐⭐⭐⭐ |
-| Fly.io   | ✅ | ✅ | ✅ | ⭐⭐⭐ |
+| Fly.io   | ✅ | ✅ | ✅ | ⭐⭐⭐⭐ |
 | Vercel   | ✅ | ✅ | ⚠️ | ⭐⭐⭐⭐ |
 | Heroku   | ❌ | ✅ | ✅ | ⭐⭐⭐⭐ |
 
@@ -364,4 +292,4 @@ Most platforms auto-deploy on push to main branch.
 
 ---
 
-**Recommendation:** Start with **Render** for easiest deployment, or **Railway** for always-on free tier.
+**Recommendation:** Start with **Render** for easiest deployment (no CLI), or **Fly.io** for always-on free tier and global edge.

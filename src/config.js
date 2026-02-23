@@ -7,10 +7,8 @@ const RammerheadJSFileCache = require('./classes/RammerheadJSFileCache.js');
 // Disable workers for Node.js v24+ compatibility (sticky-session-custom has issues)
 const enableWorkers = false; // os.cpus().length !== 1;
 
-// Auto-detect cloud/reverse-proxy environments (Railway, Render, Fly.io, Heroku, etc.)
+// Auto-detect cloud/reverse-proxy environments (Render, Fly.io, Heroku, etc.)
 const isCloudDeployment = !!(
-    process.env.RAILWAY_ENVIRONMENT ||
-    process.env.RAILWAY_PROJECT_ID ||
     process.env.RENDER ||
     process.env.FLY_APP_NAME ||
     process.env.DYNO ||

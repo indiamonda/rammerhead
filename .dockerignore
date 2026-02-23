@@ -1,0 +1,9 @@
+node_modules
+.env
+sessions
+cache-js
+.git
+*.md
+.replit
+render.yaml
+Procfile

@@ -1395,19 +1395,16 @@ body {
 
     <script>
         (function() {
-            // Redirect to correct domain if needed - but allow tunnel URLs (loca.lt, etc.)
-            const targetHost = '192.168.1.198';
-            const targetPort = '8080';
+            // Redirect to correct host only for known tunnel/deployed URLs (so they use canonical host).
+            // For local access (localhost, 127.0.0.1, LAN IP), use whatever host the user opened - no redirect.
             const currentHost = window.location.hostname;
             const currentPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
             
-            // Check if we're on a tunnel URL or deployed domain - don't redirect those
             const isTunnelUrl = currentHost.includes('.loca.lt') || 
                                currentHost.includes('.ngrok.io') || 
                                currentHost.includes('.ngrok-free.app') ||
                                currentHost.includes('.cloudflared.net') ||
                                currentHost.includes('.onrender.com') ||
-                               currentHost.includes('.railway.app') ||
                                currentHost.includes('.fly.dev') ||
                                currentHost.includes('.vercel.app') ||
                                currentHost.includes('.repl.co') ||
@@ -1416,13 +1413,9 @@ body {
                                currentHost.includes('tunnel') ||
                                window.location.protocol === 'https:';
             
-            // Only redirect if not on tunnel and not on the correct local address
-            if (!isTunnelUrl && (currentHost !== targetHost || currentPort !== targetPort)) {
-                // Always redirect exactly to http://192.168.1.198:8080/ (root path only, ignore current path/query/hash)
-                const redirectUrl = `http://${targetHost}:${targetPort}/`;
-                window.location.replace(redirectUrl);
-                return; // Stop execution until redirect completes
-            }
+            // Use current host/port for local access so any URL works (localhost, 127.0.0.1, or your LAN IP)
+            const targetHost = currentHost;
+            const targetPort = currentPort;
             
             // Detect base path
             function getBasePath() {

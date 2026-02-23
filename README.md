@@ -49,7 +49,7 @@ See [TUNNEL_SETUP.md](TUNNEL_SETUP.md) for more options.
 
 ### Cloud Deployment (Recommended)
 
-Deploy to Replit, Render, Railway, or other platforms for always-on access:
+Deploy to Replit, Render, Fly.io, or other platforms for always-on access:
 
 - **Replit** (Easiest): [REPLIT_DEPLOY.md](REPLIT_DEPLOY.md)
 - **All Platforms**: [DEPLOY.md](DEPLOY.md)
@@ -58,7 +58,7 @@ Deploy to Replit, Render, Railway, or other platforms for always-on access:
 
 - **[QUICK_START.md](QUICK_START.md)](QUICK_START.md)** - Quick reference guide
 - **[TUNNEL_SETUP.md](TUNNEL_SETUP.md)** - Remote access setup
-- **[DEPLOY.md](DEPLOY.md)** - Cloud deployment guide (Render, Railway, Fly.io)
+- **[DEPLOY.md](DEPLOY.md)** - Cloud deployment guide (Render, Fly.io)
 
 ## 🎯 Usage
 
@@ -126,7 +126,7 @@ The server runs on `http://192.168.1.198:8080/` by default. Access from any devi
 
 ### Cloud Deployment
 
-Deploy to Render, Railway, Fly.io, or other platforms. See [DEPLOY.md](DEPLOY.md) for detailed instructions.
+Deploy to Render, Fly.io, or other platforms. See [DEPLOY.md](DEPLOY.md) for detailed instructions.
 
 ### Tunnel for Remote Access
 

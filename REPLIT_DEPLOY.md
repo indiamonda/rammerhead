@@ -77,8 +77,7 @@ For production use, consider Replit Pro:
 
 If you need free hosting without time limits, consider:
 - **Render** - Free tier with no time limit (spins down after 15 min inactivity)
-- **Railway** - $5 free credit/month, pay-as-you-go
-- **Fly.io** - Free tier available
+- **Fly.io** - Free tier, always-on, WebSocket support (see [DEPLOY.md](./DEPLOY.md))
 - See [DEPLOY.md](./DEPLOY.md) for all options
 
 ## Troubleshooting

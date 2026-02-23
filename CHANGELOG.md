@@ -22,7 +22,7 @@
 - Comprehensive README.md with full feature documentation
 - Quick Start guide for easy setup
 - Tunnel setup guide for remote access
-- Cloud deployment guide for Render, Railway, Fly.io, etc.
+- Cloud deployment guide for Render, Fly.io, etc.
 
 ### UI/UX Enhancements
 - Removed "Bing" branding from new tab page
