@@ -41,6 +41,9 @@ class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
     } = {}) {
         super();
         this.saveDirectory = saveDirectory;
+        if (!fs.existsSync(this.saveDirectory)) {
+            fs.mkdirSync(this.saveDirectory, { recursive: true });
+        }
         this.logger = logger;
         this.deleteUnused = deleteUnused;
         this.cacheTimeout = cacheTimeout;

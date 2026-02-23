@@ -60,6 +60,27 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     // Register the handler for the new path
     proxyServer.GET('/styles.css', handleStylesCss);
     logger.info(`(setupRoutes) Successfully registered /styles.css handler`);
+
+    // Serve favicon.png explicitly (ensure it's always available)
+    const serveStatic = (filename, contentType) => (req, res) => {
+        try {
+            const filePath = path.join(config.publicDir, filename);
+            if (!fs.existsSync(filePath)) {
+                res.writeHead(404);
+                res.end('Not Found');
+                return;
+            }
+            const content = fs.readFileSync(filePath);
+            const headers = { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=86400', 'Content-Length': content.length };
+            res.writeHead(200, headers);
+            if (req.method !== 'HEAD') res.end(content);
+            else res.end();
+        } catch (e) {
+            res.writeHead(500);
+            res.end('Internal Server Error');
+        }
+    };
+    proxyServer.GET('/favicon.png', serveStatic('favicon.png', 'image/png'));
     
     const isNotAuthorized = (req, res) => {
         if (!config.password) return;

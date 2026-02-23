@@ -230,6 +230,7 @@ Set `cspCompatibilityMode: true` in `src/config.js` (or root `config.js`) to rel
 
 ### 403 Errors
 - **"Sessions must come from the same IP"** – `restrictSessionToIP` is enabled and the session was created from a different IP (e.g. VPN, mobile network switch). Device sessions (`ensuresession`) bypass this.
+- **Quora, Zillow** – These sites use anti-bot (TLS fingerprinting, datacenter IP blocking) that blocks proxy requests. Add them to `debug-urls.json` → `known403Hosts` to exclude from debug failures. Bypass requires residential proxies or TLS spoofing.
 
 ### Site-Specific Issues
 - **Discord** – Blank page: Discord’s JS can fail under the proxy (e.g. `Cannot read properties of undefined (reading 'open')`). Often works better over HTTPS (e.g. Fly.io) than HTTP.

@@ -15,15 +15,18 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return false;
     }, true);
 
-    // jimmyqrg.github.io: root redirects via JS; rewrite to /page/?page=extend for direct iframe load
-    // (session proxy requests don't match explicit routes, so isRoute is false - check URL directly)
+    // jimmyqrg.github.io: root and /page/ need ?page=extend for iframe content; rewrite to avoid blank
     proxyServer.addToOnRequestPipeline((req, _res, _serverInfo) => {
         if (!req.url) return false;
         const pathOnly = req.url.split('?')[0];
-        const m = pathOnly.match(/^\/([a-z0-9]{32})\/(https?:\/\/jimmyqrg\.github\.io)\/?$/i);
-        if (m) {
-            const [, sessionId, origin] = m;
-            const qs = req.url.includes('?') ? '&' + req.url.split('?')[1] : '';
+        const qs = req.url.includes('?') ? '&' + req.url.split('?')[1] : '';
+        const mRoot = pathOnly.match(/^\/([a-z0-9]{32})\/(https?:\/\/jimmyqrg\.github\.io)\/?$/i);
+        const mPage = pathOnly.match(/^\/([a-z0-9]{32})\/(https?:\/\/jimmyqrg\.github\.io)\/page\/?$/i);
+        if (mRoot) {
+            const [, sessionId, origin] = mRoot;
+            req.url = `/${sessionId}/${origin}/page/?page=extend${qs}`;
+        } else if (mPage && !req.url.includes('page=extend')) {
+            const [, sessionId, origin] = mPage;
             req.url = `/${sessionId}/${origin}/page/?page=extend${qs}`;
         }
         return false;

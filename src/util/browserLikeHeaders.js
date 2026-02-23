@@ -1,7 +1,7 @@
 /**
- * Browser-like headers to bypass 403 from sites like Discord, Poki that block
- * requests that don't look like a real browser.
- * Injected into proxied requests (isRoute) before they reach hammerhead.
+ * Browser-like headers to bypass 403 from sites that block non-browser requests.
+ * Injected into proxied requests (sessionId + destination URL) before hammerhead.
+ * Session proxy requests have isRoute=false, so we detect by URL pattern.
  */
 
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -19,6 +19,8 @@ const DOCUMENT_HEADERS = {
     'sec-fetch-site': 'none',
     'sec-fetch-user': '?1',
     'upgrade-insecure-requests': '1',
+    'cache-control': 'max-age=0',
+    'connection': 'keep-alive',
 };
 
 const SUBRESOURCE_HEADERS = {
@@ -31,12 +33,20 @@ const SUBRESOURCE_HEADERS = {
     'sec-ch-ua-platform': '"Windows"',
 };
 
+const PROXY_REQUEST_RE = /^\/[a-z0-9]{32}\/(https?:\/\/[^/]+)/i;
+
+function isProxiedRequest(req) {
+    if (!req?.url) return false;
+    return PROXY_REQUEST_RE.test(req.url.split('?')[0]);
+}
+
 /**
  * @param {http.IncomingMessage} req
- * @param {boolean} isRoute
+ * @param {boolean} isRoute - from pipeline; session proxy requests are false
  */
 function injectBrowserLikeHeaders(req, isRoute) {
-    if (!isRoute || !req.headers) return;
+    if (!req?.headers) return;
+    if (!isRoute && !isProxiedRequest(req)) return;
 
     const dest = req.headers['sec-fetch-dest'];
     const mode = req.headers['sec-fetch-mode'];
@@ -46,11 +56,9 @@ function injectBrowserLikeHeaders(req, isRoute) {
 
     for (const [name, value] of Object.entries(headersToInject)) {
         const lower = name.toLowerCase();
-        const existing = req.headers[lower];
-        if (!existing || lower === 'user-agent' || lower === 'accept') {
-            req.headers[lower] = value;
-        }
+        req.headers[lower] = value;
     }
+
 }
 
 module.exports = { injectBrowserLikeHeaders };

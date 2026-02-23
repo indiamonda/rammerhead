@@ -97,7 +97,27 @@ module.exports = {
                         if (/'unsafe-inline'/.test(x) && /'unsafe-eval'/.test(x)) return m;
                         return `script-src ${x}${/'unsafe-inline'/.test(x) ? '' : " 'unsafe-inline'"}${/'unsafe-eval'/.test(x) ? '' : " 'unsafe-eval'"};`;
                     })
-                    .replace(/connect-src\s+([^;]*)(;|$)/gi, (m, s) => (/\*/.test(s) ? m : `connect-src ${s.trim()} blob: wss: ws:;`));
+                    .replace(/connect-src\s+([^;]*)(;|$)/gi, (m, s) => (/\*/.test(s) ? m : `connect-src ${s.trim()} blob: wss: ws: data:;`))
+                    .replace(/img-src\s+([^;]*)(;|$)/gi, (m, s) => {
+                        const x = s.trim();
+                        if (/\*|data:/.test(x)) return m;
+                        return `img-src ${x} data: blob:;`;
+                    })
+                    .replace(/media-src\s+([^;]*)(;|$)/gi, (m, s) => {
+                        const x = s.trim();
+                        if (/\*/.test(x)) return m;
+                        return `media-src ${x} blob: data:;`;
+                    })
+                    .replace(/frame-src\s+([^;]*)(;|$)/gi, (m, s) => {
+                        const x = s.trim();
+                        if (/\*|'self'/.test(x)) return m;
+                        return `frame-src ${x} 'self' blob: data:;`;
+                    })
+                    .replace(/child-src\s+([^;]*)(;|$)/gi, (m, s) => {
+                        const x = s.trim();
+                        if (/\*|'self'/.test(x)) return m;
+                        return `child-src ${x} 'self' blob: data:;`;
+                    });
             }
             return csp || undefined;
         },

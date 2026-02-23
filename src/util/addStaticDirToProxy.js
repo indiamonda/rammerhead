@@ -44,10 +44,9 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
         }
 
         // Skip style.css - it's handled by a custom route to bypass caching
-        // But DO serve styles.css (the new path)
-        if (file === 'style.css') {
-            return;
-        }
+        if (file === 'style.css') return;
+        // Skip background.png - not used by proxy; avoids conflict with proxied sites (e.g. jimmyqrg)
+        if (file === 'background.png') return;
 
         const pathToFile = path.join(staticDir, file);
         const route = rootPath + file;
