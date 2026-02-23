@@ -38,7 +38,9 @@ module.exports = {
     getServerInfo: (req) => {
         const hostHeader = req?.headers?.host || 'localhost:8080';
         const [hostname, port] = hostHeader.split(':');
-        const protocol = req?.socket?.encrypted ? 'https:' : 'http:';
+        const isEncrypted = req?.socket?.encrypted ||
+            (isCloudDeployment && req?.headers?.['x-forwarded-proto'] === 'https');
+        const protocol = isEncrypted ? 'https:' : 'http:';
         return {
             hostname: hostname || 'localhost',
             port: parseInt(port || (protocol === 'https:' ? 443 : 80)),

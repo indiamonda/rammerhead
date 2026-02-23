@@ -180,6 +180,13 @@ body {
     box-shadow: 0 -1px 0 var(--color-bg-tab-active);
 }
 
+.tab-favicon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    object-fit: contain;
+}
+
 .tab-title {
     flex: 1;
     overflow: hidden;
@@ -657,6 +664,7 @@ body {
     margin-bottom: 32px;
     padding-bottom: 16px;
     border-bottom: 1px solid var(--color-border-divider);
+    text-align: center;
 }
 
 .page-header h1 {
@@ -675,7 +683,7 @@ body {
 
 .home-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 16px;
     margin-top: 24px;
     max-width: 100%;
@@ -1498,31 +1506,37 @@ body {
 
             /**
              * Extract the actual destination URL from a proxied iframe URL.
-             * The proxy URL format: http://host:port/[basePath/]sessionId/shuffledUrl
-             * where shuffledUrl is the entire destination URL (protocol + host + path + query + hash)
-             * shuffled as one string.
+             * Uses hammerhead's own parser (via the iframe window) when available,
+             * which correctly handles resource-type flags, shuffling, and edge cases.
+             * Falls back to regex extraction + client-side unshuffle.
              */
-            function extractRealUrl(proxyUrl) {
+            function extractRealUrl(proxyUrl, iframeWindow) {
+                // Strategy 1: use hammerhead's parser inside the iframe (most reliable)
                 try {
-                    // Work with the full URL string to avoid browser URL parsing issues
-                    // Find the session ID pattern (32 hex chars) and extract everything after it
-                    const match = proxyUrl.match(/\/([a-f0-9]{32})\/(.+)/);
-                    if (match) {
-                        const shuffledPart = match[2];
-                        // Unshuffle using the client-side StrShuffler
-                        if (_shuffler && shuffledPart.startsWith(_shuffledIndicator)) {
-                            return _shuffler.unshuffle(shuffledPart);
+                    if (iframeWindow) {
+                        var hh = iframeWindow['%hammerhead%'];
+                        if (hh && hh.utils && hh.utils.url && hh.utils.url.parseProxyUrl) {
+                            var parsed = hh.utils.url.parseProxyUrl(proxyUrl);
+                            if (parsed && parsed.destUrl) return parsed.destUrl;
                         }
-                        // If not shuffled (no _rhs prefix), return as-is
-                        if (!shuffledPart.startsWith(_shuffledIndicator)) {
-                            return shuffledPart;
-                        }
-                        // Shuffled but no shuffler available — can't decode
-                        return null;
                     }
-                } catch (e) {
-                    // Not a valid URL or extraction failed
-                }
+                } catch (_) {}
+
+                // Strategy 2: regex + client-side unshuffle
+                // Allow optional hammerhead resource-type flags after the session ID (e.g. !i, !s)
+                try {
+                    var match = proxyUrl.match(/\/([a-f0-9]{32})[^\/]*\/(.+)/);
+                    if (match) {
+                        var urlPart = match[2];
+                        if (_shuffler && urlPart.startsWith(_shuffledIndicator)) {
+                            return _shuffler.unshuffle(urlPart);
+                        }
+                        if (!urlPart.startsWith(_shuffledIndicator)) {
+                            return urlPart;
+                        }
+                    }
+                } catch (_) {}
+
                 return null;
             }
 
@@ -1935,14 +1949,12 @@ body {
                             // Try to get current URL from iframe (for redirect tracking)
                             try {
                                 const currentUrl = iframeWindow.location.href;
-                                // Use extractRealUrl to properly unshuffle the proxy URL
-                                const destUrl = extractRealUrl(currentUrl);
+                                const destUrl = extractRealUrl(currentUrl, iframeWindow);
                                 
                                 if (destUrl && destUrl !== lastUrl && destUrl !== normalizedUrl && tabId === activeTabId) {
                                     lastUrl = destUrl;
                                     urlInput.value = destUrl;
                                     tab.url = destUrl;
-                                    // Add redirect to history
                                     if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
                                         tab.history = tab.history.slice(0, tab.historyIndex + 1);
                                         tab.history.push(destUrl);
@@ -1957,136 +1969,148 @@ body {
                             const title = iframeDoc.title || new URL(normalizedUrl).hostname;
                             updateTabTitle(tabId, title);
                             
-                            // Intercept window.open() from proxied content
-                            if (iframeWindow && typeof iframeWindow.open === 'function') {
-                                try {
-                                    const originalOpen = iframeWindow.open;
-                                    iframeWindow.open = function(url, target, features) {
-                                        // If target is _blank or not specified, open in new tab
-                                        if (!target || target === '_blank') {
-                                            if (url) {
-                                                // Resolve relative URLs
-                                                let fullUrl = url;
-                                                try {
-                                                    fullUrl = new URL(url, normalizedUrl).href;
-                                                } catch (e) {
-                                                    // If URL parsing fails, try to use as-is
-                                                }
-                                                // Normalize and open in new tab
-                                                const normalized = normalizeUrl(fullUrl);
-                                                createTab(normalized);
-                                            } else {
-                                                // No URL, just open new tab
-                                                createTab();
-                                            }
-                                            return null; // Return null like window.open() does for blocked popups
-                                        }
-                                        // For other targets, try to use original behavior
-                                        try {
-                                            return originalOpen.call(this, url, target, features);
-                                        } catch (e) {
-                                            // If original fails, open in new tab
-                                            if (url) {
-                                                let fullUrl = url;
-                                                try {
-                                                    fullUrl = new URL(url, normalizedUrl).href;
-                                                } catch (e2) {}
-                                                createTab(normalizeUrl(fullUrl));
-                                            }
-                                            return null;
-                                        }
-                                    };
-                                } catch (e) {
-                                    console.warn('Could not override window.open in iframe:', e);
-                                }
-                            }
+                            // === Tab-aware interception of all navigation inside proxied iframes ===
                             
-                            // Intercept window.close() from proxied content
-                            if (iframeWindow && typeof iframeWindow.close === 'function') {
-                                try {
-                                    const originalClose = iframeWindow.close;
-                                    iframeWindow.close = function() {
-                                        // Only close if it's not the last tab
-                                        if (tabs.length > 1) {
-                                            closeTab(tabId);
-                                        }
-                                        // Don't call original close as it would try to close the iframe
-                                    };
-                                } catch (e) {
-                                    console.warn('Could not override window.close in iframe:', e);
-                                }
+                            // Resolve a possibly-relative URL against the page the iframe is showing
+                            function resolveUrl(raw) {
+                                if (!raw) return null;
+                                try { return new URL(raw, normalizedUrl).href; } catch (_) {}
+                                return raw;
                             }
-                            
-                            // Intercept links with target="_blank" to open in new tabs
+
+                            // Build a lightweight mock Window returned by window.open() so callers
+                            // that do `var w = window.open(...); w.focus(); w.close();` don't crash.
+                            function makeMockWindow(openedTabId) {
+                                return {
+                                    closed: false,
+                                    focus() {},
+                                    blur() {},
+                                    close() {
+                                        this.closed = true;
+                                        if (openedTabId) closeTab(openedTabId);
+                                    },
+                                    postMessage() {},
+                                    location: { href: '', replace() {}, assign() {} },
+                                    document: { write() {}, writeln() {}, close() {} },
+                                    opener: iframeWindow
+                                };
+                            }
+
+                            // Named-window registry so `window.open('url','name')` reuses same tab
+                            if (!window._namedWindows) window._namedWindows = {};
+
+                            // --- window.open() ---
                             try {
-                                const links = iframeDoc.querySelectorAll('a[target="_blank"]');
-                                links.forEach(link => {
-                                    link.addEventListener('click', (e) => {
+                                iframeWindow.open = function(url, target, features) {
+                                    var resolved = resolveUrl(url);
+                                    var norm = resolved ? normalizeUrl(resolved) : null;
+                                    var t = (target || '').toLowerCase();
+
+                                    if (t === '_self' || t === '') {
+                                        // Navigate current tab
+                                        if (norm) loadTabContent(tabId, norm);
+                                        return makeMockWindow(tabId);
+                                    }
+                                    if (t === '_top' || t === '_parent') {
+                                        // Navigate current tab (iframe IS the tab)
+                                        if (norm) loadTabContent(tabId, norm);
+                                        return makeMockWindow(tabId);
+                                    }
+                                    if (t === '_blank' || !target) {
+                                        // New proxy tab
+                                        var newId = norm ? createTab(norm) : createTab();
+                                        return makeMockWindow(newId);
+                                    }
+                                    // Named window — reuse tab if already open
+                                    if (window._namedWindows[target] && tabs.find(tb => tb.id === window._namedWindows[target])) {
+                                        var existingId = window._namedWindows[target];
+                                        if (norm) loadTabContent(existingId, norm);
+                                        switchToTab(existingId);
+                                        return makeMockWindow(existingId);
+                                    }
+                                    var namedId = norm ? createTab(norm) : createTab();
+                                    window._namedWindows[target] = namedId;
+                                    return makeMockWindow(namedId);
+                                };
+                            } catch (e) { console.warn('Could not override window.open:', e); }
+
+                            // --- window.close() ---
+                            try {
+                                iframeWindow.close = function() {
+                                    if (tabs.length > 1) {
+                                        closeTab(tabId);
+                                    } else {
+                                        loadTabContent(tabId, 'jq://newtab/');
+                                    }
+                                };
+                            } catch (e) { console.warn('Could not override window.close:', e); }
+
+                            // --- window.opener (mock so pages can call opener.focus/close) ---
+                            try {
+                                Object.defineProperty(iframeWindow, 'opener', {
+                                    get() { return makeMockWindow(tabId); },
+                                    configurable: true
+                                });
+                            } catch (_) {}
+
+                            // --- Intercept <a> clicks & <form> submits that would escape the iframe ---
+                            try {
+                                function handleLinkClick(e) {
+                                    var a = e.target.closest ? e.target.closest('a[href]') : null;
+                                    if (!a) return;
+                                    var tgt = (a.getAttribute('target') || '').toLowerCase();
+                                    var href = a.getAttribute('href');
+                                    if (!href || href.startsWith('javascript:')) return;
+
+                                    if (tgt === '_blank') {
                                         e.preventDefault();
                                         e.stopPropagation();
-                                        const href = link.getAttribute('href');
-                                        if (href) {
-                                            // Resolve relative URLs
-                                            let fullUrl;
-                                            try {
-                                                fullUrl = new URL(href, normalizedUrl).href;
-                                            } catch (e) {
-                                                fullUrl = href;
-                                            }
-                                            createTab(normalizeUrl(fullUrl));
+                                        createTab(normalizeUrl(resolveUrl(href)));
+                                    } else if (tgt === '_top' || tgt === '_parent') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        loadTabContent(tabId, normalizeUrl(resolveUrl(href)));
+                                    }
+                                    // _self or no target — let the iframe handle it normally (stays inside iframe)
+                                }
+
+                                function handleFormSubmit(e) {
+                                    var form = e.target;
+                                    if (!form || form.tagName !== 'FORM') return;
+                                    var tgt = (form.getAttribute('target') || '').toLowerCase();
+                                    if (tgt === '_blank') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        var action = form.getAttribute('action') || '';
+                                        var resolved = resolveUrl(action);
+                                        if (form.method && form.method.toLowerCase() === 'get') {
+                                            var fd = new FormData(form);
+                                            var qs = new URLSearchParams(fd).toString();
+                                            createTab(normalizeUrl(resolved + (resolved.includes('?') ? '&' : '?') + qs));
+                                        } else {
+                                            createTab(normalizeUrl(resolved));
                                         }
-                                    }, true); // Use capture phase
+                                    } else if (tgt === '_top' || tgt === '_parent') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        var act = form.getAttribute('action') || '';
+                                        loadTabContent(tabId, normalizeUrl(resolveUrl(act)));
+                                    }
+                                }
+
+                                iframeDoc.addEventListener('click', handleLinkClick, true);
+                                iframeDoc.addEventListener('submit', handleFormSubmit, true);
+
+                                // Watch for dynamically-added elements too
+                                var tabObserver = new MutationObserver(function() {
+                                    // Re-attach isn't needed — we use document-level capture listeners
                                 });
-                                
-                                // Also intercept dynamically created links
-                                const observer = new MutationObserver((mutations) => {
-                                    mutations.forEach((mutation) => {
-                                        mutation.addedNodes.forEach((node) => {
-                                            if (node.nodeType === 1) { // Element node
-                                                if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
-                                                    node.addEventListener('click', (e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        const href = node.getAttribute('href');
-                                                        if (href) {
-                                                            let fullUrl;
-                                                            try {
-                                                                fullUrl = new URL(href, normalizedUrl).href;
-                                                            } catch (e) {
-                                                                fullUrl = href;
-                                                            }
-                                                            createTab(normalizeUrl(fullUrl));
-                                                        }
-                                                    }, true);
-                                                }
-                                                // Also check child links
-                                                const childLinks = node.querySelectorAll('a[target="_blank"]');
-                                                childLinks.forEach(link => {
-                                                    link.addEventListener('click', (e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        const href = link.getAttribute('href');
-                                                        if (href) {
-                                                            let fullUrl;
-                                                            try {
-                                                                fullUrl = new URL(href, normalizedUrl).href;
-                                                            } catch (e) {
-                                                                fullUrl = href;
-                                                            }
-                                                            createTab(normalizeUrl(fullUrl));
-                                                        }
-                                                    }, true);
-                                                });
-                                            }
-                                        });
-                                    });
-                                });
-                                observer.observe(iframeDoc.body || iframeDoc.documentElement, {
+                                tabObserver.observe(iframeDoc.body || iframeDoc.documentElement, {
                                     childList: true,
                                     subtree: true
                                 });
                             } catch (e) {
-                                console.warn('Could not intercept links in iframe:', e);
+                                console.warn('Could not intercept links/forms in iframe:', e);
                             }
                             
                         } catch (e) {
@@ -2537,7 +2561,7 @@ body {
 
             function getNewTabHTML() {
                 const pageTitle = localStorage.getItem('pageTitle') || 'Unlinewize';
-                const savedFavicon = localStorage.getItem('faviconData') || 'favicon.png';
+                const savedFavicon = localStorage.getItem('faviconData') || document.getElementById('favicon')?.getAttribute('href') || '';
                 return `
                     <div class="new-tab-content">
                         <div class="new-tab-logo-container">
@@ -3904,28 +3928,24 @@ body {
             window.closeTab = closeTab;
             window.createTab = createTab;
             
-            // Override window.open() to use our tab system
-            const originalWindowOpen = window.open;
+            // Override top-frame window.open/close so any JS in the page uses our tabs
             window.open = function(url, target, features) {
-                // If target is _blank or not specified, open in new tab
-                if (!target || target === '_blank') {
-                    if (url) {
-                        const normalized = normalizeUrl(url);
-                        createTab(normalized);
-                    } else {
-                        createTab();
-                    }
-                    return null; // Return null like window.open() does for blocked popups
-                }
-                // For other targets, try to use original behavior
-                try {
-                    return originalWindowOpen.call(this, url, target, features);
-                } catch (e) {
-                    // If original fails, open in new tab
-                    if (url) {
-                        createTab(normalizeUrl(url));
-                    }
+                var t = (target || '').toLowerCase();
+                var norm = url ? normalizeUrl(url) : null;
+                if (t === '_self' || t === '') {
+                    if (norm && activeTabId) loadTabContent(activeTabId, norm);
                     return null;
+                }
+                norm ? createTab(norm) : createTab();
+                return null;
+            };
+            window.close = function() {
+                if (activeTabId) {
+                    if (tabs.length > 1) {
+                        closeTab(activeTabId);
+                    } else {
+                        loadTabContent(activeTabId, 'jq://newtab/');
+                    }
                 }
             };
         })();

@@ -2,23 +2,17 @@
   "name": "Unlinewize",
   "short_name": "Unlinewize",
   "description": "Fast, secure web proxy powered by Hammerhead",
-  "start_url": "/rammerhead/",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0f",
   "theme_color": "#00d4aa",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/rammerhead/favicon.png",
-      "sizes": "192x192",
+      "src": "favicon.png",
+      "sizes": "32x32",
       "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/rammerhead/logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
