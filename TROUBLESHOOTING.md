@@ -204,6 +204,10 @@ node --version  # Should be v16-v20 or v24+ (with workers disabled)
 
 ---
 
+## Speed vs Compatibility
+
+Set `cspCompatibilityMode: true` in `src/config.js` (or root `config.js`) to relax CSP for Discord, Poki, jmail.world. This adds some overhead but may fix blank pages on those sites.
+
 ## Still Having Issues?
 
 1. **Check server logs:** `tail -f server.log`
@@ -230,7 +234,7 @@ node --version  # Should be v16-v20 or v24+ (with workers disabled)
 ### Site-Specific Issues
 - **Discord** – Blank page: Discord’s JS can fail under the proxy (e.g. `Cannot read properties of undefined (reading 'open')`). Often works better over HTTPS (e.g. Fly.io) than HTTP.
 - **jmail.world** – Next.js client error: The proxy’s JS rewriting can break Next.js hydration. Known limitation.
-- **Poki games** – Page loads but game frame is dark/empty: CSP and worker-src have been relaxed. Some games load from external CDNs that may still be blocked.
+- **Poki games** – Page loads but game frame is dark/empty: Set `cspCompatibilityMode: true` in config. Some games load from external CDNs that may still be blocked.
 - **Netflix** – May show errors or block access due to anti-bot and geo restrictions.
 
 ## Common Error Messages

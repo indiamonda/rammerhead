@@ -59,9 +59,8 @@ module.exports = {
     restrictSessionToIP: true,
 
     // caching options for js rewrites. (disk caching not recommended for slow HDD disks)
-    // recommended: 50mb for memory, 5gb for disk
-    // Using memory cache for better performance
-    jsCache: new RammerheadJSMemCache(100 * 1024 * 1024), // 100MB memory cache for faster performance
+    // recommended: 50mb for memory, 5gb for disk. Larger = more cache hits, less rewriting
+    jsCache: new RammerheadJSMemCache(200 * 1024 * 1024), // 200MB for faster repeat visits
     // jsCache: new RammerheadJSFileCache(path.join(__dirname, '../cache-js'), 5 * 1024 * 1024 * 1024, 50000, enableWorkers),
 
     // whether to disable http2 support or not (from proxy to destination site).
@@ -82,34 +81,24 @@ module.exports = {
     //     // 'x-frame-options': (originalHeaderValue) => '',
     //     'x-frame-options': null, // set to null to tell rammerhead that you want to delete it
     // },
+    // cspCompatibilityMode: true = relax CSP for Discord, Poki, jmail (slower). false = minimal rewrite (faster)
+    cspCompatibilityMode: false,
     rewriteServerHeaders: {
         'x-frame-options': null, // remove to allow loading in iframes
         'content-security-policy': (value) => {
             if (!value) return undefined;
-            let csp = value
-                // Remove frame-ancestors to allow iframe embedding
-                .replace(/frame-ancestors[^;]*(;|$)/gi, '')
-                // Relax for games (Poki, etc): ensure worker-src allows blob + self for Web Workers
-                .replace(/worker-src\s+([^;]*)(;|$)/gi, (m, sources) => {
-                    const s = sources.trim();
-                    if (/blob:/.test(s) && /'self'|self/.test(s)) return m;
-                    return `worker-src 'self' blob: ${s};`;
-                })
-                // Add 'unsafe-inline' 'unsafe-eval' to script-src if missing (helps Discord, Next.js, games)
-                .replace(/script-src\s+([^;]*)(;|$)/gi, (m, sources) => {
-                    let s = sources.trim();
-                    if (/'unsafe-inline'/.test(s) && /'unsafe-eval'/.test(s)) return m;
-                    if (!/'unsafe-inline'/.test(s)) s += " 'unsafe-inline'";
-                    if (!/'unsafe-eval'/.test(s)) s += " 'unsafe-eval'";
-                    return `script-src ${s};`;
-                })
-                // Relax connect-src for WebSockets, XHR (Discord, Netflix, etc)
-                .replace(/connect-src\s+([^;]*)(;|$)/gi, (m, sources) => {
-                    const s = sources.trim();
-                    if (/\*/.test(s) || /'unsafe-connect'/.test(s)) return m;
-                    return `connect-src ${s} blob: wss: ws:;`;
-                })
-                .trim();
+            const compat = module.exports.cspCompatibilityMode;
+            let csp = value.replace(/frame-ancestors[^;]*(;|$)/gi, '').trim();
+            if (compat) {
+                csp = csp
+                    .replace(/worker-src\s+([^;]*)(;|$)/gi, (m, s) => (/blob:/.test(s) && /'self'|self/.test(s) ? m : `worker-src 'self' blob: ${s.trim()};`))
+                    .replace(/script-src\s+([^;]*)(;|$)/gi, (m, s) => {
+                        const x = s.trim();
+                        if (/'unsafe-inline'/.test(x) && /'unsafe-eval'/.test(x)) return m;
+                        return `script-src ${x}${/'unsafe-inline'/.test(x) ? '' : " 'unsafe-inline'"}${/'unsafe-eval'/.test(x) ? '' : " 'unsafe-eval'"};`;
+                    })
+                    .replace(/connect-src\s+([^;]*)(;|$)/gi, (m, s) => (/\*/.test(s) ? m : `connect-src ${s.trim()} blob: wss: ws:;`));
+            }
             return csp || undefined;
         },
     },
@@ -119,8 +108,8 @@ module.exports = {
     // see src/classes/RammerheadSessionFileCache.js for more details and options
     fileCacheSessionConfig: {
         saveDirectory: path.join(__dirname, '../sessions'),
-        cacheTimeout: 1000 * 60 * 30, // 30 minutes (increased for better performance)
-        cacheCheckInterval: 1000 * 60 * 15, // 15 minutes (less frequent checks)
+        cacheTimeout: 1000 * 60 * 60, // 1 hour - keep sessions in memory longer, fewer disk reads
+        cacheCheckInterval: 1000 * 60 * 30, // 30 minutes (less frequent disk writes)
         deleteUnused: true,
         staleCleanupOptions: {
             staleTimeout: 1000 * 60 * 60 * 24 * 3, // 3 days
@@ -134,7 +123,7 @@ module.exports = {
     //// LOGGING CONFIGURATION ////
 
     // valid values: 'disabled', 'debug', 'traffic', 'info', 'warn', 'error'
-    logLevel: process.env.DEVELOPMENT ? 'debug' : 'info',
+    logLevel: process.env.DEVELOPMENT ? 'debug' : 'warn', // 'warn' reduces log overhead vs 'info'
     generatePrefix: (level) => `[${new Date().toISOString()}] [${level.toUpperCase()}] `,
 
     // logger depends on this value
