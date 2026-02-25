@@ -39,7 +39,7 @@ module.exports = {
         const hostHeader = req?.headers?.host || 'localhost:8080';
         const [hostname, port] = hostHeader.split(':');
         const isEncrypted = req?.socket?.encrypted ||
-            (isCloudDeployment && req?.headers?.['x-forwarded-proto'] === 'https');
+            req?.headers?.['x-forwarded-proto'] === 'https';
         const protocol = isEncrypted ? 'https:' : 'http:';
         return {
             hostname: hostname || 'localhost',
@@ -60,7 +60,7 @@ module.exports = {
 
     // caching options for js rewrites. (disk caching not recommended for slow HDD disks)
     // recommended: 50mb for memory, 5gb for disk. Larger = more cache hits, less rewriting
-    jsCache: new RammerheadJSMemCache(200 * 1024 * 1024), // 200MB for faster repeat visits
+    jsCache: new RammerheadJSMemCache(50 * 1024 * 1024), // 50MB (fits 256MB Fly.io; increase for local)
     // jsCache: new RammerheadJSFileCache(path.join(__dirname, '../cache-js'), 5 * 1024 * 1024 * 1024, 50000, enableWorkers),
 
     // whether to disable http2 support or not (from proxy to destination site).
