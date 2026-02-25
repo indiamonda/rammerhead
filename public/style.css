@@ -42,10 +42,22 @@
     --shadow-lg: 0 2px 4px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
 }
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+[data-theme="dark"] {
+    --surface-0: #0c0c0c;
+    --surface-1: #141414;
+    --surface-2: #1c1c1c;
+    --surface-3: #262626;
+    --text: #e8e8e8;
+    --text-dim: #b0b0b0;
+    --text-muted: #707070;
+    --edge: #2a2a2a;
+    --edge-strong: #404040;
+    --accent: #4da6ff;
+    --accent-hover: #6bb5ff;
+    --accent-bg: rgba(77, 166, 255, 0.12);
+    --success: #2ecc71;
+    --error: #e74c3c;
+    --white: #ffffff;
 }
 
 /* ============================================
@@ -59,6 +71,7 @@ body {
     padding: 0;
     height: 100vh;
     overflow: hidden;
+    transition: background var(--ease), color var(--ease);
 }
 
 .browser-window {
@@ -67,14 +80,13 @@ body {
     background: var(--color-bg-primary);
     display: flex;
     flex-direction: column;
+    background: var(--surface-0);
 }
 
 /* ============================================
    Tab Bar
    ============================================ */
 .tab-bar {
-    background: var(--color-bg-secondary);
-    border-bottom: 1px solid var(--color-border);
     display: flex;
     align-items: flex-end;
     padding: 0;
@@ -130,6 +142,13 @@ body {
     box-shadow: none;
 }
 
+.tab-favicon {
+    width: 12px;
+    height: 12px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
 .tab-title {
     flex: 1;
     overflow: hidden;
@@ -170,7 +189,6 @@ body {
     border: none;
     background: transparent;
     cursor: pointer;
-    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -195,7 +213,11 @@ body {
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
-    height: 48px;
+}
+
+.browser-controls {
+    display: flex;
+    gap: 2px;
 }
 
 .browser-button {
@@ -205,6 +227,7 @@ body {
     background: transparent;
     border-radius: 4px;
     cursor: pointer;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -260,7 +283,7 @@ body {
     height: 16px;
     margin-right: 12px;
     flex-shrink: 0;
-    color: var(--color-text-muted);
+    height: 48px;
 }
 
 .url-input {
@@ -273,13 +296,11 @@ body {
     background: transparent;
 }
 
-.url-input::placeholder {
-    color: var(--color-text-placeholder);
-}
+.url-input::placeholder { color: var(--text-muted); }
 
 .page-action {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border: none;
     background: transparent;
     cursor: pointer;
@@ -302,6 +323,7 @@ body {
     flex: 1;
     overflow: hidden;
     position: relative;
+    background: var(--surface-0);
 }
 
 .tab-content {
@@ -311,8 +333,8 @@ body {
     right: 0;
     bottom: 0;
     display: none;
-    overflow-y: auto;
-    background: var(--color-bg-primary);
+    overflow: auto;
+    background: var(--surface-0);
 }
 
 .tab-content.active {
@@ -331,7 +353,6 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
     text-align: center;
     max-width: 652px;
     margin: 0 auto;
@@ -356,6 +377,11 @@ body {
     font-weight: 300;
     color: #008373;
     letter-spacing: -2px;
+}
+
+.new-tab-title,
+.page-header h1 {
+    font-family: var(--font-family-jq-title) !important;
 }
 
 .new-tab-title {
@@ -419,6 +445,7 @@ body {
     font-size: 16px;
     color: var(--color-text-primary);
     font-family: var(--font-family);
+    color: var(--text);
     background: transparent;
 }
 
@@ -444,14 +471,45 @@ body {
     font-size: 14px;
     color: var(--color-text-secondary);
     cursor: pointer;
-    transition: all var(--transition-fast);
     font-family: var(--font-family);
+    transition: all var(--ease);
 }
 
 .search-button:hover {
     box-shadow: var(--shadow-sm);
     background: var(--color-bg-tertiary);
     border-color: var(--color-border);
+}
+
+/* ─── BUTTONS ────────────────────────────────────────────────── */
+.button {
+    padding: 8px 18px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--white);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    font-family: var(--font-family);
+    transition: all var(--ease);
+}
+
+.button:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+}
+
+.button-secondary {
+    background: var(--surface-0);
+    border: 1px solid var(--edge);
+    color: var(--text);
+}
+
+.button-secondary:hover {
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .generate-link-button {
@@ -467,11 +525,12 @@ body {
     font-family: var(--font-family);
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    transition: all var(--ease);
 }
 
 .generate-link-button:hover {
-    background: var(--color-primary-hover);
+    background: var(--accent-hover);
 }
 
 .generate-link-button:active {
@@ -493,19 +552,18 @@ body {
     font-weight: 500;
     cursor: pointer;
     transition: all var(--transition-fast);
-    white-space: nowrap;
     font-family: var(--font-family);
+    transition: all var(--ease);
 }
 
 .copy-button:hover {
-    background: var(--color-bg-tertiary);
-    border-color: var(--color-border-hover);
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .copy-button.copied {
-    background: var(--color-primary-light);
-    border-color: var(--color-primary);
-    color: var(--color-primary);
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 /* ============================================
@@ -572,7 +630,7 @@ body {
 .page-header {
     margin-bottom: 32px;
     padding-bottom: 16px;
-    border-bottom: 1px solid var(--color-border-divider);
+    border-bottom: 1px solid var(--edge);
 }
 
 .page-header h1 {
@@ -680,17 +738,19 @@ body {
     border-radius: 4px;
     font-size: 14px;
     font-family: var(--font-family);
-    background: var(--color-bg-primary);
+    color: var(--text);
+    background: var(--surface-0);
+    border: 1px solid var(--edge);
+    transition: border-color var(--ease);
 }
 
 .form-group input[type="text"]:focus {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px var(--color-primary-light);
+    border-color: var(--accent);
 }
 
 .form-group input[type="text"]:hover {
-    border-color: var(--color-border-hover);
+    border-color: var(--edge-strong);
 }
 
 .button {
@@ -762,9 +822,13 @@ body {
     text-align: center;
 }
 
-.error-message.active {
-    display: block;
+.error-message {
+    background: var(--color-error-bg);
+    border-color: var(--error);
+    color: var(--error);
 }
+
+.error-message.active { display: block; }
 
 .success-message {
     display: none;
@@ -778,9 +842,7 @@ body {
   text-align: center;
 }
 
-.success-message.active {
-    display: block;
-}
+.success-message.active { display: block; }
 
 .loading {
     display: none;
@@ -790,9 +852,7 @@ body {
     font-size: 13px;
 }
 
-.loading.active {
-    display: block;
-}
+.loading.active { display: block; }
 
 .spinner {
     display: inline-block;
@@ -820,6 +880,7 @@ body {
     .new-tab-content, .settings-page, .sessions-page, .home-page {
         padding: 24px 16px;
 }
+}
 
     .search-input-wrapper {
         height: 40px;
@@ -838,5 +899,4 @@ body {
     .tab {
         min-width: 100px;
         max-width: 180px;
-}
 }

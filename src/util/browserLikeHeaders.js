@@ -1,8 +1,13 @@
 /**
  * Browser-like headers to bypass 403 from sites that block non-browser requests.
  * Injected into proxied requests (sessionId + destination URL) before hammerhead.
- * Session proxy requests have isRoute=false, so we detect by URL pattern.
+ *
+ * Anti-proxy bypass: spoof Referer/Origin to match destination; use parent page
+ * Referer for CDN subresources; map CDN hosts to main site for Referer.
  */
+
+const getSessionId = require('./getSessionId');
+const StrShuffler = require('./StrShuffler');
 
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -21,6 +26,7 @@ const DOCUMENT_HEADERS = {
     'upgrade-insecure-requests': '1',
     'cache-control': 'max-age=0',
     'connection': 'keep-alive',
+    'dnt': '0',
 };
 
 const SUBRESOURCE_HEADERS = {
@@ -31,10 +37,93 @@ const SUBRESOURCE_HEADERS = {
     'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"Windows"',
+    'sec-fetch-site': 'cross-site',
+    'sec-fetch-mode': 'cors',
+    'dnt': '0',
 };
+
+// CDN/subdomain -> main site origin for Referer (Poki, Discord, etc. block proxy Referer)
+const CDN_REFERER_MAP = [
+    [/poki-cdn\.com$/i, 'https://poki.com'],
+    [/\.?poki\.com$/i, 'https://poki.com'],
+    [/\.?discord\.com$/i, 'https://discord.com'],
+    [/\.?discordapp\.com$/i, 'https://discord.com'],
+    [/\.?cloudflare\.com$/i, 'https://www.cloudflare.com'],
+];
 
 // Match both unshuffled (https://...) and shuffled (_rhs~...) proxy URLs
 const PROXY_REQUEST_RE = /^\/[a-z0-9]{32}\/(?:https?:\/\/[^/]+|_rhs~)/i;
+const UNSHUFFLED_ORIGIN_RE = /^\/[a-z0-9]{32}\/(https?:\/\/[^/]+)/i;
+
+/**
+ * Extract destination origin from proxy URL.
+ * Handles unshuffled, shuffled, and comma-separated URL formats.
+ */
+function getDestinationOrigin(url, sessionStore) {
+    if (!url) return null;
+    const pathOnly = url.split('?')[0];
+    const m = pathOnly.match(UNSHUFFLED_ORIGIN_RE);
+    if (m) return m[1];
+
+    const sessionId = getSessionId(pathOnly);
+    if (!sessionId || !sessionStore) return null;
+    const session = sessionStore.get(sessionId);
+    if (!session?.shuffleDict) return null;
+
+    const destPartMatch = pathOnly.match(new RegExp(`^\\/[a-z0-9]{32}\\/(.+)$`, 'i'));
+    if (!destPartMatch) return null;
+    let destPart = destPartMatch[1];
+    if (!destPart.startsWith(StrShuffler.shuffledIndicator)) return null;
+
+    try {
+        const shuffler = new StrShuffler(session.shuffleDict);
+        const unshuffled = shuffler.unshuffle(destPart);
+        const firstUrl = unshuffled.split(',')[0].trim();
+        const originMatch = firstUrl.match(/^(https?:\/\/[^/]+)/i);
+        return originMatch ? originMatch[1] : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+/**
+ * Get Referer origin from browser's Referer header (parent page).
+ * Used for CDN subresources - CDN expects Referer from main site.
+ */
+function getRefererOriginFromHeader(referer, sessionStore) {
+    if (!referer || typeof referer !== 'string') return null;
+    const sessionId = getSessionId(referer);
+    if (!sessionId || !sessionStore) return null;
+    const session = sessionStore.get(sessionId);
+    if (!session?.shuffleDict) return null;
+    const pathMatch = referer.match(/\/[a-z0-9]{32}\/(.+?)(?:\?|$)/i);
+    if (!pathMatch) return null;
+    let destPart = pathMatch[1];
+    if (destPart.startsWith(StrShuffler.shuffledIndicator)) {
+        try {
+            const shuffler = new StrShuffler(session.shuffleDict);
+            destPart = shuffler.unshuffle(destPart);
+        } catch (_) {
+            return null;
+        }
+    }
+    const originMatch = destPart.match(/^(https?:\/\/[^/]+)/i);
+    return originMatch ? originMatch[1] : null;
+}
+
+/**
+ * Map CDN host to main site origin for Referer (Poki CDN blocks proxy Referer).
+ */
+function getRefererOriginForHost(destOrigin) {
+    if (!destOrigin) return null;
+    try {
+        const host = new URL(destOrigin + '/').hostname.replace(/^www\./, '');
+        for (const [re, mainOrigin] of CDN_REFERER_MAP) {
+            if (re.test(host)) return mainOrigin;
+        }
+    } catch (_) {}
+    return destOrigin;
+}
 
 function isProxiedRequest(req) {
     if (!req?.url) return false;
@@ -44,8 +133,9 @@ function isProxiedRequest(req) {
 /**
  * @param {http.IncomingMessage} req
  * @param {boolean} isRoute - from pipeline; session proxy requests are false
+ * @param {import('../classes/RammerheadSessionAbstractStore')} [sessionStore] - for unshuffling when URL is shuffled
  */
-function injectBrowserLikeHeaders(req, isRoute) {
+function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     if (!req?.headers) return;
     if (!isRoute && !isProxiedRequest(req)) return;
 
@@ -60,6 +150,22 @@ function injectBrowserLikeHeaders(req, isRoute) {
         req.headers[lower] = value;
     }
 
+    // Anti-proxy bypass: spoof Referer/Origin so Poki CDN and similar accept requests
+    const destOrigin = getDestinationOrigin(req.url, sessionStore);
+    let refererOrigin = null;
+    if (isDoc) {
+        refererOrigin = destOrigin;
+    } else {
+        // For subresources: prefer parent page from Referer; else map CDN to main site
+        refererOrigin = getRefererOriginFromHeader(req.headers['referer'], sessionStore)
+            || getRefererOriginForHost(destOrigin)
+            || destOrigin;
+    }
+    if (refererOrigin) {
+        const ref = refererOrigin.endsWith('/') ? refererOrigin : refererOrigin + '/';
+        req.headers['referer'] = ref;
+        if (!isDoc) req.headers['origin'] = refererOrigin;
+    }
 }
 
-module.exports = { injectBrowserLikeHeaders };
+module.exports = { injectBrowserLikeHeaders, getDestinationOrigin };

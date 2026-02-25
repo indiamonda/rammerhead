@@ -10,8 +10,9 @@ const path = require('path');
  */
 module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Inject browser-like headers on proxied requests to bypass 403 (Discord, Poki, etc.)
+    // Pass sessionStore for Referer/Origin spoofing when URL is shuffled
     proxyServer.addToOnRequestPipeline((req, _res, _serverInfo, isRoute) => {
-        injectBrowserLikeHeaders(req, isRoute);
+        injectBrowserLikeHeaders(req, isRoute, sessionStore);
         return false;
     }, true);
 
