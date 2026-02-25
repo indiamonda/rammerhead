@@ -33,7 +33,8 @@ const SUBRESOURCE_HEADERS = {
     'sec-ch-ua-platform': '"Windows"',
 };
 
-const PROXY_REQUEST_RE = /^\/[a-z0-9]{32}\/(https?:\/\/[^/]+)/i;
+// Match both unshuffled (https://...) and shuffled (_rhs~...) proxy URLs
+const PROXY_REQUEST_RE = /^\/[a-z0-9]{32}\/(?:https?:\/\/[^/]+|_rhs~)/i;
 
 function isProxiedRequest(req) {
     if (!req?.url) return false;
