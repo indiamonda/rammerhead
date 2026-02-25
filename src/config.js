@@ -38,8 +38,13 @@ module.exports = {
     getServerInfo: (req) => {
         const hostHeader = req?.headers?.host || 'localhost:8080';
         const [hostname, port] = hostHeader.split(':');
-        const isEncrypted = req?.socket?.encrypted ||
-            req?.headers?.['x-forwarded-proto'] === 'https';
+        let isEncrypted = req?.socket?.encrypted || req?.headers?.['x-forwarded-proto'] === 'https';
+        if (!isEncrypted && req?.headers?.['cf-visitor']) {
+            try {
+                const cf = JSON.parse(req.headers['cf-visitor']);
+                if (cf?.scheme === 'https') isEncrypted = true;
+            } catch (_) {}
+        }
         const protocol = isEncrypted ? 'https:' : 'http:';
         return {
             hostname: hostname || 'localhost',

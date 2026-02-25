@@ -170,6 +170,7 @@ body {
     display: flex;
     flex-direction: column;
     transition: background var(--transition-slow);
+    animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* ============================================
@@ -188,6 +189,7 @@ body {
     height: 38px;
     gap: 0;
     transition: background var(--transition-slow), border-color var(--transition-smooth);
+    animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .tab-bar::-webkit-scrollbar {
@@ -337,6 +339,7 @@ body {
     box-shadow: var(--shadow-chrome);
     transition: background var(--transition-slow), border-color var(--transition-smooth),
                 box-shadow var(--transition-smooth);
+    animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .browser-button {
@@ -585,6 +588,7 @@ body {
     transition: background var(--transition-smooth), border-color var(--transition-smooth),
                 box-shadow var(--transition-smooth), transform var(--transition-bounce),
                 opacity var(--transition-slow);
+    animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 .search-input-wrapper:hover {
@@ -633,6 +637,7 @@ body {
     justify-content: center;
     margin-top: 16px;
     margin-bottom: 16px;
+    animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 .search-button {
@@ -908,6 +913,7 @@ body {
     padding: 24px;
     margin-bottom: 24px;
     transition: box-shadow var(--transition-smooth), border-color var(--transition-smooth);
+    animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 .settings-section:hover, .sessions-section:hover {
@@ -1425,7 +1431,7 @@ body {
 
 .devtools-panel.active {
     display: flex;
-    animation: fadeIn 0.5s ease-out forwards;
+    animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .devtools-header {
@@ -1523,6 +1529,7 @@ body {
     cursor: pointer;
     transition: transform var(--transition-bounce), box-shadow var(--transition-smooth),
                 border-color var(--transition-smooth);
+    animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 .feature-card:hover {
@@ -1616,6 +1623,7 @@ body {
     background: var(--color-bg-primary);
     transition: transform var(--transition-bounce), box-shadow var(--transition-smooth),
                 border-color var(--transition-smooth);
+    animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 .stat-card:hover {
@@ -2627,7 +2635,7 @@ body {
                         flex-direction: column;
                         box-shadow: var(--shadow-modal);
                         border: 1px solid var(--color-border);
-                        animation: fadeIn 0.5s ease-out;
+                        animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
                     ">
                         <div style="display: flex; align-items: center; justify-content: space-between; padding: 32px 32px 20px; border-bottom: 2px solid var(--color-border-divider); flex-shrink: 0;">
                             <h2 style="margin: 0; font-size: 24px; font-weight: 600; color: var(--color-text-primary); display: flex; align-items: center; gap: 12px;">
@@ -2833,7 +2841,7 @@ body {
                         thumb.setAttribute('data-selected', 'true');
                         const overlay = thumb.querySelector('div[style*="position: absolute; inset"]');
                         if (overlay) overlay.style.background = 'var(--color-overlay)';
-                        thumb.innerHTML = '<div style="position: absolute; inset: 0; background: var(--color-overlay); transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1);"></div><div style="position: absolute; top: 8px; right: 8px; background: var(--color-primary); color: var(--color-on-primary); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: var(--shadow-overlay); z-index: 1; animation: fadeIn 0.4s ease-out forwards;"><i class="fas fa-check"></i></div>';
+                        thumb.innerHTML = '<div style="position: absolute; inset: 0; background: var(--color-overlay); transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1);"></div><div style="position: absolute; top: 8px; right: 8px; background: var(--color-primary); color: var(--color-on-primary); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: var(--shadow-overlay); z-index: 1; animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;"><i class="fas fa-check"></i></div>';
                     });
                     
                     // Add hover effect
@@ -3656,7 +3664,7 @@ body {
                             const linkUrl = contentElement.querySelector('#newtab-link-url');
                             const copyBtn = contentElement.querySelector('#newtab-copy-button');
                             if (linkUrl && linkResult && copyBtn) {
-                                linkUrl.textContent = data.url;
+                                linkUrl.textContent = data.url.startsWith('/') ? window.location.origin + data.url : data.url;
                                 linkResult.style.display = 'block';
                                 linkResult.classList.add('active');
                                 copyBtn.disabled = false;

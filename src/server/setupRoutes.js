@@ -188,7 +188,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 const indexPath = path.join(config.publicDir, 'index.html');
                 if (fs.existsSync(indexPath)) {
                     logger.debug(`(handleRoot) Serving public index.html`);
-                    res.writeHead(200, { 'Content-Type': 'text/html' });
+                    res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
                     res.end(fs.readFileSync(indexPath));
                     return;
                 }
@@ -256,13 +256,8 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             }
             const shuffler = new StrShuffler(session.shuffleDict);
             const shuffledUrl = shuffler.shuffle(targetUrl);
-            
-            const serverInfo = config.getServerInfo(req);
-            const protocol = serverInfo.protocol || 'http:';
-            const hostname = serverInfo.hostname || 'localhost';
-            const port = serverInfo.port || 8080;
-            const portSuffix = (protocol === 'https:' && port === 443) || (protocol === 'http:' && port === 80) ? '' : `:${port}`;
-            const proxiedUrl = `${protocol}//${hostname}${portSuffix}${basePath}/${id}/${shuffledUrl}`;
+            // Use relative URL so browser inherits current page's protocol (fixes mixed content behind Cloudflare Tunnel etc.)
+            const proxiedUrl = (basePath ? basePath + '/' : '/') + id + '/' + shuffledUrl;
             
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ proxiedUrl, sessionId: id }));
@@ -312,13 +307,8 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             // Generate the proxied URL
             const shuffler = new StrShuffler(session.shuffleDict);
             const shuffledUrl = shuffler.shuffle(targetUrl);
-            const serverInfo = config.getServerInfo(req);
-            const protocol = serverInfo.protocol || 'http:';
-            const hostname = serverInfo.hostname || 'localhost';
-            const port = serverInfo.port || 8080;
-            const portSuffix = (protocol === 'https:' && port === 443) || (protocol === 'http:' && port === 80) ? '' : `:${port}`;
             const basePath = getBasePath(req);
-            const proxiedUrl = `${protocol}//${hostname}${portSuffix}${basePath}/${id}/${shuffledUrl}`;
+            const proxiedUrl = (basePath ? basePath + '/' : '/') + id + '/' + shuffledUrl;
             
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ url: proxiedUrl, sessionId: id }));
