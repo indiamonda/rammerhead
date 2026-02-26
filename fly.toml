@@ -3,6 +3,13 @@
 
 app = "unlinewize-proxy"
 
+# 512MB to avoid OOM; 256MB was too tight for Node + jsCache
+[[vm]]
+  memory = "512mb"
+
+# Try IAD (US East) if ams has connection issues
+primary_region = "iad"
+
 [build]
 
 [env]
