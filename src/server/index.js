@@ -24,12 +24,15 @@ const logger = new RammerheadLogging({
     generatePrefix: (level) => prefix + config.generatePrefix(level)
 });
 
+// When port === crossDomainPort (cloud), use null to avoid two servers on same port (EADDRINUSE)
+const crossDomainPort = config.port === config.crossDomainPort ? null : config.crossDomainPort;
+
 const proxyServer = new RammerheadProxy({
     logger,
     loggerGetIP: config.getIP,
     bindingAddress: config.bindingAddress,
     port: config.port,
-    crossDomainPort: config.crossDomainPort,
+    crossDomainPort,
     dontListen: config.enableWorkers,
     ssl: config.ssl,
     getServerInfo: config.getServerInfo,
