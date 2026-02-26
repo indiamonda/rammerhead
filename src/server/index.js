@@ -125,9 +125,9 @@ if (config.enableWorkers) {
     };
     logger.info(JSON.stringify({ port: config.port, crossPort: config.crossDomainPort, master: cluster.isMaster }));
     const closeMasters = [sticky.listen(proxyServer.server1, config.port, config.bindingAddress, stickyOptions)];
-    if (config.crossDomainPort) {
+    if (crossDomainPort) {
         closeMasters.push(
-            sticky.listen(proxyServer.server2, config.crossDomainPort, config.bindingAddress, stickyOptions)
+            sticky.listen(proxyServer.server2, crossDomainPort, config.bindingAddress, stickyOptions)
         );
     }
 

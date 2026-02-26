@@ -132,12 +132,14 @@ class RammerheadProxy extends Proxy {
                 return (onlyOneHttpServer = originalCreateServer(...args));
             };
 
-            // now, we force the server to listen to a specific port and a binding address, regardless of what
-            // hammerhead server.listen(anything)
+            // Hammerhead calls server.listen() during super.start(). We no-op that here so the server
+            // is not bound in the constructor. index.js will call sticky.listen(server1, port, bindingAddress)
+            // which binds the server once. If we bound here and sticky listened again we'd get EADDRINUSE.
             const originalListen = http.Server.prototype.listen;
             http.Server.prototype.listen = function (_proxyPort) {
                 if (dontListen) return;
-                originalListen.call(this, port, bindingAddress);
+                // Single-server path: do not bind here; let index.js sticky.listen() do it.
+                return;
             };
 
             // actual proxy initialization
