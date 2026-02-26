@@ -81,7 +81,13 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         }
     };
     proxyServer.GET('/favicon.png', serveStatic('favicon.png', 'image/png'));
-    
+
+    // Lightweight health check for Fly.io/Render (avoids loading full index.html)
+    proxyServer.GET('/health', (req, res) => {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('ok');
+    });
+
     const isNotAuthorized = (req, res) => {
         if (!config.password) return;
         const { pwd } = new URLPath(req.url).getParams();

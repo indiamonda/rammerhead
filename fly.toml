@@ -26,10 +26,10 @@ app = "unlinewize-proxy"
     idle_timeout = 300
 
   [[http_service.checks]]
-    grace_period = "60s"
-    interval = "15s"
+    grace_period = "90s"
+    interval = "10s"
     method = "GET"
-    path = "/"
-    timeout = "15s"
+    path = "/health"
+    timeout = "5s"
     [http_service.checks.headers]
       X-Forwarded-Proto = "https"
