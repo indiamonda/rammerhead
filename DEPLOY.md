@@ -89,7 +89,7 @@ Deploy Unlinewize to cloud platforms for permanent, always-on access from anywhe
    ```
 
 5. **Access your proxy**:
-   - Your app will be at `https://<your-app-name>.fly.dev`
+   - Your app will be at `https://rammerhead.fly.dev`
 
 **Pros:**
 - ✅ Free tier with always-on option (generous limits)
