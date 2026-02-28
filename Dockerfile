@@ -7,6 +7,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
+# Pass --build-arg CACHEBUST=$(date +%s) to force rebuild of app code (avoids stale EADDRINUSE fix)
+ARG CACHEBUST
 COPY . .
 RUN npm run build
 
