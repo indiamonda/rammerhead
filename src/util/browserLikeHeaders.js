@@ -42,13 +42,31 @@ const SUBRESOURCE_HEADERS = {
     'dnt': '0',
 };
 
-// CDN/subdomain -> main site origin for Referer (Poki, Discord, etc. block proxy Referer)
+// CDN/subdomain -> main site origin for Referer (sites block proxy Referer)
 const CDN_REFERER_MAP = [
     [/poki-cdn\.com$/i, 'https://poki.com'],
     [/\.?poki\.com$/i, 'https://poki.com'],
     [/\.?discord\.com$/i, 'https://discord.com'],
     [/\.?discordapp\.com$/i, 'https://discord.com'],
     [/\.?cloudflare\.com$/i, 'https://www.cloudflare.com'],
+    // YouTube
+    [/\.?googlevideo\.com$/i, 'https://www.youtube.com'],
+    [/\.?youtube\.com$/i, 'https://www.youtube.com'],
+    [/\.?ytimg\.com$/i, 'https://www.youtube.com'],
+    [/\.?ggpht\.com$/i, 'https://www.youtube.com'],
+    // Twitch
+    [/\.?twitch\.tv$/i, 'https://www.twitch.tv'],
+    [/\.?twitchcdn\.net$/i, 'https://www.twitch.tv'],
+    // Douyin (抖音)
+    [/\.?douyin\.com$/i, 'https://www.douyin.com'],
+    [/\.?byteimg\.com$/i, 'https://www.douyin.com'],
+    [/\.?bytecdn\.cn$/i, 'https://www.douyin.com'],
+    [/\.?bytegoofy\.com$/i, 'https://www.douyin.com'],
+    // Bilibili (哔哩哔哩)
+    [/\.?bilibili\.com$/i, 'https://www.bilibili.com'],
+    [/\.?bilivideo\.com$/i, 'https://www.bilibili.com'],
+    [/\.?hdslb\.com$/i, 'https://www.bilibili.com'],
+    [/\.?biliapi\.net$/i, 'https://www.bilibili.com'],
 ];
 
 // Match both unshuffled (https://...) and shuffled (_rhs~...) proxy URLs

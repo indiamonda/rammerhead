@@ -235,13 +235,24 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         }
     };
     
+    // Normalize root URLs with trailing slash (helps YouTube, Bilibili, Douyin, Twitch)
+    const normalizeTargetUrl = (raw) => {
+        if (!raw || typeof raw !== 'string') return raw;
+        try {
+            const u = new URL(raw.trim());
+            if (u.pathname === '' || u.pathname === '/') return u.origin + '/';
+        } catch (_) {}
+        return raw;
+    };
+
     // Route to get proxied URL with proper shuffling
     const handleGetProxiedUrl = (req, res) => {
         try {
             const { id, url: targetUrl } = new URLPath(req.url).getParams();
             const basePath = getBasePath(req);
+            const normalizedTarget = normalizeTargetUrl(targetUrl);
             
-            if (!id || !targetUrl) {
+            if (!id || !normalizedTarget) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Session ID and URL required' }));
                 return;
@@ -261,7 +272,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 session.shuffleDict = StrShuffler.generateDictionary();
             }
             const shuffler = new StrShuffler(session.shuffleDict);
-            const shuffledUrl = shuffler.shuffle(targetUrl);
+            const shuffledUrl = shuffler.shuffle(normalizedTarget);
             // Use relative URL so browser inherits current page's protocol (fixes mixed content behind Cloudflare Tunnel etc.)
             const proxiedUrl = (basePath ? basePath + '/' : '/') + id + '/' + shuffledUrl;
             
@@ -291,8 +302,9 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     const handleGenerateLink = (req, res) => {
         try {
             const { url: targetUrl } = new URLPath(req.url).getParams();
+            const normalizedTarget = normalizeTargetUrl(targetUrl);
             
-            if (!targetUrl) {
+            if (!normalizedTarget) {
                 logger.error(`(generatelink) ${config.getIP(req)} ${req.url} Must provide url parameter`);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Must provide url parameter' }));
@@ -312,7 +324,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             
             // Generate the proxied URL
             const shuffler = new StrShuffler(session.shuffleDict);
-            const shuffledUrl = shuffler.shuffle(targetUrl);
+            const shuffledUrl = shuffler.shuffle(normalizedTarget);
             const basePath = getBasePath(req);
             const proxiedUrl = (basePath ? basePath + '/' : '/') + id + '/' + shuffledUrl;
             

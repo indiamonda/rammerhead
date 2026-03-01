@@ -489,6 +489,13 @@
                     if (!url.match(/^https?:\/\//i)) {
                         url = 'https://' + url;
                     }
+                    // Ensure root URLs have trailing slash (helps YouTube, Bilibili, Douyin, Twitch proxy loads)
+                    try {
+                        const u = new URL(url);
+                        if (u.pathname === '' || u.pathname === '/') {
+                            url = u.origin + '/';
+                        }
+                    } catch (_) {}
                 } else {
                     // Treat as search query - use selected search engine
                     const engine = searchEngines[getSearchEngine()];
