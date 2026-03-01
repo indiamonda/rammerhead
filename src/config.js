@@ -37,8 +37,10 @@ module.exports = {
     // set them differently from bindingAddress and port if rammerhead is being served
     // from a reverse proxy.
     getServerInfo: (req) => {
-        const hostHeader = req?.headers?.host || 'localhost:8080';
-        const [hostname, port] = hostHeader.split(':');
+        const hostHeader = (req?.headers?.host || '').trim() || 'localhost:8080';
+        const colonIdx = hostHeader.indexOf(':');
+        const hostname = colonIdx >= 0 ? hostHeader.slice(0, colonIdx).trim() : hostHeader.trim();
+        const portStr = colonIdx >= 0 ? hostHeader.slice(colonIdx + 1).trim() : '';
         let isEncrypted = req?.socket?.encrypted || req?.headers?.['x-forwarded-proto'] === 'https';
         if (!isEncrypted && req?.headers?.['cf-visitor']) {
             try {
@@ -47,10 +49,13 @@ module.exports = {
             } catch (_) {}
         }
         const protocol = isEncrypted ? 'https:' : 'http:';
+        const defaultPort = protocol === 'https:' ? 443 : 80;
+        const port = parseInt(portStr, 10);
+        const resolvedPort = Number.isInteger(port) && port > 0 ? port : defaultPort;
         return {
             hostname: hostname || 'localhost',
-            port: parseInt(port || (protocol === 'https:' ? 443 : 80)),
-            crossDomainPort: parseInt(port || (protocol === 'https:' ? 443 : 80)),
+            port: resolvedPort,
+            crossDomainPort: resolvedPort,
             protocol
         };
     },
