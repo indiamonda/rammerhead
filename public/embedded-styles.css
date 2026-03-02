@@ -476,11 +476,11 @@ body {
 .settings-page {
     font-family: var(--font-family-jq);
 }
-.new-tab-content *:not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not(.fad):not([class^="fa-"]),
-.home-page *:not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not(.fad):not([class^="fa-"]),
-.feature-page *:not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not(.fad):not([class^="fa-"]),
-.sessions-page *:not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not(.fad):not([class^="fa-"]),
-.settings-page *:not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not(.fad):not([class^="fa-"]) {
+.new-tab-content *:not(iconify-icon),
+.home-page *:not(iconify-icon),
+.feature-page *:not(iconify-icon),
+.sessions-page *:not(iconify-icon),
+.settings-page *:not(iconify-icon) {
     font-family: inherit;
 }
 

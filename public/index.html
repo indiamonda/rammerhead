@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://jimmyqrg.github.io" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300..700&family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Red+Hat+Text:ital,wght@0,300..700;1,300..700&display=swap" as="style">
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300..700&family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Red+Hat+Text:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="embedded-styles.css" id="embedded-styles" />
 
     <script>
@@ -52,7 +52,7 @@
         <!-- Tab Bar -->
         <div class="tab-bar" id="tab-bar">
             <button class="new-tab-button" id="new-tab-button" title="New Tab">
-                <i class="fas fa-plus"></i>
+                <iconify-icon icon="ci:add-plus"></iconify-icon>
             </button>
             </div>
 
@@ -60,20 +60,20 @@
         <div class="browser-chrome">
             <div class="browser-controls">
                 <button class="browser-button" id="back-button" title="Back">
-                    <i class="fas fa-arrow-left"></i>
+                    <iconify-icon icon="ci:arrow-left-md"></iconify-icon>
                 </button>
                 <button class="browser-button" id="forward-button" title="Forward">
-                    <i class="fas fa-arrow-right"></i>
+                    <iconify-icon icon="ci:arrow-right-md"></iconify-icon>
                 </button>
                 <button class="browser-button" id="refresh-button" title="Refresh">
-                    <i class="fas fa-redo"></i>
+                    <iconify-icon icon="ci:redo"></iconify-icon>
                 </button>
                 <button class="browser-button" id="home-button" title="Home">
-                    <i class="fas fa-home"></i>
+                    <iconify-icon icon="ci:house-01"></iconify-icon>
                 </button>
         </div>
             <div class="url-bar-wrapper">
-                <i class="fas fa-lock security-icon" id="security-icon"></i>
+                <iconify-icon icon="ci:lock" class="security-icon" id="security-icon"></iconify-icon>
                 <input 
                     type="text" 
                     id="url-input" 
@@ -82,19 +82,19 @@
                     autocomplete="off"
                 />
                 <button class="page-action" id="clear-button" style="display: none;" title="Clear">
-                    <i class="fas fa-times"></i>
+                    <iconify-icon icon="ci:close-md"></iconify-icon>
                 </button>
                 <button class="page-action" id="bookmark-button" title="Bookmark this page">
-                    <i class="far fa-star"></i>
+                    <iconify-icon icon="ci:star" id="bookmark-star-icon"></iconify-icon>
                 </button>
             </div>
             <div class="browser-actions">
                 <button class="browser-button" id="downloads-button" title="Downloads">
-                    <i class="fas fa-download"></i>
+                    <iconify-icon icon="ci:download"></iconify-icon>
                     <span class="download-badge" id="download-badge" style="display: none;">0</span>
                 </button>
                 <button class="browser-button" id="menu-button" title="Menu">
-                    <i class="fas fa-ellipsis-v"></i>
+                    <iconify-icon icon="ci:more-vertical"></iconify-icon>
                 </button>
             </div>
         </div>
@@ -107,25 +107,25 @@
         <!-- Menu Dropdown -->
         <div class="menu-dropdown" id="menu-dropdown" style="display: none;">
             <div class="menu-item" data-action="new-tab">
-                <i class="fas fa-plus"></i> New Tab
+                <iconify-icon icon="ci:add-plus"></iconify-icon> New Tab
             </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="bookmarks">
-                <i class="fas fa-bookmark"></i> Bookmarks
+                <iconify-icon icon="ci:bookmark"></iconify-icon> Bookmarks
         </div>
             <div class="menu-item" data-action="history">
-                <i class="fas fa-history"></i> History
+                <iconify-icon icon="ci:clock"></iconify-icon> History
             </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="settings">
-                <i class="fas fa-cog"></i> Settings
+                <iconify-icon icon="ci:settings"></iconify-icon> Settings
                 </div>
             <div class="menu-item" data-action="devtools">
-                <i class="fas fa-code"></i> Developer Tools
+                <iconify-icon icon="ci:code"></iconify-icon> Developer Tools
             </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="theme">
-                <i class="fas fa-moon" id="theme-icon"></i> <span id="theme-text">Dark Mode</span>
+                <iconify-icon icon="ci:moon" id="theme-icon"></iconify-icon> <span id="theme-text">Dark Mode</span>
         </div>
     </div>
 
@@ -420,7 +420,7 @@
                 const icon = document.getElementById('theme-icon');
                 const text = document.getElementById('theme-text');
                 if (icon) {
-                    icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+                    icon.setAttribute('icon', theme === 'dark' ? 'ci:sun' : 'ci:moon');
                 }
                 if (text) {
                     text.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
@@ -531,7 +531,7 @@
                     <img class="tab-favicon" src="${tabFaviconSrc}" alt="" onerror="this.style.display='none'" />
                     <span class="tab-title">${title}</span>
                     <button class="tab-close" onclick="closeTab('${tabId}')" title="Close tab">
-                        <i class="fas fa-times"></i>
+                        <iconify-icon icon="ci:close-md"></iconify-icon>
                     </button>
                 `;
                 tabElement.addEventListener('click', (e) => {
@@ -930,22 +930,22 @@
             </div>
                         <div class="home-grid">
                             <a href="jq://newtab/" class="home-card" data-url="jq://newtab/">
-                                <div class="home-card-icon"><i class="fas fa-search"></i></div>
+                                <div class="home-card-icon"><iconify-icon icon="ci:search-magnifying-glass"></iconify-icon></div>
                                 <div class="home-card-title">New Tab</div>
                                 <div class="home-card-desc">Search and browse the web</div>
                             </a>
                             <a href="jq://sessions/" class="home-card" data-url="jq://sessions/">
-                                <div class="home-card-icon"><i class="fas fa-key"></i></div>
+                                <div class="home-card-icon"><iconify-icon icon="ci:keyboard"></iconify-icon></div>
                                 <div class="home-card-title">Sessions</div>
                                 <div class="home-card-desc">Manage your proxy session</div>
                             </a>
                             <a href="jq://settings/" class="home-card" data-url="jq://settings/">
-                                <div class="home-card-icon"><i class="fas fa-cog"></i></div>
+                                <div class="home-card-icon"><iconify-icon icon="ci:settings"></iconify-icon></div>
                                 <div class="home-card-title">Settings</div>
                                 <div class="home-card-desc">Customize your browser</div>
                             </a>
                             <a href="#" class="home-card" data-url="customize-theme" id="customize-theme-card">
-                                <div class="home-card-icon"><i class="fas fa-palette"></i></div>
+                                <div class="home-card-icon"><iconify-icon icon="ci:swatches-palette"></iconify-icon></div>
                                 <div class="home-card-title">Customize Theme</div>
                                 <div class="home-card-desc">Change theme colors and background</div>
                             </a>
@@ -996,7 +996,7 @@
                             overflow: hidden;
                         " ${isSelected ? 'data-selected="true"' : ''}>
                             <div style="position: absolute; inset: 0; background: ${isSelected ? 'var(--color-overlay)' : 'transparent'}; transition: background 0.5s;"></div>
-                            ${isSelected ? '<div style="position: absolute; top: 8px; right: 8px; background: var(--color-primary); color: var(--color-on-primary); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: var(--shadow-overlay); z-index: 1;"><i class="fas fa-check"></i></div>' : ''}
+                            ${isSelected ? '<div style="position: absolute; top: 8px; right: 8px; background: var(--color-primary); color: var(--color-on-primary); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: var(--shadow-overlay); z-index: 1;"><iconify-icon icon="ci:check"></iconify-icon></div>' : ''}
                         </div>
                     `;
                 }).join('');
@@ -1019,17 +1019,17 @@
                     ">
                         <div style="display: flex; align-items: center; justify-content: space-between; padding: 32px 32px 20px; border-bottom: 2px solid var(--color-border-divider); flex-shrink: 0;">
                             <h2 style="margin: 0; font-size: 24px; font-weight: 600; color: var(--color-text-primary); display: flex; align-items: center; gap: 12px;">
-                                <i class="fas fa-palette" style="color: var(--color-primary);"></i> Customize Theme
+                                <iconify-icon icon="ci:swatches-palette" style="color: var(--color-primary);"></iconify-icon> Customize Theme
                             </h2>
                             <button id="close-modal-button" style="background: none; border: none; color: var(--color-text-icon); cursor: pointer; padding: 8px; border-radius: 50%; transition: all 0.4s; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
-                                <i class="fas fa-times"></i>
+                                <iconify-icon icon="ci:close-md"></iconify-icon>
                             </button>
                         </div>
                         <div style="overflow-y: auto; flex: 1; padding: 28px 32px 0;">
                         
                         <div style="margin-bottom: 32px;">
                             <label style="display: block; margin-bottom: 16px; font-weight: 500; color: var(--color-text-primary); font-size: 14px;">
-                                <i class="fas fa-fill-drip" style="margin-right: 8px; color: var(--color-primary);"></i>Theme Colors
+                                <iconify-icon icon="ci:water-drop" style="margin-right: 8px; color: var(--color-primary);"></iconify-icon>Theme Colors
                             </label>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                                 <div>
@@ -1051,7 +1051,7 @@
                         
                         <div style="margin-bottom: 32px;">
                             <label style="display: block; margin-bottom: 12px; font-weight: 500; color: var(--color-text-primary); font-size: 14px;">
-                                <i class="fas fa-image" style="margin-right: 8px; color: var(--color-primary);"></i>Wallpaper
+                                <iconify-icon icon="ci:image-01" style="margin-right: 8px; color: var(--color-primary);"></iconify-icon>Wallpaper
                             </label>
                             
                             <div style="margin-bottom: 16px;">
@@ -1082,7 +1082,7 @@
                                     background: var(--color-bg-tertiary);
                                     color: var(--color-text-secondary);
                                 " onmouseover="this.style.borderColor='var(--color-primary)'; this.style.background='var(--color-primary-light)'" onmouseout="this.style.borderColor='var(--color-border)'; this.style.background='var(--color-bg-tertiary)'">
-                                    <i class="fas fa-cloud-upload-alt" style="font-size: 32px; margin-bottom: 8px; display: block; color: var(--color-primary);"></i>
+                                    <iconify-icon icon="ci:cloud-upload" style="font-size: 32px; margin-bottom: 8px; display: block; color: var(--color-primary);"></iconify-icon>
                                     <div style="font-weight: 500; margin-bottom: 4px;">Upload Custom Background</div>
                                     <div style="font-size: 12px; color: var(--color-text-muted);">Click to select an image file</div>
                                     <input type="file" id="background-upload" accept="image/*" style="display: none;">
@@ -1091,7 +1091,7 @@
                                     <div style="position: relative; display: inline-block;">
                                         <img id="uploaded-image-preview" src="${uploadedBackground}" style="max-width: 200px; max-height: 120px; border-radius: 8px; border: 2px solid var(--color-primary); box-shadow: var(--shadow-thumb-selected);">
                                         <button id="remove-uploaded" style="position: absolute; top: -8px; right: -8px; background: var(--color-error-bg); color: var(--color-error-text); border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-overlay);">
-                                            <i class="fas fa-times" style="font-size: 12px;"></i>
+                                            <iconify-icon icon="ci:close-md" style="font-size: 12px;"></iconify-icon>
                                         </button>
                                     </div>
                                 </div>
@@ -1100,7 +1100,7 @@
                             <div style="display: flex; gap: 8px; align-items: center;">
                                 <input type="text" id="background-input" value="${currentBackground && !currentBackground.startsWith('data:') ? currentBackground : ''}" placeholder="Or enter image URL" style="flex: 1; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-primary); color: var(--color-text-primary); font-size: 14px; transition: all 0.4s;">
                                 <button class="button button-secondary" id="clear-background-button" style="white-space: nowrap; padding: 12px 20px;">
-                                    <i class="fas fa-times"></i> Clear
+                                    <iconify-icon icon="ci:close-md"></iconify-icon> Clear
                                 </button>
                             </div>
                         </div>
@@ -1111,7 +1111,7 @@
                                 Cancel
                             </button>
                             <button class="button" id="save-theme-button" style="padding: 12px 24px; background: var(--color-primary); color: var(--color-on-primary); font-weight: 500;">
-                                <i class="fas fa-check" style="margin-right: 8px;"></i>Save Changes
+                                <iconify-icon icon="ci:check" style="margin-right: 8px;"></iconify-icon>Save Changes
                             </button>
                         </div>
                     </div>
@@ -1180,8 +1180,8 @@
                             modal.querySelectorAll('.wallpaper-thumb').forEach(t => {
                                 t.style.borderColor = 'transparent';
                                 t.removeAttribute('data-selected');
-                                const check = t.querySelector('div');
-                                if (check && check.querySelector('i.fa-check')) check.remove();
+                                const check = t.querySelector('div[style*="top: 8px"]');
+                                if (check) check.remove();
                             });
                         };
                         reader.readAsDataURL(file);
@@ -1221,7 +1221,7 @@
                         thumb.setAttribute('data-selected', 'true');
                         const overlay = thumb.querySelector('div[style*="position: absolute; inset"]');
                         if (overlay) overlay.style.background = 'var(--color-overlay)';
-                        thumb.innerHTML = '<div style="position: absolute; inset: 0; background: var(--color-overlay); transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1);"></div><div style="position: absolute; top: 8px; right: 8px; background: var(--color-primary); color: var(--color-on-primary); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: var(--shadow-overlay); z-index: 1; animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;"><i class="fas fa-check"></i></div>';
+                        thumb.innerHTML = '<div style="position: absolute; inset: 0; background: var(--color-overlay); transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1);"></div><div style="position: absolute; top: 8px; right: 8px; background: var(--color-primary); color: var(--color-on-primary); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: var(--shadow-overlay); z-index: 1; animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;"><iconify-icon icon="ci:check"></iconify-icon></div>';
                     });
                     
                     // Add hover effect
@@ -1422,16 +1422,16 @@
                             <button class="button" id="save-search-engine-button">Save</button>
                         </div>
                         <div class="settings-section">
-                            <h2><i class="fas fa-shield-alt"></i> Privacy & Security</h2>
+                            <h2><iconify-icon icon="ci:shield"></iconify-icon> Privacy & Security</h2>
                             <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Manage your privacy and security settings</p>
                             <div class="action-buttons">
-                                <button class="button button-secondary" id="settings-clear-cookies-button"><i class="fas fa-cookie"></i> Clear Cookies</button>
-                                <button class="button button-secondary" id="settings-clear-cache-button"><i class="fas fa-broom"></i> Clear Cache</button>
-                                <button class="button button-secondary" id="settings-clear-storage-button"><i class="fas fa-database"></i> Clear Storage</button>
-                                <button class="button button-secondary" id="settings-clear-all-button"><i class="fas fa-trash-alt"></i> Clear All Data</button>
+                                <button class="button button-secondary" id="settings-clear-cookies-button"><iconify-icon icon="ci:cookie"></iconify-icon> Clear Cookies</button>
+                                <button class="button button-secondary" id="settings-clear-cache-button"><iconify-icon icon="ci:trash-empty"></iconify-icon> Clear Cache</button>
+                                <button class="button button-secondary" id="settings-clear-storage-button"><iconify-icon icon="ci:data"></iconify-icon> Clear Storage</button>
+                                <button class="button button-secondary" id="settings-clear-all-button"><iconify-icon icon="ci:trash-full"></iconify-icon> Clear All Data</button>
                             </div>
                             <div style="margin-top: 16px;">
-                                <button class="button button-secondary" id="settings-view-cookies-button"><i class="fas fa-eye"></i> View Cookies</button>
+                                <button class="button button-secondary" id="settings-view-cookies-button"><iconify-icon icon="ci:show"></iconify-icon> View Cookies</button>
                                 <div id="settings-cookies-display" style="margin-top: 16px;"></div>
                             </div>
                             <div class="form-group" style="margin-top: 20px;">
@@ -1443,7 +1443,7 @@
                             <button class="button" id="settings-save-user-agent-button">Save User Agent</button>
                         </div>
                         <div class="settings-section">
-                            <h2><i class="fas fa-chart-bar"></i> Statistics</h2>
+                            <h2><iconify-icon icon="ci:chart-bar-vertical-01"></iconify-icon> Statistics</h2>
                             <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Your browsing statistics</p>
                             ${(() => {
                                 const stats = getStats();
@@ -1487,13 +1487,13 @@
                                             }
                                             return '<table class="data-table"><thead><tr><th>Site</th><th>Visits</th><th>Action</th></tr></thead><tbody>' +
                                                 mostVisited.map(([domain, count]) => 
-                                                    `<tr><td>${domain}</td><td>${count}</td><td><button class="button button-secondary" onclick="createTab('https://${domain}')"><i class="fas fa-external-link-alt"></i></button></td></tr>`
+                                                    `<tr><td>${domain}</td><td>${count}</td><td><button class="button button-secondary" onclick="createTab('https://${domain}')"><iconify-icon icon="ci:external-link"></iconify-icon></button></td></tr>`
                                                 ).join('') +
                                                 '</tbody></table>';
                                         })()}
                                     </div>
                                     <div style="margin-top: 24px;">
-                                        <button class="button button-secondary" id="clear-statistics-button"><i class="fas fa-trash-alt"></i> Clear Statistics</button>
+                                        <button class="button button-secondary" id="clear-statistics-button"><iconify-icon icon="ci:trash-full"></iconify-icon> Clear Statistics</button>
                                     </div>
                                 `;
                             })()}
@@ -1516,12 +1516,12 @@
                 return `
                     <div class="feature-page">
                         <div class="page-header">
-                            <h1><i class="fas fa-bookmark"></i> Bookmarks</h1>
+                            <h1><iconify-icon icon="ci:bookmark"></iconify-icon> Bookmarks</h1>
                             <p>Manage your saved bookmarks</p>
                         </div>
                         <div class="action-buttons">
-                            <button class="button" id="bookmarks-import-button"><i class="fas fa-upload"></i> Import</button>
-                            <button class="button button-secondary" id="bookmarks-export-button"><i class="fas fa-download"></i> Export</button>
+                            <button class="button" id="bookmarks-import-button"><iconify-icon icon="ci:file-upload"></iconify-icon> Import</button>
+                            <button class="button button-secondary" id="bookmarks-export-button"><iconify-icon icon="ci:download"></iconify-icon> Export</button>
                         </div>
                         <div class="settings-section" style="margin-top: 24px;">
                             <h2>Your Bookmarks (${bookmarks.length})</h2>
@@ -1541,8 +1541,8 @@
                                                 <td>${bookmark.title}</td>
                                                 <td><a href="${bookmark.url}" style="color: var(--color-link);">${bookmark.url}</a></td>
                                                 <td>
-                                                    <button class="button button-secondary" onclick="openBookmark('${bookmark.url}')"><i class="fas fa-external-link-alt"></i></button>
-                                                    <button class="button button-secondary" onclick="deleteBookmark('${bookmark.url}')"><i class="fas fa-trash"></i></button>
+                                                    <button class="button button-secondary" onclick="openBookmark('${bookmark.url}')"><iconify-icon icon="ci:external-link"></iconify-icon></button>
+                                                    <button class="button button-secondary" onclick="deleteBookmark('${bookmark.url}')"><iconify-icon icon="ci:trash-full"></iconify-icon></button>
                                                 </td>
                                             </tr>
                                         `).join('')}
@@ -1567,11 +1567,11 @@
                 return `
                     <div class="feature-page">
                         <div class="page-header">
-                            <h1><i class="fas fa-history"></i> History</h1>
+                            <h1><iconify-icon icon="ci:clock"></iconify-icon> History</h1>
                             <p>Your browsing history (${history.length} entries)</p>
                         </div>
                         <div class="action-buttons">
-                            <button class="button button-secondary" id="clear-history-button"><i class="fas fa-trash"></i> Clear History</button>
+                            <button class="button button-secondary" id="clear-history-button"><iconify-icon icon="ci:trash-full"></iconify-icon> Clear History</button>
                             <input type="text" id="history-search" placeholder="Search history..." class="form-control" style="max-width: 300px; margin-left: auto;">
                         </div>
                         <div class="settings-section" style="margin-top: 24px;">
@@ -1595,8 +1595,8 @@
                                                     <td>${item.title}</td>
                                                     <td><a href="${item.url}" style="color: var(--color-link);">${item.url}</a></td>
                                                     <td>
-                                                        <button class="button button-secondary" onclick="openHistoryItem('${item.url}')" title="Open"><i class="fas fa-external-link-alt"></i></button>
-                                                        <button class="button button-secondary" onclick="deleteHistoryItem('${item.url}', ${item.timestamp})" title="Delete" style="margin-left: 8px;"><i class="fas fa-trash"></i></button>
+                                                        <button class="button button-secondary" onclick="openHistoryItem('${item.url}')" title="Open"><iconify-icon icon="ci:external-link"></iconify-icon></button>
+                                                        <button class="button button-secondary" onclick="deleteHistoryItem('${item.url}', ${item.timestamp})" title="Delete" style="margin-left: 8px;"><iconify-icon icon="ci:trash-full"></iconify-icon></button>
                                                     </td>
                                                 </tr>
                                             `).join('')}
@@ -1615,7 +1615,7 @@
                 return `
                     <div class="feature-page">
                         <div class="page-header">
-                            <h1><i class="fas fa-download"></i> Downloads</h1>
+                            <h1><iconify-icon icon="ci:download"></iconify-icon> Downloads</h1>
                             <p>Your download history</p>
                         </div>
                         <div class="settings-section" style="margin-top: 24px;">
@@ -1652,23 +1652,23 @@
                 return `
                     <div class="feature-page">
                         <div class="page-header">
-                            <h1><i class="fas fa-shield-alt"></i> Privacy & Security</h1>
+                            <h1><iconify-icon icon="ci:shield"></iconify-icon> Privacy & Security</h1>
                             <p>Manage your privacy and security settings</p>
                         </div>
                         <div class="settings-section">
                             <h2>Clear Browsing Data</h2>
                             <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Remove browsing data from this browser</p>
                             <div class="action-buttons">
-                                <button class="button button-secondary" id="clear-cookies-button"><i class="fas fa-cookie"></i> Clear Cookies</button>
-                                <button class="button button-secondary" id="clear-cache-button"><i class="fas fa-broom"></i> Clear Cache</button>
-                                <button class="button button-secondary" id="clear-storage-button"><i class="fas fa-database"></i> Clear Storage</button>
-                                <button class="button button-secondary" id="clear-all-button"><i class="fas fa-trash-alt"></i> Clear All Data</button>
+                                <button class="button button-secondary" id="clear-cookies-button"><iconify-icon icon="ci:cookie"></iconify-icon> Clear Cookies</button>
+                                <button class="button button-secondary" id="clear-cache-button"><iconify-icon icon="ci:trash-empty"></iconify-icon> Clear Cache</button>
+                                <button class="button button-secondary" id="clear-storage-button"><iconify-icon icon="ci:data"></iconify-icon> Clear Storage</button>
+                                <button class="button button-secondary" id="clear-all-button"><iconify-icon icon="ci:trash-full"></iconify-icon> Clear All Data</button>
                             </div>
                         </div>
                         <div class="settings-section">
                             <h2>Cookie Manager</h2>
                             <p style="color: var(--color-text-secondary); margin-bottom: 16px;">View and manage cookies</p>
-                            <button class="button" id="view-cookies-button"><i class="fas fa-eye"></i> View Cookies</button>
+                            <button class="button" id="view-cookies-button"><iconify-icon icon="ci:show"></iconify-icon> View Cookies</button>
                             <div id="cookies-display" style="margin-top: 16px;"></div>
                         </div>
                         <div class="settings-section">
@@ -1692,7 +1692,7 @@
                 return `
                     <div class="feature-page">
                         <div class="page-header">
-                            <h1><i class="fas fa-chart-bar"></i> Statistics</h1>
+                            <h1><iconify-icon icon="ci:chart-bar-vertical-01"></iconify-icon> Statistics</h1>
                             <p>Your browsing statistics</p>
                         </div>
                         <div class="stats-grid">
@@ -1728,7 +1728,7 @@
                                 <button class="devtools-tab" data-tab="storage">Storage</button>
                                 <button class="devtools-tab" data-tab="source">Source</button>
                             </div>
-                            <button class="devtools-close" id="devtools-close"><i class="fas fa-times"></i></button>
+                            <button class="devtools-close" id="devtools-close"><iconify-icon icon="ci:close-md"></iconify-icon></button>
                         </div>
                         <div class="devtools-content">
                             <div id="devtools-console" class="devtools-tab-content active">
@@ -2278,7 +2278,7 @@
                 
                 bookmarkItems.innerHTML = bookmarks.slice(0, 10).map(bookmark => `
                     <div class="bookmark-item" onclick="createTab('${bookmark.url}')">
-                        <i class="fas fa-bookmark"></i>
+                        <iconify-icon icon="ci:bookmark"></iconify-icon>
                         <span>${bookmark.title}</span>
                     </div>
                 `).join('');
@@ -2367,13 +2367,17 @@
                 bookmarkButton?.addEventListener('click', () => {
                     const activeTab = tabs.find(t => t.id === activeTabId);
                     if (activeTab && !activeTab.url.startsWith('jq://')) {
-                        const icon = bookmarkButton.querySelector('i');
-                        if (isBookmarked(activeTab.url)) {
-                            removeBookmark(activeTab.url);
-                            icon.className = 'far fa-star';
-                        } else {
-                            addBookmark(activeTab.url, activeTab.title);
-                            icon.className = 'fas fa-star';
+                        const icon = bookmarkButton.querySelector('iconify-icon');
+                        if (icon) {
+                            if (isBookmarked(activeTab.url)) {
+                                removeBookmark(activeTab.url);
+                                icon.setAttribute('icon', 'ci:star');
+                                icon.style.opacity = '0.5';
+                            } else {
+                                addBookmark(activeTab.url, activeTab.title);
+                                icon.setAttribute('icon', 'ci:star');
+                                icon.style.opacity = '1';
+                            }
                         }
                     }
                 });
@@ -2382,12 +2386,15 @@
                 function updateBookmarkButton() {
                     const activeTab = tabs.find(t => t.id === activeTabId);
                     if (activeTab && bookmarkButton) {
-                        const icon = bookmarkButton.querySelector('i');
+                        const icon = bookmarkButton.querySelector('iconify-icon');
                         if (activeTab.url.startsWith('jq://')) {
                             bookmarkButton.style.display = 'none';
                         } else {
                             bookmarkButton.style.display = 'block';
-                            icon.className = isBookmarked(activeTab.url) ? 'fas fa-star' : 'far fa-star';
+                            if (icon) {
+                                icon.setAttribute('icon', 'ci:star');
+                                icon.style.opacity = isBookmarked(activeTab.url) ? '1' : '0.5';
+                            }
                         }
                     }
                 }
