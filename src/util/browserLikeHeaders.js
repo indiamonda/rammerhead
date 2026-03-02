@@ -14,7 +14,7 @@ const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 
 const DOCUMENT_HEADERS = {
     'user-agent': CHROME_UA,
     'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-    'accept-language': 'en-US,en;q=0.9',
+    'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
     'accept-encoding': 'gzip, deflate, br, zstd',
     'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
     'sec-ch-ua-mobile': '?0',
@@ -32,7 +32,7 @@ const DOCUMENT_HEADERS = {
 const SUBRESOURCE_HEADERS = {
     'user-agent': CHROME_UA,
     'accept': '*/*',
-    'accept-language': 'en-US,en;q=0.9',
+    'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
     'accept-encoding': 'gzip, deflate, br, zstd',
     'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
     'sec-ch-ua-mobile': '?0',
@@ -59,19 +59,29 @@ const CDN_REFERER_MAP = [
     [/\.?twitchcdn\.net$/i, 'https://www.twitch.tv'],
     // Douyin (抖音)
     [/\.?douyin\.com$/i, 'https://www.douyin.com'],
+    [/\.?douyinpic\.com$/i, 'https://www.douyin.com'],
+    [/\.?douyincdn\.com$/i, 'https://www.douyin.com'],
+    [/\.?douyinstatic\.com$/i, 'https://www.douyin.com'],
+    [/\.?iesdouyin\.com$/i, 'https://www.douyin.com'],
     [/\.?byteimg\.com$/i, 'https://www.douyin.com'],
     [/\.?bytecdn\.cn$/i, 'https://www.douyin.com'],
+    [/\.?bytecdn\.com$/i, 'https://www.douyin.com'],
     [/\.?bytegoofy\.com$/i, 'https://www.douyin.com'],
     // Bilibili (哔哩哔哩)
     [/\.?bilibili\.com$/i, 'https://www.bilibili.com'],
+    [/\.?bilibili\.cn$/i, 'https://www.bilibili.com'],
     [/\.?bilivideo\.com$/i, 'https://www.bilibili.com'],
+    [/\.?bilivideo\.cn$/i, 'https://www.bilibili.com'],
     [/\.?hdslb\.com$/i, 'https://www.bilibili.com'],
     [/\.?biliapi\.net$/i, 'https://www.bilibili.com'],
+    [/\.?biliapi\.com$/i, 'https://www.bilibili.com'],
+    [/\.?szbdyd\.com$/i, 'https://www.bilibili.com'],
 ];
 
 // Match both unshuffled (https://...) and shuffled (_rhs~...) proxy URLs
-const PROXY_REQUEST_RE = /^\/[a-z0-9]{32}\/(?:https?:\/\/[^/]+|_rhs~)/i;
-const UNSHUFFLED_ORIGIN_RE = /^\/[a-z0-9]{32}\/(https?:\/\/[^/]+)/i;
+// Support optional base path (e.g. /rammerhead) for reverse-proxy deployments
+const PROXY_REQUEST_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}\/(?:https?:\/\/[^/]+|_rhs~)/i;
+const UNSHUFFLED_ORIGIN_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}\/(https?:\/\/[^/]+)/i;
 
 /**
  * Extract destination origin from proxy URL.
@@ -88,7 +98,7 @@ function getDestinationOrigin(url, sessionStore) {
     const session = sessionStore.get(sessionId);
     if (!session?.shuffleDict) return null;
 
-    const destPartMatch = pathOnly.match(new RegExp(`^\\/[a-z0-9]{32}\\/(.+)$`, 'i'));
+    const destPartMatch = pathOnly.match(new RegExp(`^(?:\\/rammerhead)?\\/[a-z0-9]{32}\\/(.+)$`, 'i'));
     if (!destPartMatch) return null;
     let destPart = destPartMatch[1];
     if (!destPart.startsWith(StrShuffler.shuffledIndicator)) return null;
@@ -114,7 +124,7 @@ function getRefererOriginFromHeader(referer, sessionStore) {
     if (!sessionId || !sessionStore) return null;
     const session = sessionStore.get(sessionId);
     if (!session?.shuffleDict) return null;
-    const pathMatch = referer.match(/\/[a-z0-9]{32}\/(.+?)(?:\?|$)/i);
+    const pathMatch = referer.match(/(?:\/rammerhead)?\/[a-z0-9]{32}\/(.+?)(?:\?|$)/i);
     if (!pathMatch) return null;
     let destPart = pathMatch[1];
     if (destPart.startsWith(StrShuffler.shuffledIndicator)) {
