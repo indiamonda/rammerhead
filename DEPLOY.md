@@ -101,6 +101,8 @@ Deploy Unlinewize to cloud platforms for permanent, always-on access from anywhe
 - ⚠️ Requires CLI and Docker (or use GitHub + Fly’s GitHub integration)
 - ⚠️ Free tier has resource limits
 
+**Fly.io and multiple machines:** Proxy sessions are stored per-instance (in-memory/file). The default `fly.toml` uses `min_machines_running = 1` so all requests hit the same instance and sessions work. If you scale to multiple machines, requests for the same session can land on different instances and you'll see 404s or `/api/shuffleDict` errors. To scale out, you would need a shared session store (e.g. Redis) and [Fly Replay](https://fly.io/docs/blueprints/sticky-sessions/) so requests for a session are replayed to the instance that owns it.
+
 ---
 
 ### Option 3: Replit (Easiest Setup - 30-Day Free Trial)
