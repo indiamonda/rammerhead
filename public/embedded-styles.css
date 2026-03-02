@@ -271,9 +271,11 @@ body {
     transform: scale(1.1);
 }
 
-.tab-close svg {
+.tab-close svg,
+.tab-close .material-icons {
     width: 12px;
     height: 12px;
+    font-size: 16px;
 }
 
 .new-tab-button {
@@ -302,6 +304,10 @@ body {
 
 .new-tab-button:active {
     transform: scale(0.92);
+}
+
+.new-tab-button .material-icons {
+    font-size: 20px;
 }
 
 /* ============================================
@@ -356,9 +362,11 @@ body {
     cursor: not-allowed;
 }
 
-.browser-button svg {
+.browser-button svg,
+.browser-button .material-icons {
     width: 14px;
     height: 14px;
+    font-size: 20px;
 }
 
 .url-bar-wrapper {
@@ -395,6 +403,10 @@ body {
     margin-right: 12px;
     flex-shrink: 0;
     color: var(--color-text-muted);
+    font-size: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .url-input {
@@ -433,6 +445,10 @@ body {
 
 .page-action:active {
     transform: scale(0.95);
+}
+
+.page-action .material-icons {
+    font-size: 18px;
 }
 
 /* ============================================
@@ -476,11 +492,11 @@ body {
 .settings-page {
     font-family: var(--font-family-jq);
 }
-.new-tab-content *:not(iconify-icon),
-.home-page *:not(iconify-icon),
-.feature-page *:not(iconify-icon),
-.sessions-page *:not(iconify-icon),
-.settings-page *:not(iconify-icon) {
+.new-tab-content *:not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not(.fad):not([class^="fa-"]):not(.material-icons),
+.home-page *:not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not(.fad):not([class^="fa-"]):not(.material-icons),
+.feature-page *:not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not(.fad):not([class^="fa-"]):not(.material-icons),
+.sessions-page *:not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not(.fad):not([class^="fa-"]):not(.material-icons),
+.settings-page *:not(.fa):not(.fas):not(.far):not(.fab):not(.fal):not(.fad):not([class^="fa-"]):not(.material-icons) {
     font-family: inherit;
 }
 
@@ -1328,7 +1344,8 @@ body {
     padding-left: 20px;
 }
 
-.menu-item:hover i {
+.menu-item:hover i,
+.menu-item:hover .material-icons {
     color: var(--color-primary);
 }
 
@@ -1336,8 +1353,10 @@ body {
     animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
-.menu-item i {
+.menu-item i,
+.menu-item .material-icons {
     width: 16px;
+    font-size: 20px;
     text-align: center;
     color: var(--color-text-icon);
     transition: color var(--transition-smooth);
