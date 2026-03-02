@@ -79,9 +79,8 @@ const CDN_REFERER_MAP = [
 ];
 
 // Match both unshuffled (https://...) and shuffled (_rhs~...) proxy URLs
-// Support optional base path (e.g. /rammerhead) for reverse-proxy deployments
-const PROXY_REQUEST_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}\/(?:https?:\/\/[^/]+|_rhs~)/i;
-const UNSHUFFLED_ORIGIN_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}\/(https?:\/\/[^/]+)/i;
+const PROXY_REQUEST_RE = /^\/[a-z0-9]{32}\/(?:https?:\/\/[^/]+|_rhs~)/i;
+const UNSHUFFLED_ORIGIN_RE = /^\/[a-z0-9]{32}\/(https?:\/\/[^/]+)/i;
 
 /**
  * Extract destination origin from proxy URL.
@@ -98,7 +97,7 @@ function getDestinationOrigin(url, sessionStore) {
     const session = sessionStore.get(sessionId);
     if (!session?.shuffleDict) return null;
 
-    const destPartMatch = pathOnly.match(new RegExp(`^(?:\\/rammerhead)?\\/[a-z0-9]{32}\\/(.+)$`, 'i'));
+    const destPartMatch = pathOnly.match(new RegExp(`^\\/[a-z0-9]{32}\\/(.+)$`, 'i'));
     if (!destPartMatch) return null;
     let destPart = destPartMatch[1];
     if (!destPart.startsWith(StrShuffler.shuffledIndicator)) return null;
@@ -124,7 +123,7 @@ function getRefererOriginFromHeader(referer, sessionStore) {
     if (!sessionId || !sessionStore) return null;
     const session = sessionStore.get(sessionId);
     if (!session?.shuffleDict) return null;
-    const pathMatch = referer.match(/(?:\/rammerhead)?\/[a-z0-9]{32}\/(.+?)(?:\?|$)/i);
+    const pathMatch = referer.match(/\/[a-z0-9]{32}\/(.+?)(?:\?|$)/i);
     if (!pathMatch) return null;
     let destPart = pathMatch[1];
     if (destPart.startsWith(StrShuffler.shuffledIndicator)) {
