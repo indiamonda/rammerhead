@@ -203,12 +203,15 @@
     var noShuffling = false;
     function addUrlShuffling() {
         const request = new XMLHttpRequest();
-        const sessionId = (location.pathname.slice(1).match(/^[a-z0-9]+/i) || [])[0];
+        // Session ID is the 32-char hex segment before the destination URL (supports optional /rammerhead base path)
+        const pathMatch = location.pathname.match(/\/(?:rammerhead\/)?([a-f0-9]{32})\//i);
+        const sessionId = pathMatch ? pathMatch[1] : (location.pathname.slice(1).match(/^[a-f0-9]{32}/i) || [])[0];
         if (!sessionId) {
             console.warn('cannot get session id from url');
             return;
         }
-        request.open('GET', '/api/shuffleDict?id=' + sessionId, false);
+        const apiPath = location.pathname.indexOf('/rammerhead/') === 0 ? '/rammerhead/api/shuffleDict' : '/api/shuffleDict';
+        request.open('GET', apiPath + '?id=' + sessionId, false);
         request.send();
         if (request.status !== 200) {
             console.warn(

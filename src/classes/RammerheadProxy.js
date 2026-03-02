@@ -461,19 +461,37 @@ class RammerheadProxy extends Proxy {
             ),
             contentType: 'application/x-javascript'
         });
-        this.GET('/api/shuffleDict', (req, res) => {
-            const { id } = new URLPath(req.url).getParams();
-            if (!id) {
-                return httpResponse.badRequest(this.logger, req, res, this.loggerGetIP(req), 'Invalid session id');
+        const shuffleDictHandler = (req, res) => {
+            try {
+                const params = new URLPath(req.url || '').getParams();
+                const id = params && typeof params.id === 'string' ? params.id.trim() : '';
+                if (!id) {
+                    return httpResponse.badRequest(this.logger, req, res, this.loggerGetIP(req), 'Invalid session id');
+                }
+                let session = this.openSessions.get(id);
+                if (!session) {
+                    if (/^[a-f0-9]{32}$/i.test(id)) {
+                        const RammerheadSession = require('./RammerheadSession');
+                        const StrShuffler = require('../util/StrShuffler');
+                        session = new RammerheadSession();
+                        session.shuffleDict = StrShuffler.generateDictionary();
+                        this.openSessions.addSerializedSession(id, session.serializeSession());
+                        session = this.openSessions.get(id) || session;
+                    } else {
+                        return httpResponse.badRequest(this.logger, req, res, this.loggerGetIP(req), 'Invalid session id');
+                    }
+                }
+                const shuffleDict = session.shuffleDict || (session.shuffleDict = require('../util/StrShuffler').generateDictionary());
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(shuffleDict));
+            } catch (e) {
+                this.logger.error(`(shuffleDict) ${e.message}`);
+                res.writeHead(500, { 'Content-Type': 'text/plain' });
+                res.end('Internal Server Error');
             }
-            // Load session from disk if not in memory (fixes 400 when session exists in file store but not yet cached)
-            const session = this.openSessions.get(id);
-            if (!session) {
-                return httpResponse.badRequest(this.logger, req, res, this.loggerGetIP(req), 'Invalid session id');
-            }
-            const shuffleDict = session.shuffleDict || (session.shuffleDict = require('../util/StrShuffler').generateDictionary());
-            res.end(JSON.stringify(shuffleDict) || '');
-        });
+        };
+        this.GET('/api/shuffleDict', shuffleDictHandler);
+        this.GET('/rammerhead/api/shuffleDict', shuffleDictHandler);
     }
     /**
      * @private
