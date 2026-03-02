@@ -154,20 +154,20 @@ body {
 }
 
 /* ============================================
-   Tab Bar - Chrome-like
+   Tab Bar (top row) - Google Material Icons, aligned
    ============================================ */
 .tab-bar {
     background: var(--color-bg-secondary);
     border-bottom: 1px solid var(--color-border);
     display: flex;
     align-items: center;
-    padding: 0 4px;
+    padding: 0 6px;
     overflow-x: auto;
     overflow-y: hidden;
     flex-shrink: 0;
-    min-height: 38px;
-    height: 38px;
-    gap: 0;
+    min-height: 40px;
+    height: 40px;
+    gap: 2px;
     transition: background var(--transition-slow), border-color var(--transition-smooth);
     animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
@@ -189,12 +189,11 @@ body {
     border-radius: 8px 8px 0 0;
     padding: 0 30px 0 12px;
     margin-right: -1px;
-    margin-top: auto;
     cursor: pointer;
     user-select: none;
     min-width: 100px;
     max-width: 240px;
-    height: 30px;
+    height: 32px;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -221,7 +220,6 @@ body {
     z-index: 1;
     border-bottom: 1px solid var(--color-bg-tab-active);
     margin-bottom: -1px;
-    margin-top: auto;
     height: 32px;
     box-shadow: 0 -1px 0 var(--color-bg-tab-active);
     transition: all var(--transition-smooth);
@@ -276,11 +274,16 @@ body {
     width: 12px;
     height: 12px;
     font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .new-tab-button {
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
     border: none;
     background: transparent;
     cursor: pointer;
@@ -288,10 +291,9 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 4px;
+    margin: 0 2px;
     flex-shrink: 0;
     color: var(--color-text-muted);
-    font-size: 12px;
     transition: background var(--transition-smooth), color var(--transition-smooth),
                 transform var(--transition-bounce);
 }
@@ -307,25 +309,39 @@ body {
 }
 
 .new-tab-button .material-icons {
-    font-size: 20px;
+    font-size: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }
 
 /* ============================================
-   Browser Chrome (Top Bar) - Modern Chrome-like
+   Browser Chrome (Top Bar) - Google Material Icons
    ============================================ */
 .browser-chrome {
     background: var(--color-bg-primary);
     border-bottom: 1px solid var(--color-border);
-    padding: 4px 8px;
+    padding: 6px 10px;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     flex-shrink: 0;
+    min-height: 44px;
     height: 44px;
     box-shadow: var(--shadow-chrome);
     transition: background var(--transition-slow), border-color var(--transition-smooth),
                 box-shadow var(--transition-smooth);
     animation: flowUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Keep Material Icons in top bar crisp and aligned */
+.browser-chrome .material-icons,
+.tab-bar .material-icons {
+    font-family: 'Material Icons';
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'liga';
+    user-select: none;
 }
 
 .browser-button {
@@ -364,9 +380,13 @@ body {
 
 .browser-button svg,
 .browser-button .material-icons {
-    width: 14px;
-    height: 14px;
-    font-size: 20px;
+    font-size: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    width: 24px;
+    height: 24px;
 }
 
 .url-bar-wrapper {
@@ -377,8 +397,9 @@ body {
     border: 1px solid transparent;
     border-radius: 20px;
     padding: 0 14px;
-    margin: 0 4px;
-    height: 34px;
+    margin: 0 2px;
+    min-height: 36px;
+    height: 36px;
     transition: background var(--transition-smooth), border-color var(--transition-smooth),
                 box-shadow var(--transition-smooth), outline var(--transition-fast);
     box-shadow: var(--shadow-input);
@@ -398,15 +419,16 @@ body {
 }
 
 .security-icon {
-    width: 16px;
-    height: 16px;
-    margin-right: 12px;
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
     flex-shrink: 0;
     color: var(--color-text-muted);
     font-size: 18px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    line-height: 1;
 }
 
 .url-input {
@@ -414,9 +436,11 @@ body {
     border: none;
     outline: none;
     font-size: 13px;
+    line-height: 20px;
     color: var(--color-text-primary);
     font-family: var(--font-family);
     background: transparent;
+    min-width: 0;
 }
 
 .url-input::placeholder {
@@ -424,17 +448,20 @@ body {
 }
 
 .page-action {
-    width: 20px;
-    height: 20px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
     border: none;
     background: transparent;
     cursor: pointer;
     color: var(--color-text-muted);
-    margin-left: 8px;
+    margin-left: 4px;
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: 50%;
     transition: color var(--transition-smooth), transform var(--transition-bounce);
 }
 
@@ -448,7 +475,11 @@ body {
 }
 
 .page-action .material-icons {
-    font-size: 18px;
+    font-size: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }
 
 /* ============================================
@@ -1381,6 +1412,7 @@ body {
     display: flex;
     align-items: center;
     gap: 2px;
+    flex-shrink: 0;
 }
 
 .download-badge {
