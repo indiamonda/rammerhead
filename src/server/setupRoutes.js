@@ -4,6 +4,7 @@ const httpResponse = require('../util/httpResponse');
 const config = require('../config');
 const StrShuffler = require('../util/StrShuffler');
 const RammerheadSession = require('../classes/RammerheadSession');
+const sessionAffinity = require('../util/sessionAffinity');
 const fs = require('fs');
 const path = require('path');
 
@@ -224,6 +225,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 session.data.restrictIP = null; // Don't restrict IP for device sessions
                 session.shuffleDict = StrShuffler.generateDictionary();
                 sessionStore.addSerializedSession(id, session.serializeSession());
+                sessionAffinity.registerSessionMachineSync(id);
             }
             
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -264,8 +266,9 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 session.data.restrictIP = null;
                 session.shuffleDict = StrShuffler.generateDictionary();
                 sessionStore.addSerializedSession(id, session.serializeSession());
+                sessionAffinity.registerSessionMachineSync(id);
             }
-            
+
             // Get session and shuffle URL
             const session = sessionStore.get(id);
             if (!session.shuffleDict) {
@@ -321,6 +324,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             session.shuffleDict = StrShuffler.generateDictionary();
             
             sessionStore.addSerializedSession(id, session.serializeSession());
+            sessionAffinity.registerSessionMachineSync(id);
             
             // Generate the proxied URL
             const shuffler = new StrShuffler(session.shuffleDict);

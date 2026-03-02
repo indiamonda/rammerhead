@@ -473,9 +473,11 @@ class RammerheadProxy extends Proxy {
                     if (/^[a-f0-9]{32}$/i.test(id)) {
                         const RammerheadSession = require('./RammerheadSession');
                         const StrShuffler = require('../util/StrShuffler');
+                        const sessionAffinity = require('../util/sessionAffinity');
                         session = new RammerheadSession();
                         session.shuffleDict = StrShuffler.generateDictionary();
                         this.openSessions.addSerializedSession(id, session.serializeSession());
+                        sessionAffinity.registerSessionMachineSync(id);
                         session = this.openSessions.get(id) || session;
                     } else {
                         return httpResponse.badRequest(this.logger, req, res, this.loggerGetIP(req), 'Invalid session id');

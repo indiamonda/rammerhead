@@ -1,6 +1,7 @@
 const config = require('../config');
 const getSessionId = require('../util/getSessionId');
 const { injectBrowserLikeHeaders } = require('../util/browserLikeHeaders');
+const sessionAffinity = require('../util/sessionAffinity');
 const fs = require('fs');
 const path = require('path');
 
@@ -9,6 +10,23 @@ const path = require('path');
  * @param {import('../classes/RammerheadSessionAbstractStore')} sessionStore
  */
 module.exports = function setupPipeline(proxyServer, sessionStore) {
+    // Fly.io multi-machine: replay proxy requests to the instance that owns the session (optional, needs Redis)
+    proxyServer.addToOnRequestPipeline(async (req, res, _serverInfo, isRoute) => {
+        if (!sessionAffinity.isEnabled() || isRoute) return false;
+        const pathname = (req.url || '').split('?')[0];
+        const sessionId = getSessionId(req.url) || (pathname.match(/\/([a-f0-9]{32})(?:\/|$)/) || [])[1];
+        if (!sessionId) return false;
+        if (sessionStore.get(sessionId)) return false; // we have it, handle normally
+        const targetMachine = await sessionAffinity.getMachineForSession(sessionId);
+        if (!targetMachine || targetMachine === sessionAffinity.FLY_MACHINE_ID) return false;
+        res.writeHead(307, {
+            'Fly-Replay': `instance=${targetMachine}`,
+            'Set-Cookie': `rh_sid=${sessionId}; Path=/; Max-Age=3600; SameSite=Lax`
+        });
+        res.end();
+        return true;
+    }, true);
+
     // Inject browser-like headers on proxied requests to bypass 403 (Discord, Poki, etc.)
     // Pass sessionStore for Referer/Origin spoofing when URL is shuffled
     proxyServer.addToOnRequestPipeline((req, _res, _serverInfo, isRoute) => {
