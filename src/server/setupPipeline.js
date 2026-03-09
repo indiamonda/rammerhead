@@ -5,6 +5,14 @@ const sessionAffinity = require('../util/sessionAffinity');
 const fs = require('fs');
 const path = require('path');
 
+// Headers that leak proxy/reverse-proxy; strip before forwarding to destination so sites don't block
+const PROXY_LEAK_HEADERS = [
+    'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-protocol',
+    'x-real-ip', 'via', 'forwarded', 'cf-connecting-ip', 'cf-ipcountry', 'cf-ray',
+    'x-request-id', 'x-vercel-id', 'x-amzn-trace-id', 'x-cloud-trace-context',
+    'cdn-loop', 'true-client-ip', 'x-client-ip', 'x-original-url', 'x-rewrite-url'
+];
+
 /**
  * @param {import('../classes/RammerheadProxy')} proxyServer
  * @param {import('../classes/RammerheadSessionAbstractStore')} sessionStore
@@ -127,6 +135,9 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
 
         for (const eachHeader of config.stripClientHeaders) {
             delete req.headers[eachHeader];
+        }
+        for (const name of PROXY_LEAK_HEADERS) {
+            delete req.headers[name];
         }
     });
     Object.assign(proxyServer.rewriteServerHeaders, config.rewriteServerHeaders);

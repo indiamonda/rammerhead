@@ -42,6 +42,9 @@ const SUBRESOURCE_HEADERS = {
     'dnt': '0',
 };
 
+// Destinations that expect Chinese Accept-Language first (by host pattern)
+const ZH_FIRST_HOST_RE = /\.?bilibili\.(com|cn)$|\.?douyin\.com$|\.?biliapi\.|\.?hdslb\.com$|\.?bilivideo\./i;
+
 // CDN/subdomain -> main site origin for Referer (sites block proxy Referer)
 const CDN_REFERER_MAP = [
     [/poki-cdn\.com$/i, 'https://poki.com'],
@@ -121,6 +124,19 @@ function getDestinationOrigin(url, sessionStore) {
  * Used for CDN subresources - CDN expects Referer from main site.
  */
 function getRefererOriginFromHeader(referer, sessionStore) {
+    const full = getRefererFullUrl(referer, sessionStore);
+    if (!full) return null;
+    try {
+        return new URL(full).origin;
+    } catch (_) {
+        return null;
+    }
+}
+
+/**
+ * Get full destination URL from Referer (unshuffled). Use as Referer value so CDNs see a real page path.
+ */
+function getRefererFullUrl(referer, sessionStore) {
     if (!referer || typeof referer !== 'string') return null;
     const sessionId = getSessionId(referer);
     if (!sessionId || !sessionStore) return null;
@@ -137,8 +153,8 @@ function getRefererOriginFromHeader(referer, sessionStore) {
             return null;
         }
     }
-    const originMatch = destPart.match(/^(https?:\/\/[^/]+)/i);
-    return originMatch ? originMatch[1] : null;
+    const firstUrl = destPart.split(',')[0].trim();
+    return /^https?:\/\//i.test(firstUrl) ? firstUrl : null;
 }
 
 /**
@@ -198,7 +214,26 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
 
     const destOrigin = getDestinationOrigin(req.url, sessionStore);
 
-    const headersToInject = isDoc ? { ...DOCUMENT_HEADERS } : SUBRESOURCE_HEADERS;
+    // Compute referer origin early so we can use it for same-site and Accept-Language
+    let refererOrigin = null;
+    if (isDoc) {
+        refererOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
+    } else {
+        refererOrigin = getRefererOriginFromHeader(req.headers['referer'], sessionStore)
+            || getRefererOriginForHost(destOrigin)
+            || destOrigin
+            || getRefererOriginFallback(req.url, req.headers['referer']);
+    }
+
+    const headersToInject = isDoc ? { ...DOCUMENT_HEADERS } : { ...SUBRESOURCE_HEADERS };
+
+    // Destination-aware Accept-Language: Chinese sites expect zh-CN first
+    const originForLang = destOrigin || refererOrigin;
+    try {
+        if (originForLang && ZH_FIRST_HOST_RE.test(new URL(originForLang + '/').hostname)) {
+            headersToInject['accept-language'] = 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7';
+        }
+    } catch (_) {}
 
     // Some sites (e.g. bilibili) are stricter about sec-fetch-site and expect same-origin for their own documents.
     const docOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
@@ -211,26 +246,39 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
         } catch (_) {}
     }
 
+    // For subresources: same-site when dest is CDN under referer (e.g. hdslb.com under bilibili.com)
+    if (!isDoc && refererOrigin && destOrigin && getRefererOriginForHost(destOrigin) === refererOrigin) {
+        headersToInject['sec-fetch-site'] = 'same-site';
+    }
+
     for (const [name, value] of Object.entries(headersToInject)) {
         const lower = name.toLowerCase();
         req.headers[lower] = value;
     }
 
     // Anti-proxy bypass: spoof Referer/Origin so Poki CDN and similar accept requests
-    let refererOrigin = null;
-    if (isDoc) {
-        refererOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
-    } else {
-        // For subresources: prefer parent page from Referer; else map CDN to main site
-        refererOrigin = getRefererOriginFromHeader(req.headers['referer'], sessionStore)
-            || getRefererOriginForHost(destOrigin)
-            || destOrigin
-            || getRefererOriginFallback(req.url, req.headers['referer']);
-    }
     if (refererOrigin) {
-        const ref = refererOrigin.endsWith('/') ? refererOrigin : refererOrigin + '/';
+        // Prefer full Referer URL (with path) when available — some CDNs validate page path
+        const fullRefererUrl = !isDoc ? getRefererFullUrl(req.headers['referer'], sessionStore) : null;
+        const ref = (fullRefererUrl && fullRefererUrl.startsWith(refererOrigin))
+            ? (fullRefererUrl.endsWith('/') ? fullRefererUrl : fullRefererUrl + '/')
+            : (refererOrigin.endsWith('/') ? refererOrigin : refererOrigin + '/');
         req.headers['referer'] = ref;
         if (!isDoc) req.headers['origin'] = refererOrigin;
+    }
+
+    // API-like requests: some backends expect X-Requested-With, Accept: application/json, or sec-fetch-dest: empty
+    if (!isDoc && req.url) {
+        const pathAndQuery = (req.url.split('?')[0] || '').toLowerCase();
+        const accept = (req.headers['accept'] || '').toLowerCase();
+        const looksLikeApi = /\/api\/|\/x\/|\.biliapi\.|api\.bilibili|graphql|\.json/.test(pathAndQuery) || accept.includes('application/json');
+        if (looksLikeApi) {
+            req.headers['x-requested-with'] = 'XMLHttpRequest';
+            req.headers['sec-fetch-dest'] = 'empty';
+            if (accept.includes('*/*') && !accept.includes('application/json')) {
+                req.headers['accept'] = 'application/json, text/plain, */*';
+            }
+        }
     }
 }
 
