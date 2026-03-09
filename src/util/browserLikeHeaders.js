@@ -166,6 +166,12 @@ function isProxiedRequest(req) {
 function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     if (!req?.headers) return;
     if (!isRoute && !isProxiedRequest(req)) return;
+    // Don't overwrite Referer/Origin for task.js — pipeline and hammerhead need the real referer (proxy URL with session id) to warm session and unshuffle
+    let pathname = (req.url || '').split('?')[0];
+    try {
+        pathname = decodeURIComponent(pathname);
+    } catch (_) {}
+    if (pathname === '/task.js') return;
 
     const dest = req.headers['sec-fetch-dest'];
     const mode = req.headers['sec-fetch-mode'];

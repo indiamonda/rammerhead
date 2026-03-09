@@ -28,14 +28,18 @@ RequestPipelineContext.prototype.dispatch = function (openSessions) {
     let sessionId = getSessionId(this.req.url);
     let session = sessionId && openSessions.get(sessionId);
     if (!session) {
-        sessionId = getSessionId(this.req.headers[BUILTIN_HEADERS.referer]);
+        let ref = this.req.headers[BUILTIN_HEADERS.referer];
+        if (Array.isArray(ref)) ref = ref[0];
+        sessionId = getSessionId(ref);
         session = sessionId && openSessions.get(sessionId);
     }
     if (session && session.shuffleDict) {
         const shuffler = new StrShuffler(session.shuffleDict);
         this.req.url = replaceUrl(this.req.url, (url) => shuffler.unshuffle(url));
-        if (getSessionId(this.req.headers[BUILTIN_HEADERS.referer]) === sessionId) {
-            this.req.headers[BUILTIN_HEADERS.referer] = replaceUrl(this.req.headers[BUILTIN_HEADERS.referer], (url) =>
+        let ref = this.req.headers[BUILTIN_HEADERS.referer];
+        if (Array.isArray(ref)) ref = ref[0];
+        if (getSessionId(ref) === sessionId) {
+            this.req.headers[BUILTIN_HEADERS.referer] = replaceUrl(ref, (url) =>
                 shuffler.unshuffle(url)
             );
         }
@@ -50,25 +54,36 @@ const _toProxyUrl = RequestPipelineContext.prototype.toProxyUrl;
 RequestPipelineContext.prototype.toProxyUrl = function (...args) {
     const proxyUrl = _toProxyUrl.apply(this, args);
 
-    if (!this.session.shuffleDict || disableShuffling) return proxyUrl;
+    if (!this.session || !this.session.shuffleDict || disableShuffling) return proxyUrl;
 
     const shuffler = new StrShuffler(this.session.shuffleDict);
     return replaceUrl(proxyUrl, (url) => shuffler.shuffle(url));
 };
 
-// unshuffle task.js referer header
+// unshuffle task.js referer header (avoid 500 when hammerhead parses referer; if session missing, strip referer so hammerhead doesn't throw)
 const Proxy = require('testcafe-hammerhead/lib/proxy/index');
 const __onTaskScriptRequest = Proxy.prototype._onTaskScriptRequest;
 Proxy.prototype._onTaskScriptRequest = async function _onTaskScriptRequest(req, ...args) {
-    let referer = req.headers[BUILTIN_HEADERS.referer];
-    referer = safeDecodeUrl(referer) || referer;
-    const sessionId = getSessionId(referer);
-    const session = sessionId && this.openSessions.get(sessionId);
-    if (session && session.shuffleDict) {
-        const shuffler = new StrShuffler(session.shuffleDict);
-        req.headers[BUILTIN_HEADERS.referer] = replaceUrl(referer, (url) => shuffler.unshuffle(url));
+    try {
+        let referer = req.headers[BUILTIN_HEADERS.referer];
+        if (Array.isArray(referer)) referer = referer[0];
+        referer = safeDecodeUrl(referer) || referer;
+        const sessionId = getSessionId(referer);
+        const session = sessionId && this.openSessions.get(sessionId);
+        if (session && session.shuffleDict) {
+            const shuffler = new StrShuffler(session.shuffleDict);
+            req.headers[BUILTIN_HEADERS.referer] = replaceUrl(referer, (url) => shuffler.unshuffle(url));
+        } else if (sessionId && !session) {
+            // Session not in memory (e.g. task.js requested before document); remove referer so hammerhead doesn't parse shuffled URL and throw
+            delete req.headers[BUILTIN_HEADERS.referer];
+        }
+        return await __onTaskScriptRequest.call(this, req, ...args);
+    } catch (err) {
+        if (typeof console !== 'undefined' && console.warn) {
+            console.warn('(addUrlShuffling) _onTaskScriptRequest error:', err.message);
+        }
+        throw err;
     }
-    return __onTaskScriptRequest.call(this, req, ...args);
 };
 
 // don't shuffle action urls (because we don't get to control the rewriting when the user submits the form)
