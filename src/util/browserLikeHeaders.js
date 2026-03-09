@@ -40,10 +40,13 @@ const SUBRESOURCE_HEADERS = {
     'sec-fetch-site': 'cross-site',
     'sec-fetch-mode': 'cors',
     'dnt': '0',
+    'priority': 'u=1',
 };
 
-// Destinations that expect Chinese Accept-Language first (by host pattern)
-const ZH_FIRST_HOST_RE = /\.?bilibili\.(com|cn)$|\.?douyin\.com$|\.?biliapi\.|\.?hdslb\.com$|\.?bilivideo\./i;
+// Region-specific Accept-Language (host pattern -> value)
+const ZH_FIRST_HOST_RE = /\.?bilibili\.(com|cn)$|\.?douyin\.com$|\.?biliapi\.|\.?hdslb\.com$|\.?bilivideo\.|\.?taobao\.com$|\.?tmall\.|\.?weibo\.com$|\.?zhihu\.com$|\.?qq\.com$|\.?baidu\.com$|\.?jd\.com$|\.?163\.com$/i;
+const JA_FIRST_HOST_RE = /\.?nicovideo\.jp$|\.?yahoo\.co\.jp$|\.?rakuten\.co\.jp$|\.?dmm\.co\.jp$|\.?pixiv\.net$|\.?line\.me$|\.?fc2\.com$/i;
+const KO_FIRST_HOST_RE = /\.?naver\.(com|co\.kr)$|\.?daum\.net$|\.?kakao\.(com|co\.kr)$|\.?nate\.com$|\.?tistory\.com$/i;
 
 // CDN/subdomain -> main site origin for Referer (sites block proxy Referer)
 const CDN_REFERER_MAP = [
@@ -60,7 +63,7 @@ const CDN_REFERER_MAP = [
     // Twitch
     [/\.?twitch\.tv$/i, 'https://www.twitch.tv'],
     [/\.?twitchcdn\.net$/i, 'https://www.twitch.tv'],
-    // Douyin (抖音)
+    // Douyin / TikTok
     [/\.?douyin\.com$/i, 'https://www.douyin.com'],
     [/\.?douyinpic\.com$/i, 'https://www.douyin.com'],
     [/\.?douyincdn\.com$/i, 'https://www.douyin.com'],
@@ -70,7 +73,10 @@ const CDN_REFERER_MAP = [
     [/\.?bytecdn\.cn$/i, 'https://www.douyin.com'],
     [/\.?bytecdn\.com$/i, 'https://www.douyin.com'],
     [/\.?bytegoofy\.com$/i, 'https://www.douyin.com'],
-    // Bilibili (哔哩哔哩)
+    [/\.?tiktok\.com$/i, 'https://www.tiktok.com'],
+    [/\.?tiktokcdn\.com$/i, 'https://www.tiktok.com'],
+    [/\.?musical\.ly$/i, 'https://www.tiktok.com'],
+    // Bilibili
     [/\.?bilibili\.com$/i, 'https://www.bilibili.com'],
     [/\.?bilibili\.cn$/i, 'https://www.bilibili.com'],
     [/\.?bilivideo\.com$/i, 'https://www.bilibili.com'],
@@ -79,6 +85,100 @@ const CDN_REFERER_MAP = [
     [/\.?biliapi\.net$/i, 'https://www.bilibili.com'],
     [/\.?biliapi\.com$/i, 'https://www.bilibili.com'],
     [/\.?szbdyd\.com$/i, 'https://www.bilibili.com'],
+    // Reddit
+    [/\.?reddit\.com$/i, 'https://www.reddit.com'],
+    [/\.?redditstatic\.com$/i, 'https://www.reddit.com'],
+    [/\.?redditmedia\.com$/i, 'https://www.reddit.com'],
+    // Twitter / X
+    [/\.?twitter\.com$/i, 'https://twitter.com'],
+    [/\.?x\.com$/i, 'https://twitter.com'],
+    [/\.?twimg\.com$/i, 'https://twitter.com'],
+    [/\.?abs\.twimg\.com$/i, 'https://twitter.com'],
+    [/\.?pbs\.twimg\.com$/i, 'https://twitter.com'],
+    [/\.?video\.twimg\.com$/i, 'https://twitter.com'],
+    [/\.?ton\.twitter\.com$/i, 'https://twitter.com'],
+    // Instagram
+    [/\.?instagram\.com$/i, 'https://www.instagram.com'],
+    [/\.?cdninstagram\.com$/i, 'https://www.instagram.com'],
+    [/\.?fbcdn\.net$/i, 'https://www.facebook.com'],
+    // Facebook
+    [/\.?facebook\.com$/i, 'https://www.facebook.com'],
+    [/\.?fb\.com$/i, 'https://www.facebook.com'],
+    [/\.?fbcdn\.net$/i, 'https://www.facebook.com'],
+    [/\.?xx\.fbcdn\.net$/i, 'https://www.facebook.com'],
+    // Netflix
+    [/\.?netflix\.com$/i, 'https://www.netflix.com'],
+    [/\.?nflxvideo\.net$/i, 'https://www.netflix.com'],
+    [/\.?nflxso\.net$/i, 'https://www.netflix.com'],
+    [/\.?nflxext\.com$/i, 'https://www.netflix.com'],
+    // Spotify
+    [/\.?spotify\.com$/i, 'https://open.spotify.com'],
+    [/\.?scdn\.co$/i, 'https://open.spotify.com'],
+    [/\.?spotifycdn\.com$/i, 'https://open.spotify.com'],
+    // Vimeo
+    [/\.?vimeo\.com$/i, 'https://vimeo.com'],
+    [/\.?vimeocdn\.com$/i, 'https://vimeo.com'],
+    [/\.?cloud\.vimeo\.com$/i, 'https://vimeo.com'],
+    // Imgur
+    [/\.?imgur\.com$/i, 'https://imgur.com'],
+    [/\.?i\.imgur\.com$/i, 'https://imgur.com'],
+    // GitHub (raw / cdn)
+    [/\.?github\.com$/i, 'https://github.com'],
+    [/\.?githubassets\.com$/i, 'https://github.com'],
+    [/\.?githubusercontent\.com$/i, 'https://github.com'],
+    [/\.?raw\.githubusercontent\.com$/i, 'https://github.com'],
+    // Medium
+    [/\.?medium\.com$/i, 'https://medium.com'],
+    [/\.?cdn-images-\d+\.medium\.com$/i, 'https://medium.com'],
+    // Pinterest
+    [/\.?pinterest\.com$/i, 'https://www.pinterest.com'],
+    [/\.?pinimg\.com$/i, 'https://www.pinterest.com'],
+    // LinkedIn
+    [/\.?linkedin\.com$/i, 'https://www.linkedin.com'],
+    [/\.?licdn\.com$/i, 'https://www.linkedin.com'],
+    // WhatsApp / Meta CDN
+    [/\.?whatsapp\.net$/i, 'https://web.whatsapp.com'],
+    [/\.?whatsapp\.com$/i, 'https://web.whatsapp.com'],
+    [/\.?cdn\.whatsapp\.net$/i, 'https://web.whatsapp.com'],
+    // Telegram
+    [/\.?t\.me$/i, 'https://web.telegram.org'],
+    [/\.?telegram\.org$/i, 'https://web.telegram.org'],
+    [/\.?telegram-cdn\.org$/i, 'https://web.telegram.org'],
+    // Discord CDN (already above, keep)
+    // Steam
+    [/\.?steampowered\.com$/i, 'https://store.steampowered.com'],
+    [/\.?steamcommunity\.com$/i, 'https://steamcommunity.com'],
+    [/\.?steamstatic\.com$/i, 'https://store.steampowered.com'],
+    [/\.?steamcdn-a\.akamaihd\.net$/i, 'https://store.steampowered.com'],
+    // SoundCloud
+    [/\.?soundcloud\.com$/i, 'https://soundcloud.com'],
+    [/\.?sndcdn\.com$/i, 'https://soundcloud.com'],
+    // VK
+    [/\.?vk\.com$/i, 'https://vk.com'],
+    [/\.?vk-cdn\.net$/i, 'https://vk.com'],
+    [/\.?vk\.me$/i, 'https://vk.com'],
+    // Nicovideo (Japan)
+    [/\.?nicovideo\.jp$/i, 'https://www.nicovideo.jp'],
+    [/\.?nimg\.jp$/i, 'https://www.nicovideo.jp'],
+    // Naver (Korea)
+    [/\.?naver\.com$/i, 'https://www.naver.com'],
+    [/\.?naver\.co\.kr$/i, 'https://www.naver.com'],
+    [/\.?navercorp\.com$/i, 'https://www.naver.com'],
+    [/\.?nhncorp\.com$/i, 'https://www.naver.com'],
+    [/\.?pstatic\.net$/i, 'https://www.naver.com'],
+    // Pixiv
+    [/\.?pixiv\.net$/i, 'https://www.pixiv.net'],
+    [/\.?i\.pixiv\.net$/i, 'https://www.pixiv.net'],
+    [/\.?pixiv\.net$/i, 'https://www.pixiv.net'],
+    // Wikipedia / Wikimedia
+    [/\.?wikipedia\.org$/i, 'https://www.wikipedia.org'],
+    [/\.?wikimedia\.org$/i, 'https://www.wikipedia.org'],
+    [/\.?upload\.wikimedia\.org$/i, 'https://www.wikipedia.org'],
+    // Google (drive, docs, etc.)
+    [/\.?google\.com$/i, 'https://www.google.com'],
+    [/\.?googleapis\.com$/i, 'https://www.google.com'],
+    [/\.?gstatic\.com$/i, 'https://www.google.com'],
+    [/\.?googleusercontent\.com$/i, 'https://www.google.com'],
 ];
 
 // Match both unshuffled (https://...) and shuffled (_rhs...) proxy URLs (indicator is _rhs, no tilde).
@@ -177,13 +277,35 @@ function getRefererOriginForHost(destOrigin) {
  */
 function getRefererOriginFallback(url, referer) {
     const combined = ((url || '') + ' ' + (referer || '')).toLowerCase();
-    // Explicit host substring checks for CDN domains that block proxy Referer
     if (/hdslb\.com|bilivideo|biliapi|bilibili\.com|bilibili\.cn|szbdyd\.com/.test(combined)) return 'https://www.bilibili.com';
     if (/poki-cdn|poki\.com/.test(combined)) return 'https://poki.com';
     if (/googlevideo|ytimg|ggpht|youtube\.com/.test(combined)) return 'https://www.youtube.com';
     if (/douyin|byteimg|bytecdn|iesdouyin/.test(combined)) return 'https://www.douyin.com';
+    if (/tiktok|tiktokcdn|musical\.ly/.test(combined)) return 'https://www.tiktok.com';
     if (/discord|discordapp/.test(combined)) return 'https://discord.com';
     if (/twitch|twitchcdn/.test(combined)) return 'https://www.twitch.tv';
+    if (/reddit|redditstatic|redditmedia/.test(combined)) return 'https://www.reddit.com';
+    if (/twitter\.com|twimg\.com|x\.com/.test(combined)) return 'https://twitter.com';
+    if (/instagram|cdninstagram/.test(combined)) return 'https://www.instagram.com';
+    if (/facebook|fbcdn\.net|fb\.com/.test(combined)) return 'https://www.facebook.com';
+    if (/netflix|nflxvideo|nflxso|nflxext/.test(combined)) return 'https://www.netflix.com';
+    if (/spotify|scdn\.co|spotifycdn/.test(combined)) return 'https://open.spotify.com';
+    if (/vimeo|vimeocdn/.test(combined)) return 'https://vimeo.com';
+    if (/imgur\.com|i\.imgur/.test(combined)) return 'https://imgur.com';
+    if (/github|githubassets|githubusercontent/.test(combined)) return 'https://github.com';
+    if (/medium\.com|cdn-images.*medium/.test(combined)) return 'https://medium.com';
+    if (/pinterest|pinimg/.test(combined)) return 'https://www.pinterest.com';
+    if (/linkedin|licdn/.test(combined)) return 'https://www.linkedin.com';
+    if (/whatsapp\.net|whatsapp\.com/.test(combined)) return 'https://web.whatsapp.com';
+    if (/telegram|t\.me/.test(combined)) return 'https://web.telegram.org';
+    if (/steam|steampowered|steamcommunity|steamstatic/.test(combined)) return 'https://store.steampowered.com';
+    if (/soundcloud|sndcdn/.test(combined)) return 'https://soundcloud.com';
+    if (/vk\.com|vk-cdn|vk\.me/.test(combined)) return 'https://vk.com';
+    if (/nicovideo|nimg\.jp/.test(combined)) return 'https://www.nicovideo.jp';
+    if (/naver|pstatic\.net|nhncorp/.test(combined)) return 'https://www.naver.com';
+    if (/pixiv\.net|i\.pixiv/.test(combined)) return 'https://www.pixiv.net';
+    if (/wikipedia|wikimedia|upload\.wikimedia/.test(combined)) return 'https://www.wikipedia.org';
+    if (/googleapis|gstatic|googleusercontent|google\.com/.test(combined)) return 'https://www.google.com';
     if (/cloudflare\.com/.test(combined)) return 'https://www.cloudflare.com';
     return null;
 }
@@ -227,20 +349,28 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
 
     const headersToInject = isDoc ? { ...DOCUMENT_HEADERS } : { ...SUBRESOURCE_HEADERS };
 
-    // Destination-aware Accept-Language: Chinese sites expect zh-CN first
+    // Destination-aware Accept-Language: Chinese / Japanese / Korean sites
     const originForLang = destOrigin || refererOrigin;
     try {
-        if (originForLang && ZH_FIRST_HOST_RE.test(new URL(originForLang + '/').hostname)) {
-            headersToInject['accept-language'] = 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7';
+        if (originForLang) {
+            const host = new URL(originForLang + '/').hostname;
+            if (ZH_FIRST_HOST_RE.test(host)) {
+                headersToInject['accept-language'] = 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7';
+            } else if (JA_FIRST_HOST_RE.test(host)) {
+                headersToInject['accept-language'] = 'ja,en-US;q=0.9,en;q=0.8';
+            } else if (KO_FIRST_HOST_RE.test(host)) {
+                headersToInject['accept-language'] = 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7';
+            }
         }
     } catch (_) {}
 
-    // Some sites (e.g. bilibili) are stricter about sec-fetch-site and expect same-origin for their own documents.
+    // Sites that expect same-origin sec-fetch-site for document requests
+    const SAME_ORIGIN_DOC_RE = /\.?bilibili\.(com|cn)$|\.?twitter\.com$|\.?x\.com$|\.?instagram\.com$|\.?facebook\.com$|\.?tiktok\.com$|\.?reddit\.com$|\.?netflix\.com$|\.?discord\.com$/i;
     const docOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
     if (isDoc && docOrigin) {
         try {
             const host = new URL(docOrigin + '/').hostname.replace(/^www\./, '');
-            if (/\.?bilibili\.com$/i.test(host) || /\.?bilibili\.cn$/i.test(host)) {
+            if (SAME_ORIGIN_DOC_RE.test(host)) {
                 headersToInject['sec-fetch-site'] = 'same-origin';
             }
         } catch (_) {}
@@ -267,17 +397,34 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
         if (!isDoc) req.headers['origin'] = refererOrigin;
     }
 
-    // API-like requests: some backends expect X-Requested-With, Accept: application/json, or sec-fetch-dest: empty
+    // Request-type-aware Accept + sec-fetch-dest (by URL path) — many CDNs/servers validate these
     if (!isDoc && req.url) {
         const pathAndQuery = (req.url.split('?')[0] || '').toLowerCase();
         const accept = (req.headers['accept'] || '').toLowerCase();
         const looksLikeApi = /\/api\/|\/x\/|\.biliapi\.|api\.bilibili|graphql|\.json/.test(pathAndQuery) || accept.includes('application/json');
+        const looksLikeImage = /\.(jpg|jpeg|png|gif|webp|avif|svg|ico|bmp)(\?|$)/.test(pathAndQuery) || /\/img\/|\/image\/|\/images\/|\.ytimg\.|i\.imgur|pbs\.twimg|cdninstagram/.test(pathAndQuery);
+        const looksLikeScript = /\.js(\?|$)/.test(pathAndQuery) || /\/script\/|\.min\.js/.test(pathAndQuery);
+        const looksLikeStyle = /\.css(\?|$)/.test(pathAndQuery) || /\/style\/|\.min\.css/.test(pathAndQuery);
+        const looksLikeFont = /\.(woff2?|ttf|otf|eot)(\?|$)/.test(pathAndQuery);
+
         if (looksLikeApi) {
             req.headers['x-requested-with'] = 'XMLHttpRequest';
             req.headers['sec-fetch-dest'] = 'empty';
             if (accept.includes('*/*') && !accept.includes('application/json')) {
                 req.headers['accept'] = 'application/json, text/plain, */*';
             }
+        } else if (looksLikeImage) {
+            req.headers['sec-fetch-dest'] = 'image';
+            req.headers['accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
+        } else if (looksLikeScript) {
+            req.headers['sec-fetch-dest'] = 'script';
+            req.headers['accept'] = '*/*';
+        } else if (looksLikeStyle) {
+            req.headers['sec-fetch-dest'] = 'style';
+            req.headers['accept'] = 'text/css,*/*;q=0.1';
+        } else if (looksLikeFont) {
+            req.headers['sec-fetch-dest'] = 'font';
+            req.headers['accept'] = 'font/woff2,font/woff,*/*;q=0.9';
         }
     }
 }
