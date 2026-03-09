@@ -10,7 +10,8 @@
  */
 
 const BASE = process.argv[2] || 'https://rammerhead.fly.dev';
-const sessionId = 'debug' + Date.now().toString(36) + '0000000000000001'.slice(0, 32 - 8);
+// Must be 32 hex chars so proxy getSessionId() and session store recognize it
+const sessionId = Array.from(require('crypto').randomBytes(16)).map(b => b.toString(16).padStart(2, '0')).join('');
 
 async function fetchJson(url) {
     const res = await fetch(url);
