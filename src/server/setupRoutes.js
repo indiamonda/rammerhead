@@ -89,6 +89,19 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         res.end('ok');
     });
 
+    // Debug: check if session exists (helps verify Fly single-machine / session lookup)
+    proxyServer.GET('/debug-proxy', (req, res) => {
+        const id = (new URLPath(req.url).getParams().id || '').trim().slice(0, 32);
+        const hasSession = id && id.length === 32 && sessionStore.has(id);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            ok: true,
+            sessionId: id || null,
+            hasSession: !!hasSession,
+            sessionCount: sessionStore.keys().length
+        }));
+    });
+
     const isNotAuthorized = (req, res) => {
         if (!config.password) return;
         const { pwd } = new URLPath(req.url).getParams();

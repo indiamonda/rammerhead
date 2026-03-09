@@ -2,6 +2,15 @@ const RequestPipelineContext = require('testcafe-hammerhead/lib/request-pipeline
 const StrShuffler = require('./StrShuffler');
 const getSessionId = require('./getSessionId');
 
+function safeDecodeUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    try {
+        return decodeURIComponent(url);
+    } catch (_) {
+        return url;
+    }
+}
+
 const replaceUrl = (url, replacer) => {
     //        regex:              https://google.com/    sessionid/   url
     return (url || '').replace(/^((?:[a-z0-9]+:\/\/[^/]+)?(?:\/[^/]+\/))([^]+)/i, function (_, g1, g2) {
@@ -13,6 +22,9 @@ const replaceUrl = (url, replacer) => {
 const BUILTIN_HEADERS = require('testcafe-hammerhead/lib/request-pipeline/builtin-header-names');
 const _dispatch = RequestPipelineContext.prototype.dispatch;
 RequestPipelineContext.prototype.dispatch = function (openSessions) {
+    // Decode path so percent-encoded :// (%3A%2F%2F) from Fly/proxies matches shuffled URLs
+    const rawUrl = this.req.url;
+    this.req.url = safeDecodeUrl(rawUrl) || rawUrl;
     let sessionId = getSessionId(this.req.url);
     let session = sessionId && openSessions.get(sessionId);
     if (!session) {
@@ -48,15 +60,13 @@ RequestPipelineContext.prototype.toProxyUrl = function (...args) {
 const Proxy = require('testcafe-hammerhead/lib/proxy/index');
 const __onTaskScriptRequest = Proxy.prototype._onTaskScriptRequest;
 Proxy.prototype._onTaskScriptRequest = async function _onTaskScriptRequest(req, ...args) {
-    const referer = req.headers[BUILTIN_HEADERS.referer];
-
+    let referer = req.headers[BUILTIN_HEADERS.referer];
+    referer = safeDecodeUrl(referer) || referer;
     const sessionId = getSessionId(referer);
     const session = sessionId && this.openSessions.get(sessionId);
     if (session && session.shuffleDict) {
         const shuffler = new StrShuffler(session.shuffleDict);
-        req.headers[BUILTIN_HEADERS.referer] = replaceUrl(req.headers[BUILTIN_HEADERS.referer], (url) =>
-            shuffler.unshuffle(url)
-        );
+        req.headers[BUILTIN_HEADERS.referer] = replaceUrl(referer, (url) => shuffler.unshuffle(url));
     }
     return __onTaskScriptRequest.call(this, req, ...args);
 };
