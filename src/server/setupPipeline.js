@@ -34,6 +34,21 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return false;
     }, true);
 
+    // Ensure session is in proxy's openSessions so addUrlShuffling dispatch can unshuffle (avoids 400 when document request arrives before or without shuffleDict)
+    proxyServer.addToOnRequestPipeline((req, _res, _serverInfo, isRoute) => {
+        if (isRoute) return false;
+        const sessionId = getSessionId(req.url) || getSessionId(req.headers?.referer || '');
+        if (!sessionId || !sessionStore.has(sessionId)) return false;
+        if (proxyServer.openSessions.get(sessionId)) return false;
+        try {
+            const session = sessionStore.get(sessionId);
+            if (session && typeof session.serializeSession === 'function') {
+                proxyServer.openSessions.addSerializedSession(sessionId, session.serializeSession());
+            }
+        } catch (_) { /* ignore */ }
+        return false;
+    }, true);
+
     // jimmyqrg.github.io: root and /page/ need ?page=extend for iframe content; rewrite to avoid blank
     proxyServer.addToOnRequestPipeline((req, _res, _serverInfo) => {
         if (!req.url) return false;
