@@ -48,8 +48,10 @@ module.exports = {
                 if (cf?.scheme === 'https') isEncrypted = true;
             } catch (_) {}
         }
-        // Fly.io and other proxies: force HTTPS when Host is *.fly.dev so rewrite URLs are always https
-        if (!isEncrypted && hostname && hostname.endsWith('.fly.dev')) isEncrypted = true;
+        // Behind a reverse proxy (cloud): force HTTPS for any non-local host so rewrite URLs are correct
+        if (!isEncrypted && isCloudDeployment && hostname && hostname !== 'localhost' && !/^127\.\d+\.\d+\.\d+$/.test(hostname)) {
+            isEncrypted = true;
+        }
         const protocol = isEncrypted ? 'https:' : 'http:';
         const defaultPort = protocol === 'https:' ? 443 : 80;
         const port = parseInt(portStr, 10);

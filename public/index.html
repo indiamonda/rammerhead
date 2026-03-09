@@ -143,18 +143,9 @@
             const currentHost = window.location.hostname;
             const currentPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
             
-            const isTunnelUrl = currentHost.includes('.loca.lt') || 
-                               currentHost.includes('.ngrok.io') || 
-                               currentHost.includes('.ngrok-free.app') ||
-                               currentHost.includes('.cloudflared.net') ||
-                               currentHost.includes('.onrender.com') ||
-                               currentHost.includes('.fly.dev') ||
-                               currentHost.includes('.vercel.app') ||
-                               currentHost.includes('.repl.co') ||
-                               currentHost.includes('.replit.dev') ||
-                               currentHost.includes('replit.com') ||
-                               currentHost.includes('tunnel') ||
-                               window.location.protocol === 'https:';
+            // Treat as proxy/tunnel if HTTPS or any non-local host (no hardcoded provider list)
+            const isLocalHost = currentHost === 'localhost' || /^127\.\d+\.\d+\.\d+$/.test(currentHost);
+            const isTunnelUrl = window.location.protocol === 'https:' || !isLocalHost;
             
             // Use current host/port for local access so any URL works (localhost, 127.0.0.1, or your LAN IP)
             const targetHost = currentHost;
