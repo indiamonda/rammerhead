@@ -22,8 +22,9 @@ primary_region = "iad"
   force_https = true
   auto_stop_machines = "off"
   auto_start_machines = true
-  # With 6+ machines, set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for session affinity (fly-replay).
-  min_machines_running = 6
+  # Use 1 machine so all requests hit the same session store (no Redis needed).
+  # For 6+ machines: set Upstash secrets and change to min_machines_running = 6.
+  min_machines_running = 1
   processes = ["app"]
 
   [http_service.concurrency]

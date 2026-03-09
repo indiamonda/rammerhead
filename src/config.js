@@ -48,6 +48,8 @@ module.exports = {
                 if (cf?.scheme === 'https') isEncrypted = true;
             } catch (_) {}
         }
+        // Fly.io and other proxies: force HTTPS when Host is *.fly.dev so rewrite URLs are always https
+        if (!isEncrypted && hostname && hostname.endsWith('.fly.dev')) isEncrypted = true;
         const protocol = isEncrypted ? 'https:' : 'http:';
         const defaultPort = protocol === 'https:' ? 443 : 80;
         const port = parseInt(portStr, 10);
@@ -66,8 +68,8 @@ module.exports = {
     // disable or enable localStorage sync (turn off if clients send over huge localStorage data, resulting in huge memory usages)
     disableLocalStorageSync: false,
 
-    // restrict sessions to be only used per IP
-    restrictSessionToIP: true,
+    // restrict sessions to be only used per IP (disabled in cloud: Fly/Render can vary x-forwarded-for)
+    restrictSessionToIP: !isCloudDeployment,
 
     // caching options for js rewrites. (disk caching not recommended for slow HDD disks)
     // recommended: 50mb for memory, 5gb for disk. Larger = more cache hits, less rewriting
