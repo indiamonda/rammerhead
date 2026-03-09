@@ -80,8 +80,10 @@ const CDN_REFERER_MAP = [
 
 // Match both unshuffled (https://...) and shuffled (_rhs...) proxy URLs (indicator is _rhs, no tilde).
 // Optional /rammerhead prefix for reverse-proxy deployments.
-const PROXY_REQUEST_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}\/(?:https?:\/\/[^/]+|_rhs)/i;
-const UNSHUFFLED_ORIGIN_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}\/(https?:\/\/[^/]+)/i;
+// Allow hammerhead-style metadata segments after the session id, e.g.:
+//   /<id>!s!utf-8/_rhs... or /<id>!a!1!s*host/_rhs...
+const PROXY_REQUEST_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(?:https?:\/\/[^/]+|_rhs)/i;
+const UNSHUFFLED_ORIGIN_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(https?:\/\/[^/]+)/i;
 
 /**
  * Extract destination origin from proxy URL.
@@ -98,7 +100,7 @@ function getDestinationOrigin(url, sessionStore) {
     const session = sessionStore.get(sessionId);
     if (!session?.shuffleDict) return null;
 
-    const destPartMatch = pathOnly.match(new RegExp(`^(?:\\/rammerhead)?\\/[a-z0-9]{32}\\/(.+)$`, 'i'));
+    const destPartMatch = pathOnly.match(new RegExp(`^(?:\\/rammerhead)?\\/[a-z0-9]{32}(?:(?:![^\\/]+)*)\\/(.+)$`, 'i'));
     if (!destPartMatch) return null;
     let destPart = destPartMatch[1];
     if (!destPart.startsWith(StrShuffler.shuffledIndicator)) return null;
@@ -124,7 +126,7 @@ function getRefererOriginFromHeader(referer, sessionStore) {
     if (!sessionId || !sessionStore) return null;
     const session = sessionStore.get(sessionId);
     if (!session?.shuffleDict) return null;
-    const pathMatch = referer.match(/(?:\/rammerhead)?\/[a-z0-9]{32}\/(.+?)(?:\?|$)/i);
+    const pathMatch = referer.match(/(?:\/rammerhead)?\/[a-z0-9]{32}(?:(?:![^\/\?]+)*)\/(.+?)(?:\?|$)/i);
     if (!pathMatch) return null;
     let destPart = pathMatch[1];
     if (destPart.startsWith(StrShuffler.shuffledIndicator)) {
@@ -177,7 +179,19 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     const mode = req.headers['sec-fetch-mode'];
     const isDoc = !dest || dest === 'document' || mode === 'navigate';
 
-    const headersToInject = isDoc ? DOCUMENT_HEADERS : SUBRESOURCE_HEADERS;
+    const destOrigin = getDestinationOrigin(req.url, sessionStore);
+
+    const headersToInject = isDoc ? { ...DOCUMENT_HEADERS } : SUBRESOURCE_HEADERS;
+
+    // Some sites (e.g. bilibili) are stricter about sec-fetch-site and expect same-origin for their own documents.
+    if (isDoc && destOrigin) {
+        try {
+            const host = new URL(destOrigin + '/').hostname.replace(/^www\./, '');
+            if (/\.?bilibili\.com$/i.test(host) || /\.?bilibili\.cn$/i.test(host)) {
+                headersToInject['sec-fetch-site'] = 'same-origin';
+            }
+        } catch (_) {}
+    }
 
     for (const [name, value] of Object.entries(headersToInject)) {
         const lower = name.toLowerCase();
@@ -185,7 +199,6 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     }
 
     // Anti-proxy bypass: spoof Referer/Origin so Poki CDN and similar accept requests
-    const destOrigin = getDestinationOrigin(req.url, sessionStore);
     let refererOrigin = null;
     if (isDoc) {
         refererOrigin = destOrigin;
