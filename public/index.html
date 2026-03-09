@@ -72,7 +72,7 @@
                 <button class="browser-button" id="home-button" title="Home">
                     <span class="material-icons">home</span>
                 </button>
-            </div>
+        </div>
             <div class="url-bar-wrapper">
                 <span class="material-icons security-icon" id="security-icon">lock</span>
                 <input 
@@ -113,21 +113,21 @@
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="bookmarks">
                 <span class="material-icons">bookmark</span> Bookmarks
-            </div>
+        </div>
             <div class="menu-item" data-action="history">
                 <span class="material-icons">schedule</span> History
             </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="settings">
                 <span class="material-icons">settings</span> Settings
-            </div>
+                </div>
             <div class="menu-item" data-action="devtools">
                 <span class="material-icons">code</span> Developer Tools
             </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="theme">
                 <span class="material-icons" id="theme-icon">dark_mode</span> <span id="theme-text">Dark Mode</span>
-            </div>
+        </div>
     </div>
 
         <!-- Browser Content -->
@@ -1341,20 +1341,20 @@
                                 Generate never-expire link
                             </button>
                             <div class="message-slot">
-                                <div class="link-result" id="newtab-link-result" style="display: none;">
-                                    <div class="link-result-label">Never-expire link:</div>
-                                    <div class="link-display">
-                                        <div class="link-url" id="newtab-link-url"></div>
-                                        <button class="copy-button" id="newtab-copy-button" disabled>Copy</button>
-                                    </div>
+                            <div class="link-result" id="newtab-link-result" style="display: none;">
+                                <div class="link-result-label">Never-expire link:</div>
+                                <div class="link-display">
+                                    <div class="link-url" id="newtab-link-url"></div>
+                                    <button class="copy-button" id="newtab-copy-button" disabled>Copy</button>
+    </div>
+    </div>
+                            <div class="error-message" id="newtab-error-message"></div>
+                            <div class="loading" id="newtab-loading">
+                                <span class="spinner"></span>
+                                Creating session...
                                 </div>
-                                <div class="error-message" id="newtab-error-message"></div>
-                                <div class="loading" id="newtab-loading">
-                                    <span class="spinner"></span>
-                                    Creating session...
-                                </div>
-                            </div>
-                        </div>
+            </div>
+        </div>
                         ${_jqFooterHTML}
     </div>
                 `;
@@ -2373,11 +2373,11 @@
                     if (activeTab && !activeTab.url.startsWith('jq://')) {
                         const icon = bookmarkButton.querySelector('.material-icons');
                         if (icon) {
-                            if (isBookmarked(activeTab.url)) {
-                                removeBookmark(activeTab.url);
+                        if (isBookmarked(activeTab.url)) {
+                            removeBookmark(activeTab.url);
                                 icon.textContent = 'star_border';
-                            } else {
-                                addBookmark(activeTab.url, activeTab.title);
+                        } else {
+                            addBookmark(activeTab.url, activeTab.title);
                                 icon.textContent = 'star';
                             }
                         }
