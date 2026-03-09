@@ -49,13 +49,13 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return false;
     }, true);
 
-    // task.js is served as a route (isRoute=true) so the warm-up above is skipped; warm session from Referer so addUrlShuffling can unshuffle and hammerhead doesn't 500
+    // task.js / iframe-task.js are served as routes (isRoute=true) so the warm-up above is skipped; warm session from Referer so addUrlShuffling can unshuffle and hammerhead doesn't 500
     proxyServer.addToOnRequestPipeline((req, _res, _serverInfo) => {
         let pathname = (req.url || '').split('?')[0];
         try {
             pathname = decodeURIComponent(pathname);
         } catch (_) {}
-        if (pathname !== '/task.js') return false;
+        if (pathname !== '/task.js' && pathname !== '/iframe-task.js') return false;
         const sessionId = getSessionId(req.headers?.referer || '');
         if (!sessionId || !sessionStore.has(sessionId)) return false;
         if (proxyServer.openSessions.get(sessionId)) return false;
