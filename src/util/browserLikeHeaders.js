@@ -155,6 +155,23 @@ function getRefererOriginForHost(destOrigin) {
     return destOrigin;
 }
 
+/**
+ * Fallback: infer referer origin from URL path or Referer header when normal detection fails.
+ * Handles shuffled URLs where host may appear in plaintext (query, path), or Referer contains hints.
+ */
+function getRefererOriginFallback(url, referer) {
+    const combined = ((url || '') + ' ' + (referer || '')).toLowerCase();
+    // Explicit host substring checks for CDN domains that block proxy Referer
+    if (/hdslb\.com|bilivideo|biliapi|bilibili\.com|bilibili\.cn|szbdyd\.com/.test(combined)) return 'https://www.bilibili.com';
+    if (/poki-cdn|poki\.com/.test(combined)) return 'https://poki.com';
+    if (/googlevideo|ytimg|ggpht|youtube\.com/.test(combined)) return 'https://www.youtube.com';
+    if (/douyin|byteimg|bytecdn|iesdouyin/.test(combined)) return 'https://www.douyin.com';
+    if (/discord|discordapp/.test(combined)) return 'https://discord.com';
+    if (/twitch|twitchcdn/.test(combined)) return 'https://www.twitch.tv';
+    if (/cloudflare\.com/.test(combined)) return 'https://www.cloudflare.com';
+    return null;
+}
+
 function isProxiedRequest(req) {
     if (!req?.url) return false;
     return PROXY_REQUEST_RE.test(req.url.split('?')[0]);
@@ -184,9 +201,10 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     const headersToInject = isDoc ? { ...DOCUMENT_HEADERS } : SUBRESOURCE_HEADERS;
 
     // Some sites (e.g. bilibili) are stricter about sec-fetch-site and expect same-origin for their own documents.
-    if (isDoc && destOrigin) {
+    const docOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
+    if (isDoc && docOrigin) {
         try {
-            const host = new URL(destOrigin + '/').hostname.replace(/^www\./, '');
+            const host = new URL(docOrigin + '/').hostname.replace(/^www\./, '');
             if (/\.?bilibili\.com$/i.test(host) || /\.?bilibili\.cn$/i.test(host)) {
                 headersToInject['sec-fetch-site'] = 'same-origin';
             }
@@ -201,12 +219,13 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     // Anti-proxy bypass: spoof Referer/Origin so Poki CDN and similar accept requests
     let refererOrigin = null;
     if (isDoc) {
-        refererOrigin = destOrigin;
+        refererOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
     } else {
         // For subresources: prefer parent page from Referer; else map CDN to main site
         refererOrigin = getRefererOriginFromHeader(req.headers['referer'], sessionStore)
             || getRefererOriginForHost(destOrigin)
-            || destOrigin;
+            || destOrigin
+            || getRefererOriginFallback(req.url, req.headers['referer']);
     }
     if (refererOrigin) {
         const ref = refererOrigin.endsWith('/') ? refererOrigin : refererOrigin + '/';
