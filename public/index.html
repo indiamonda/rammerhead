@@ -238,38 +238,50 @@
             }
 
             /**
+             * If the string is a shuffled URL (from path or parseProxyUrl), return the real URL.
+             * Handles both "_rhs..." and raw shuffled form like "xVV2v://..." (no _rhs prefix).
+             */
+            function ensureUnshuffled(candidate) {
+                if (!candidate || typeof candidate !== 'string') return candidate;
+                if (candidate.startsWith('http://') || candidate.startsWith('https://')) return candidate;
+                if (!_shuffler) return null;
+                var toUnshuffle = candidate.startsWith(_shuffledIndicator) ? candidate : (_shuffledIndicator + candidate);
+                try {
+                    var real = _shuffler.unshuffle(toUnshuffle);
+                    return (real && (real.startsWith('http://') || real.startsWith('https://'))) ? real : null;
+                } catch (_) {}
+                return null;
+            }
+
+            /**
              * Extract the actual destination URL from a proxied iframe URL.
              * Uses hammerhead's own parser (via the iframe window) when available,
-             * which correctly handles resource-type flags, shuffling, and edge cases.
-             * Falls back to regex extraction + client-side unshuffle.
+             * then ensures the result is unshuffled so the URL bar never shows shuffled form.
              */
             function extractRealUrl(proxyUrl, iframeWindow) {
-                // Strategy 1: use hammerhead's parser inside the iframe (most reliable)
+                var raw = null;
                 try {
                     if (iframeWindow) {
                         var hh = iframeWindow['%hammerhead%'];
                         if (hh && hh.utils && hh.utils.url && hh.utils.url.parseProxyUrl) {
                             var parsed = hh.utils.url.parseProxyUrl(proxyUrl);
-                            if (parsed && parsed.destUrl) return parsed.destUrl;
+                            if (parsed && parsed.destUrl) raw = parsed.destUrl;
                         }
                     }
                 } catch (_) {}
-
-                // Strategy 2: regex + client-side unshuffle
-                // Allow optional hammerhead resource-type flags after the session ID (e.g. !i, !s)
+                if (raw !== null) {
+                    var unshuffled = ensureUnshuffled(raw);
+                    if (unshuffled) return unshuffled;
+                }
                 try {
                     var match = proxyUrl.match(/\/([a-f0-9]{32})[^\/]*\/(.+)/);
                     if (match) {
                         var urlPart = match[2];
-                        if (_shuffler && urlPart.startsWith(_shuffledIndicator)) {
-                            return _shuffler.unshuffle(urlPart);
-                        }
-                        if (!urlPart.startsWith(_shuffledIndicator)) {
-                            return urlPart;
-                        }
+                        var unshuffled = ensureUnshuffled(urlPart);
+                        if (unshuffled) return unshuffled;
+                        if (!urlPart.startsWith(_shuffledIndicator)) return urlPart.startsWith('http') ? urlPart : null;
                     }
                 } catch (_) {}
-
                 return null;
             }
 
