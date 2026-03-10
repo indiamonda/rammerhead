@@ -482,6 +482,44 @@ body {
     line-height: 1;
 }
 
+/* Mic button with level ring */
+.mic-button {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+}
+
+.mic-button .material-icons {
+    position: relative;
+    z-index: 1;
+    font-size: 18px;
+    transition: color 0.2s;
+}
+
+.mic-button.listening .material-icons {
+    color: var(--color-primary);
+}
+
+.mic-level-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.mic-button.listening .mic-level-ring {
+    opacity: 1;
+}
+
+.mic-level-fg {
+    transition: stroke-dashoffset 0.08s linear;
+}
+
 /* ============================================
    Browser Content Area
    ============================================ */

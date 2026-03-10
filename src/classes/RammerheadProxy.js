@@ -18,6 +18,7 @@ require('../util/fixWebsocket');
 require('../util/addMoreErrorGuards');
 require('../util/addUrlShuffling');
 require('../util/patchAsyncResourceProcessor');
+require('../util/patchTlsFingerprint');
 let addJSDiskCache = function (jsCache) {
     require('../util/addJSDiskCache')(jsCache);
     // modification only works once
