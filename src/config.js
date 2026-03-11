@@ -96,71 +96,11 @@ module.exports = {
     //     // 'x-frame-options': (originalHeaderValue) => '',
     //     'x-frame-options': null, // set to null to tell rammerhead that you want to delete it
     // },
-    // cspCompatibilityMode: true = relax CSP for Discord, Poki, jmail (slower). false = minimal rewrite (faster)
-    cspCompatibilityMode: true,
     rewriteServerHeaders: {
-        'x-frame-options': null, // remove to allow loading in iframes
-        'content-security-policy': (value) => {
-            if (!value) return undefined;
-            const compat = module.exports.cspCompatibilityMode;
-            let csp = value
-                .replace(/frame-ancestors[^;]*(;|$)/gi, '')
-                .replace(/upgrade-insecure-requests[^;]*(;|$)/gi, '') // allow mixed content in proxy
-                .trim();
-            if (compat) {
-                csp = csp
-                    .replace(/default-src\s+([^;]*)(;|$)/gi, (m, s) => {
-                        const x = s.trim();
-                        if (/\*/.test(x)) return m;
-                        if (/'none'/.test(x)) return `default-src 'self' blob: wss: ws: data: 'unsafe-inline' 'unsafe-eval';`;
-                        return `default-src ${x} blob: wss: ws: data: 'unsafe-inline' 'unsafe-eval';`;
-                    })
-                    .replace(/base-uri\s+[^;]*(;|$)/gi, "base-uri *;")
-                    .replace(/worker-src\s+([^;]*)(;|$)/gi, (m, s) => (/blob:/.test(s) && /'self'|self/.test(s) ? m : `worker-src 'self' blob: ${s.trim()};`))
-                    .replace(/script-src\s+([^;]*)(;|$)/gi, (m, s) => {
-                        const x = s.trim();
-                        if (/'unsafe-inline'/.test(x) && /'unsafe-eval'/.test(x)) return m;
-                        return `script-src ${x}${/'unsafe-inline'/.test(x) ? '' : " 'unsafe-inline'"}${/'unsafe-eval'/.test(x) ? '' : " 'unsafe-eval'"};`;
-                    })
-                    .replace(/style-src\s+([^;]*)(;|$)/gi, (m, s) => {
-                        const x = s.trim();
-                        if (/'unsafe-inline'/.test(x)) return m;
-                        return `style-src ${x} 'unsafe-inline';`;
-                    })
-                    .replace(/connect-src\s+([^;]*)(;|$)/gi, (m, s) => (/\*/.test(s) ? m : `connect-src ${s.trim()} blob: wss: ws: data:;`))
-                    .replace(/img-src\s+([^;]*)(;|$)/gi, (m, s) => {
-                        const x = s.trim();
-                        if (/\*|data:/.test(x)) return m;
-                        return `img-src ${x} data: blob:;`;
-                    })
-                    .replace(/media-src\s+([^;]*)(;|$)/gi, (m, s) => {
-                        const x = s.trim();
-                        if (/\*/.test(x)) return m;
-                        return `media-src ${x} blob: data:;`;
-                    })
-                    .replace(/frame-src\s+([^;]*)(;|$)/gi, (m, s) => {
-                        const x = s.trim();
-                        if (/\*|'self'/.test(x)) return m;
-                        return `frame-src ${x} 'self' blob: data:;`;
-                    })
-                    .replace(/child-src\s+([^;]*)(;|$)/gi, (m, s) => {
-                        const x = s.trim();
-                        if (/\*|'self'/.test(x)) return m;
-                        return `child-src ${x} 'self' blob: data:;`;
-                    })
-                    .replace(/font-src\s+([^;]*)(;|$)/gi, (m, s) => {
-                        const x = s.trim();
-                        if (/data:|\*/.test(x)) return m;
-                        return `font-src ${x} data: blob:;`;
-                    })
-                    .replace(/object-src\s+([^;]*)(;|$)/gi, (m, s) => {
-                        const x = s.trim();
-                        if (/blob:|\*/.test(x)) return m;
-                        return `object-src ${x} blob:;`;
-                    });
-            }
-            return csp || undefined;
-        },
+        'x-frame-options': null,
+        'content-security-policy': () => undefined,
+        'content-security-policy-report-only': () => undefined,
+        'x-content-security-policy': () => undefined,
     },
 
     //// SESSION STORE CONFIG ////

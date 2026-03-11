@@ -19,6 +19,7 @@ require('../util/addMoreErrorGuards');
 require('../util/addUrlShuffling');
 require('../util/patchAsyncResourceProcessor');
 require('../util/patchTlsFingerprint');
+require('../util/patchScriptProcessing');
 let addJSDiskCache = function (jsCache) {
     require('../util/addJSDiskCache')(jsCache);
     // modification only works once
@@ -178,13 +179,21 @@ class RammerheadProxy extends Proxy {
         this.onUpgradePipeline = [];
         this.websocketRoutes = [];
         this.rewriteServerHeaders = {
-            'permissions-policy': (headerValue) => headerValue && headerValue.replace(/sync-xhr/g, 'sync-yes'),
-            'feature-policy': (headerValue) => headerValue && headerValue.replace(/sync-xhr/g, 'sync-yes'),
+            'permissions-policy': () => undefined,
+            'feature-policy': () => undefined,
             'referrer-policy': () => 'no-referrer-when-downgrade',
             'report-to': () => undefined,
+            'nel': () => undefined,
+            'expect-ct': () => undefined,
+            'document-policy': () => undefined,
+            'origin-agent-cluster': () => undefined,
             'cross-origin-embedder-policy': () => undefined,
             'cross-origin-opener-policy': () => undefined,
-            'cross-origin-resource-policy': () => undefined
+            'cross-origin-resource-policy': () => undefined,
+            'strict-transport-security': () => undefined,
+            'x-dns-prefetch-control': () => undefined,
+            'x-content-type-options': () => undefined,
+            'x-xss-protection': () => undefined,
         };
 
         this.getServerInfo = getServerInfo;

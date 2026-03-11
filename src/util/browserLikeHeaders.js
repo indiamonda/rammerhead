@@ -58,6 +58,45 @@ const CDN_REFERER_MAP = [
     [/\.?discord\.com$/i, 'https://discord.com'],
     [/\.?discordapp\.com$/i, 'https://discord.com'],
     [/\.?cloudflare\.com$/i, 'https://www.cloudflare.com'],
+    // Amazon
+    [/\.?amazon\.(com|co\.\w+|de|fr|it|es|ca|com\.au|co\.jp|in|com\.br)$/i, 'https://www.amazon.com'],
+    [/\.?ssl-images-amazon\.com$/i, 'https://www.amazon.com'],
+    [/\.?media-amazon\.com$/i, 'https://www.amazon.com'],
+    [/\.?images-amazon\.com$/i, 'https://www.amazon.com'],
+    [/\.?cloudfront\.net$/i, 'https://www.amazon.com'],
+    // Netflix
+    [/\.?netflix\.com$/i, 'https://www.netflix.com'],
+    [/\.?nflxvideo\.net$/i, 'https://www.netflix.com'],
+    [/\.?nflxso\.net$/i, 'https://www.netflix.com'],
+    [/\.?nflxext\.com$/i, 'https://www.netflix.com'],
+    [/\.?nflximg\.net$/i, 'https://www.netflix.com'],
+    // LinkedIn
+    [/\.?linkedin\.com$/i, 'https://www.linkedin.com'],
+    [/\.?licdn\.com$/i, 'https://www.linkedin.com'],
+    [/\.?linkedin\.sc$/i, 'https://www.linkedin.com'],
+    // Canva
+    [/\.?canva\.com$/i, 'https://www.canva.com'],
+    [/\.?canva\.cn$/i, 'https://www.canva.com'],
+    // Slack
+    [/\.?slack\.com$/i, 'https://slack.com'],
+    [/\.?slack-edge\.com$/i, 'https://slack.com'],
+    [/\.?slack-imgs\.com$/i, 'https://slack.com'],
+    [/\.?slack-files\.com$/i, 'https://slack.com'],
+    // GitLab
+    [/\.?gitlab\.com$/i, 'https://gitlab.com'],
+    [/\.?gitlab\.net$/i, 'https://gitlab.com'],
+    // Figma
+    [/\.?figma\.com$/i, 'https://www.figma.com'],
+    [/\.?figmacdn\.com$/i, 'https://www.figma.com'],
+    // Reddit
+    [/\.?reddit\.com$/i, 'https://www.reddit.com'],
+    [/\.?redditstatic\.com$/i, 'https://www.reddit.com'],
+    [/\.?redditmedia\.com$/i, 'https://www.reddit.com'],
+    [/\.?redd\.it$/i, 'https://www.reddit.com'],
+    // Vercel
+    [/\.?vercel\.com$/i, 'https://vercel.com'],
+    [/\.?vercel\.app$/i, 'https://vercel.com'],
+    [/\.?vercel-insights\.com$/i, 'https://vercel.com'],
     // YouTube
     [/\.?googlevideo\.com$/i, 'https://www.youtube.com'],
     [/\.?youtube\.com$/i, 'https://www.youtube.com'],
@@ -310,6 +349,13 @@ function getRefererOriginFallback(url, referer) {
     if (/wikipedia|wikimedia|upload\.wikimedia/.test(combined)) return 'https://www.wikipedia.org';
     if (/googleapis|gstatic|googleusercontent|google\.com/.test(combined)) return 'https://www.google.com';
     if (/cloudflare\.com/.test(combined)) return 'https://www.cloudflare.com';
+    if (/amazon\.com|ssl-images-amazon|media-amazon|images-amazon/.test(combined)) return 'https://www.amazon.com';
+    if (/canva\.com|canva\.cn/.test(combined)) return 'https://www.canva.com';
+    if (/slack\.com|slack-edge|slack-imgs|slack-files/.test(combined)) return 'https://slack.com';
+    if (/gitlab\.com|gitlab\.net/.test(combined)) return 'https://gitlab.com';
+    if (/figma\.com|figmacdn/.test(combined)) return 'https://www.figma.com';
+    if (/vercel\.com|vercel\.app|vercel-insights/.test(combined)) return 'https://vercel.com';
+    if (/netlify\.com|netlify\.app/.test(combined)) return 'https://www.netlify.com';
     return null;
 }
 
@@ -368,7 +414,7 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     } catch (_) {}
 
     // Sites that expect same-origin sec-fetch-site for document requests
-    const SAME_ORIGIN_DOC_RE = /\.?bilibili\.(com|cn)$|\.?twitter\.com$|\.?x\.com$|\.?instagram\.com$|\.?facebook\.com$|\.?tiktok\.com$|\.?reddit\.com$|\.?netflix\.com$|\.?discord\.com$/i;
+    const SAME_ORIGIN_DOC_RE = /\.?bilibili\.(com|cn)$|\.?twitter\.com$|\.?x\.com$|\.?instagram\.com$|\.?facebook\.com$|\.?tiktok\.com$|\.?reddit\.com$|\.?netflix\.com$|\.?discord\.com$|\.?amazon\.(com|co\.\w+)$|\.?linkedin\.com$|\.?canva\.com$|\.?slack\.com$|\.?gitlab\.com$|\.?figma\.com$|\.?youtube\.com$|\.?docs\.google\.com$|\.?vercel\.com$|\.?netlify\.com$/i;
     const docOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
     if (isDoc && docOrigin) {
         try {
