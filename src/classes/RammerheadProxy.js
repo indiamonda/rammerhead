@@ -20,6 +20,8 @@ require('../util/addUrlShuffling');
 require('../util/patchAsyncResourceProcessor');
 require('../util/patchTlsFingerprint');
 require('../util/patchScriptProcessing');
+require('../util/patchSameOriginPolicy');
+require('../util/patchResponseHeaders');
 let addJSDiskCache = function (jsCache) {
     require('../util/addJSDiskCache')(jsCache);
     // modification only works once
