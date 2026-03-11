@@ -75,7 +75,7 @@ module.exports = {
 
     // caching options for js rewrites. (disk caching not recommended for slow HDD disks)
     // recommended: 50mb for memory, 5gb for disk. Larger = more cache hits, less rewriting
-    jsCache: new RammerheadJSMemCache(50 * 1024 * 1024), // 50MB (fits 256MB Fly.io; increase for local)
+    jsCache: new RammerheadJSMemCache(25 * 1024 * 1024), // 25MB – keep low on 512MB Fly VMs to avoid OOM
     // jsCache: new RammerheadJSFileCache(path.join(__dirname, '../cache-js'), 5 * 1024 * 1024 * 1024, 50000, enableWorkers),
 
     // whether to disable http2 support or not (from proxy to destination site).
@@ -168,13 +168,13 @@ module.exports = {
     // see src/classes/RammerheadSessionFileCache.js for more details and options
     fileCacheSessionConfig: {
         saveDirectory: path.join(__dirname, '../sessions'),
-        cacheTimeout: 1000 * 60 * 60, // 1 hour - keep sessions in memory longer, fewer disk reads
-        cacheCheckInterval: 1000 * 60 * 30, // 30 minutes (less frequent disk writes)
+        cacheTimeout: 1000 * 60 * 20, // 20 min – evict idle sessions from RAM sooner on 512MB VMs
+        cacheCheckInterval: 1000 * 60 * 10, // 10 min
         deleteUnused: true,
         staleCleanupOptions: {
-            staleTimeout: 1000 * 60 * 60 * 24 * 3, // 3 days
+            staleTimeout: 1000 * 60 * 60 * 24, // 1 day
             maxToLive: null,
-            staleCheckInterval: 1000 * 60 * 60 * 12 // 12 hours (less frequent cleanup)
+            staleCheckInterval: 1000 * 60 * 60 * 6 // 6 hours
         },
         // corrupted session files happens when nodejs exits abruptly while serializing the JSON sessions to disk
         deleteCorruptedSessions: true,
