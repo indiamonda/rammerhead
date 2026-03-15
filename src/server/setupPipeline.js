@@ -76,6 +76,24 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return false;
     }, true);
 
+    // Google services: bypass broken auth redirect chain by rewriting to direct sign-in URL.
+    // accounts.google.com's redirect chain fails with 400 because __Host-GAPS cookies and CSRF
+    // tokens get lost. Going directly to /v3/signin/identifier with flowName works.
+    proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
+        if (!req.url) return false;
+        const GOOGLE_SERVICES_RE = /\/([a-z0-9]{32})\/(https?:\/\/(docs|drive|sheets|slides|forms|sites|keep|calendar|meet|chat|mail|groups)\.google\.com)(\/.*)?$/i;
+        const m = req.url.match(GOOGLE_SERVICES_RE);
+        if (m) {
+            const [, sessionId, origin] = m;
+            const continueUrl = encodeURIComponent(origin + '/');
+            const signinUrl = `/${sessionId}/https://accounts.google.com/v3/signin/identifier?continue=${continueUrl}&flowName=GlifWebSignIn&flowEntry=ServiceLogin`;
+            res.writeHead(302, { location: signinUrl });
+            res.end();
+            return true;
+        }
+        return false;
+    }, true);
+
     // jimmyqrg.github.io: root and /page/ need ?page=extend for iframe content; rewrite to avoid blank
     proxyServer.addToOnRequestPipeline((req, _res, _serverInfo) => {
         if (!req.url) return false;
