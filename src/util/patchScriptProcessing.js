@@ -36,13 +36,52 @@ const FALLBACK = [
     '}'
 ].join('');
 
+// Client-side console capture — runs once per window context (guard: __rhC).
+// Overrides console.log/warn/error/info/debug + window.onerror + unhandledrejection.
+// Batches messages and sends via fetch("/__rh_console") which hammerhead rewrites
+// to go through the proxy. The pipeline handler in setupPipeline.js intercepts it.
+const CONSOLE_CAPTURE = [
+    'if(typeof window!=="undefined"&&!window.__rhC){window.__rhC=1;(function(){',
+    'var C=window.console||{},Q=[],T=0,M=["log","warn","error","info","debug"];',
+    'function S(a){',
+      'if(a===void 0)return"undefined";',
+      'if(a===null)return"null";',
+      'if(a instanceof Error)return(a.stack||a.message||""+a).slice(0,1500);',
+      'if(typeof a==="function")return"f "+( a.name||"anon");',
+      'if(typeof a==="symbol")return a.toString();',
+      'if(typeof a==="object"){try{var s=JSON.stringify(a);return s.length>2e3?s.slice(0,2e3)+"…":s}catch(e){return""+a}}',
+      'var s=""+a;return s.length>2e3?s.slice(0,2e3)+"…":s',
+    '}',
+    'function F(){',
+      'if(!Q.length)return;var b=Q.splice(0,50);',
+      'try{fetch("/__rh_console",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b),keepalive:true})}catch(e){}',
+    '}',
+    'M.forEach(function(m){var o=C[m]||function(){};C[m]=function(){',
+      'try{o.apply(C,arguments)}catch(e){}',
+      'var a=[];for(var i=0;i<arguments.length;i++)a.push(S(arguments[i]));',
+      'Q.push({l:m,a:a,u:(""+location.href).slice(0,200),t:Date.now()});',
+      'if(!T)T=setTimeout(function(){T=0;F()},150)',
+    '}});',
+    'window.addEventListener("error",function(e){',
+      'Q.push({l:"error",a:["[Uncaught] "+S(e.error||e.message)],u:(""+location.href).slice(0,200),t:Date.now()});',
+      'if(!T)T=setTimeout(function(){T=0;F()},150)',
+    '});',
+    'window.addEventListener("unhandledrejection",function(e){',
+      'var r=e.reason;',
+      'Q.push({l:"error",a:["[Promise] "+S(r&&r.stack?r.stack:r)],u:(""+location.href).slice(0,200),t:Date.now()});',
+      'if(!T)T=setTimeout(function(){T=0;F()},150)',
+    '});',
+    'window.console=C',
+    '})()}'
+].join('');
+
 const END_HEADER = headerModule.SCRIPT_PROCESSING_END_HEADER_COMMENT;
 const originalAdd = headerModule.add;
 
 headerModule.add = function patchedAdd(code, isStrictMode, swScopeHeaderValue, nativeAutomation, workerSettings) {
     let result = originalAdd.call(this, code, isStrictMode, swScopeHeaderValue, nativeAutomation, workerSettings);
     if (result.includes(END_HEADER)) {
-        result = result.replace(END_HEADER, END_HEADER + '\n' + FALLBACK + '\n');
+        result = result.replace(END_HEADER, END_HEADER + '\n' + FALLBACK + '\n' + CONSOLE_CAPTURE + '\n');
     }
     return result;
 };

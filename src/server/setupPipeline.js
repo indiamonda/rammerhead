@@ -13,11 +13,124 @@ const PROXY_LEAK_HEADERS = [
     'cdn-loop', 'true-client-ip', 'x-client-ip', 'x-original-url', 'x-rewrite-url'
 ];
 
+const ANSI = { reset: '\x1b[0m', red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', cyan: '\x1b[36m', gray: '\x1b[90m', white: '\x1b[37m', magenta: '\x1b[35m' };
+const LEVEL_STYLE = {
+    error: { color: ANSI.red, label: 'ERR' },
+    warn:  { color: ANSI.yellow, label: 'WRN' },
+    info:  { color: ANSI.cyan, label: 'INF' },
+    debug: { color: ANSI.gray, label: 'DBG' },
+    log:   { color: ANSI.white, label: 'LOG' }
+};
+
+const CTYPE_SHORT = { 'text/html': 'html', 'text/css': 'css', 'text/javascript': 'js', 'application/javascript': 'js',
+    'application/json': 'json', 'application/xml': 'xml', 'text/plain': 'txt', 'image/png': 'png',
+    'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'image/webp': 'webp',
+    'font/woff2': 'woff2', 'font/woff': 'woff', 'application/octet-stream': 'bin' };
+
+function shortType(ct) {
+    if (!ct) return '';
+    const base = ct.split(';')[0].trim().toLowerCase();
+    return CTYPE_SHORT[base] || base.replace(/^(application|text)\//, '');
+}
+
+function formatBytes(n) {
+    if (n < 1024) return n + 'B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + 'KB';
+    return (n / 1048576).toFixed(1) + 'MB';
+}
+
+function statusColor(code) {
+    if (code >= 500) return ANSI.red;
+    if (code >= 400) return ANSI.yellow;
+    if (code >= 300) return ANSI.cyan;
+    if (code >= 200) return ANSI.green;
+    return ANSI.gray;
+}
+
+function printNetRequest(status, ctype, size, ms, url) {
+    let short;
+    try { const u = new URL(url); short = u.host + u.pathname + (u.search || ''); } catch (_) { short = url; }
+    if (short.length > 90) short = short.substring(0, 87) + '...';
+    const sc = statusColor(status);
+    const typ = shortType(ctype).padEnd(5);
+    const sz = formatBytes(size).padStart(8);
+    const time = (ms + 'ms').padStart(7);
+    process.stdout.write(`${sc}${status}${ANSI.reset} ${ANSI.gray}${typ}${ANSI.reset} ${sz} ${ANSI.gray}${time}${ANSI.reset}  ${short}\n`);
+}
+
+function printConsoleMessage(entry) {
+    const s = LEVEL_STYLE[entry.l] || LEVEL_STYLE.log;
+    const ts = new Date(entry.t).toLocaleTimeString();
+    let src = entry.u || '';
+    try { src = new URL(src).host + new URL(src).pathname; } catch (_) {}
+    if (src.length > 60) src = src.substring(0, 57) + '...';
+    const msg = (entry.a || []).join(' ');
+    const line = `${ANSI.gray}${ts}${ANSI.reset} ${s.color}[${s.label}]${ANSI.reset} ${ANSI.gray}${src}${ANSI.reset} ${msg}`;
+    if (entry.l === 'error') process.stderr.write(line + '\n');
+    else process.stdout.write(line + '\n');
+}
+
 /**
  * @param {import('../classes/RammerheadProxy')} proxyServer
  * @param {import('../classes/RammerheadSessionAbstractStore')} sessionStore
  */
 module.exports = function setupPipeline(proxyServer, sessionStore) {
+    // Console capture endpoint — intercepts /__rh_console at the end of any proxied URL path
+    proxyServer.addToOnRequestPipeline((req, res) => {
+        if (!req.url || !req.url.includes('/__rh_console')) return false;
+        if (req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => { body += chunk; if (body.length > 65536) body = body.substring(0, 65536); });
+            req.on('end', () => {
+                try {
+                    const batch = JSON.parse(body);
+                    (Array.isArray(batch) ? batch : [batch]).forEach(printConsoleMessage);
+                } catch (_) {}
+                res.writeHead(204);
+                res.end();
+            });
+        } else {
+            res.writeHead(204);
+            res.end();
+        }
+        return true;
+    }, true);
+
+    // Network logging — logs every proxied request with status, type, size, time, and original URL
+    proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
+        if (isRoute) return false;
+        const m = (req.url || '').match(/^\/[a-z0-9]{32}\/(https?:\/\/.+)$/i);
+        if (!m) return false;
+        const originalUrl = m[1];
+        const start = Date.now();
+        let status = 0, ctype = '', size = 0;
+
+        const _writeHead = res.writeHead;
+        res.writeHead = function (code, reason, headers) {
+            status = code;
+            const h = typeof reason === 'object' ? reason : headers;
+            if (h) {
+                for (const k of Object.keys(h)) {
+                    if (k.toLowerCase() === 'content-type') ctype = h[k];
+                }
+            }
+            return _writeHead.apply(this, arguments);
+        };
+        const _write = res.write;
+        res.write = function (chunk) {
+            if (chunk) size += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
+            return _write.apply(this, arguments);
+        };
+        const _end = res.end;
+        res.end = function (chunk) {
+            if (chunk && chunk.length) size += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
+            if (!ctype && res.getHeader) ctype = res.getHeader('content-type') || '';
+            printNetRequest(status, ctype, size, Date.now() - start, originalUrl);
+            return _end.apply(this, arguments);
+        };
+        return false;
+    }, true);
+
     // Fly.io multi-machine: replay proxy requests to the instance that owns the session (optional, needs Redis)
     proxyServer.addToOnRequestPipeline(async (req, res, _serverInfo, isRoute) => {
         if (!sessionAffinity.isEnabled() || isRoute) return false;
@@ -90,23 +203,6 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             res.writeHead(302, { location: signinUrl });
             res.end();
             return true;
-        }
-        return false;
-    }, true);
-
-    // jimmyqrg.github.io: root and /page/ need ?page=extend for iframe content; rewrite to avoid blank
-    proxyServer.addToOnRequestPipeline((req, _res, _serverInfo) => {
-        if (!req.url) return false;
-        const pathOnly = req.url.split('?')[0];
-        const qs = req.url.includes('?') ? '&' + req.url.split('?')[1] : '';
-        const mRoot = pathOnly.match(/^\/([a-z0-9]{32})\/(https?:\/\/jimmyqrg\.github\.io)\/?$/i);
-        const mPage = pathOnly.match(/^\/([a-z0-9]{32})\/(https?:\/\/jimmyqrg\.github\.io)\/page\/?$/i);
-        if (mRoot) {
-            const [, sessionId, origin] = mRoot;
-            req.url = `/${sessionId}/${origin}/page/?page=extend${qs}`;
-        } else if (mPage && !req.url.includes('page=extend')) {
-            const [, sessionId, origin] = mPage;
-            req.url = `/${sessionId}/${origin}/page/?page=extend${qs}`;
         }
         return false;
     }, true);
