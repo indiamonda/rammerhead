@@ -36,6 +36,65 @@ const FALLBACK = [
     '}'
 ].join('');
 
+// Apparatus-style iframe safety net — catches dynamically created iframes that
+// bypass hammerhead's URL rewriting (race conditions, __proc$Html fallback, etc.).
+// Uses MutationObserver to detect iframes with unproxied src attributes.
+// Fallback chain: proxy URL → blob URL (proxy content) → blob URL (raw content).
+const IFRAME_PROXY = [
+    'if(typeof window!=="undefined"&&typeof document!=="undefined"&&!window.__rhIframe){window.__rhIframe=1;(function(){',
+    'function getHH(){try{return window["%hammerhead%"]}catch(e){return null}}',
+    'function proxyUrl(url){',
+      'var h=getHH();',
+      'if(h&&h.utils&&h.utils.url&&h.utils.url.getProxyUrl){',
+        'try{return h.utils.url.getProxyUrl(url,{resourceType:"i"})}catch(e){}}',
+      'try{var n=performance.getEntriesByType("navigation");',
+      'if(n&&n[0]){var m=n[0].name.match(/^(https?:\\/\\/[^/]+)\\/([a-f0-9]{32})\\//i);',
+      'if(m)return m[1]+"/"+m[2]+"/"+url}}catch(e){}',
+      'return null',
+    '}',
+    'function isAbs(s){return!!s&&typeof s==="string"&&/^https?:\\/\\//i.test(s)}',
+    'function blobLoad(el,html){',
+      'if(!html)return;',
+      'try{el.src=URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}))}catch(e){}',
+    '}',
+    'function fixIframe(el){',
+      'if(!el||el.tagName!=="IFRAME"||el.__rhIf)return;',
+      'var src=el.getAttribute("src")||"";',
+      'if(!isAbs(src))return;',
+      'el.__rhIf=1;',
+      'if(!getHH()){var p=proxyUrl(src);if(p)try{el.setAttribute("src",p)}catch(e){}}',
+      'var pu=proxyUrl(src);if(!pu)return;',
+      'el.addEventListener("error",function(){',
+        'fetch(pu,{credentials:"include"}).then(function(r){',
+          'return r.ok?r.text():Promise.reject()}).then(function(h){blobLoad(el,h)',
+        '}).catch(function(){',
+          'fetch("/__rh_raw",{method:"POST",headers:{"Content-Type":"application/json"},',
+            'body:JSON.stringify({url:src})}).then(function(r){',
+            'return r.ok?r.text():null}).then(function(h){blobLoad(el,h)',
+          '}).catch(function(){})',
+        '})',
+      '},{once:true})',
+    '}',
+    'function startObs(){',
+      'var root=document.documentElement;',
+      'if(!root){document.addEventListener("DOMContentLoaded",startObs);return}',
+      'try{new MutationObserver(function(ml){',
+        'for(var i=0;i<ml.length;i++){var m=ml[i];',
+          'if(m.type==="childList"){',
+            'for(var j=0;j<m.addedNodes.length;j++){var n=m.addedNodes[j];',
+              'if(n.nodeType!==1)continue;',
+              'if(n.tagName==="IFRAME")fixIframe(n);',
+              'else try{var f=n.getElementsByTagName("iframe");',
+              'for(var k=0;k<f.length;k++)fixIframe(f[k])}catch(e){}}',
+          '}else if(m.type==="attributes"&&m.target&&m.target.tagName==="IFRAME"){',
+            'm.target.__rhIf=0;fixIframe(m.target)}',
+        '}',
+      '}).observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:["src"]})}catch(e){}',
+    '}',
+    'startObs()',
+    '})()}'
+].join('');
+
 // Client-side console capture — runs once per window context (guard: __rhC).
 // Overrides console.log/warn/error/info/debug + window.onerror + unhandledrejection.
 // Batches messages and sends via fetch("/__rh_console") which hammerhead rewrites
@@ -81,7 +140,7 @@ const originalAdd = headerModule.add;
 headerModule.add = function patchedAdd(code, isStrictMode, swScopeHeaderValue, nativeAutomation, workerSettings) {
     let result = originalAdd.call(this, code, isStrictMode, swScopeHeaderValue, nativeAutomation, workerSettings);
     if (result.includes(END_HEADER)) {
-        result = result.replace(END_HEADER, END_HEADER + '\n' + FALLBACK + '\n' + CONSOLE_CAPTURE + '\n');
+        result = result.replace(END_HEADER, END_HEADER + '\n' + FALLBACK + '\n' + IFRAME_PROXY + '\n' + CONSOLE_CAPTURE + '\n');
     }
     return result;
 };

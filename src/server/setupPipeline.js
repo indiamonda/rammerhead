@@ -1,3 +1,5 @@
+const http = require('http');
+const https = require('https');
 const config = require('../config');
 const getSessionId = require('../util/getSessionId');
 const { injectBrowserLikeHeaders } = require('../util/browserLikeHeaders');
@@ -93,6 +95,75 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             res.writeHead(204);
             res.end();
         }
+        return true;
+    }, true);
+
+    // Raw content proxy for Apparatus-style iframe blob loading.
+    // When hammerhead's JS rewriting breaks iframe content (games, SPAs), the client
+    // falls back to fetching raw HTML without hammerhead processing. A <base> tag is
+    // injected so relative URLs resolve correctly from the blob: context.
+    proxyServer.addToOnRequestPipeline((req, res) => {
+        if (!req.url || !req.url.includes('/__rh_raw')) return false;
+
+        if (req.method === 'OPTIONS') {
+            res.writeHead(204, {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST',
+                'Access-Control-Allow-Headers': 'Content-Type',
+            });
+            res.end();
+            return true;
+        }
+        if (req.method !== 'POST') { res.writeHead(405); res.end(); return true; }
+
+        let body = '';
+        req.on('data', chunk => { body += chunk; if (body.length > 4096) body = body.substring(0, 4096); });
+        req.on('end', () => {
+            let targetUrl;
+            try { targetUrl = JSON.parse(body).url; } catch (_) { res.writeHead(400); res.end(); return; }
+            if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) { res.writeHead(400); res.end(); return; }
+
+            function doFetch(url, hops) {
+                if (hops > 5) { res.writeHead(502); res.end(); return; }
+                let parsed;
+                try { parsed = new URL(url); } catch (_) { res.writeHead(400); res.end(); return; }
+                const lib = parsed.protocol === 'https:' ? https : http;
+                const opts = {
+                    hostname: parsed.hostname,
+                    port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+                    path: parsed.pathname + parsed.search,
+                    headers: {
+                        'Host': parsed.host,
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept-Encoding': 'identity',
+                    },
+                    timeout: 12000,
+                    rejectUnauthorized: false,
+                };
+                const fetchReq = lib.get(opts, fetchRes => {
+                    if (fetchRes.statusCode >= 300 && fetchRes.statusCode < 400 && fetchRes.headers.location) {
+                        try { doFetch(new URL(fetchRes.headers.location, url).href, hops + 1); } catch (_) { res.writeHead(502); res.end(); }
+                        return;
+                    }
+                    const chunks = [];
+                    fetchRes.on('data', c => chunks.push(c));
+                    fetchRes.on('end', () => {
+                        let html = Buffer.concat(chunks).toString('utf-8');
+                        const base = `<base href="${url.replace(/"/g, '&quot;')}">`;
+                        if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, '$&' + base);
+                        else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, '$&<head>' + base + '</head>');
+                        else html = base + html;
+                        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+                        res.end(html);
+                    });
+                });
+                fetchReq.on('error', () => { try { res.writeHead(502); res.end(); } catch (_) {} });
+                fetchReq.on('timeout', () => { fetchReq.destroy(); try { res.writeHead(504); res.end(); } catch (_) {} });
+            }
+            doFetch(targetUrl, 0);
+        });
         return true;
     }, true);
 
