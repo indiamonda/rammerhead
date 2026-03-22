@@ -650,22 +650,35 @@
                     return;
                 }
 
+                // Raw mode: prefix URL with "raw!" to bypass hammerhead's JS rewriting
+                // (Apparatus-style proxy — better for React/Next.js/complex SPAs)
+                let rawMode = false;
+                if (url.startsWith('raw!')) {
+                    rawMode = true;
+                    url = url.slice(4);
+                }
+
                 // Normalize URL before processing
                 const normalizedUrl = normalizeUrl(url);
                 const sessionId = getDeviceSessionId();
                 
                 // Ensure session exists and get proxied URL with proper shuffling
                 let proxiedUrl;
-                try {
-                    const response = await fetch(`${basePath}/getproxiedurl?id=${encodeURIComponent(sessionId)}&url=${encodeURIComponent(normalizedUrl)}`);
-                    if (!response.ok) {
-                        throw new Error(`Server error: ${response.status}`);
-                    }
-                    const data = await response.json();
-                    proxiedUrl = data.proxiedUrl || `${basePath}/${sessionId}/${normalizedUrl}`;
-                } catch (_) {
+                if (rawMode) {
                     try { await fetch(`${basePath}/ensuresession?id=${encodeURIComponent(sessionId)}`); } catch (_) {}
-                    proxiedUrl = `${basePath}/${sessionId}/${normalizedUrl}`;
+                    proxiedUrl = `${basePath}/${sessionId}!raw/${normalizedUrl}`;
+                } else {
+                    try {
+                        const response = await fetch(`${basePath}/getproxiedurl?id=${encodeURIComponent(sessionId)}&url=${encodeURIComponent(normalizedUrl)}`);
+                        if (!response.ok) {
+                            throw new Error(`Server error: ${response.status}`);
+                        }
+                        const data = await response.json();
+                        proxiedUrl = data.proxiedUrl || `${basePath}/${sessionId}/${normalizedUrl}`;
+                    } catch (_) {
+                        try { await fetch(`${basePath}/ensuresession?id=${encodeURIComponent(sessionId)}`); } catch (_) {}
+                        proxiedUrl = `${basePath}/${sessionId}/${normalizedUrl}`;
+                    }
                 }
 
                 // Ensure shuffler is ready (fetch shuffle dict after session exists)
@@ -674,9 +687,9 @@
                 }
                 
                 // Store actual URL in tab (always the real URL, not shuffled)
-                tab.url = normalizedUrl;
+                tab.url = rawMode ? 'raw!' + normalizedUrl : normalizedUrl;
                 if (tabId === activeTabId) {
-                    urlInput.value = normalizedUrl;
+                    urlInput.value = tab.url;
                 }
 
                 // Clear any wallpaper background from newtab
@@ -691,7 +704,13 @@
                             const win = iframe.contentWindow;
                             if (!win) return;
                             const currentUrl = win.location.href;
-                            const destUrl = extractRealUrl(currentUrl, win);
+                            let destUrl;
+                            if (rawMode) {
+                                destUrl = extractRealUrl(currentUrl, win) || currentUrl;
+                                if (destUrl && destUrl.startsWith('http')) destUrl = 'raw!' + destUrl;
+                            } else {
+                                destUrl = extractRealUrl(currentUrl, win);
+                            }
                             if (destUrl && destUrl !== tab.url && tabId === activeTabId) {
                                 tab.url = destUrl;
                                 urlInput.value = destUrl;

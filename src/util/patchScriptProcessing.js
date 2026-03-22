@@ -39,17 +39,27 @@ const FALLBACK = [
 // Apparatus-style iframe safety net — catches dynamically created iframes that
 // bypass hammerhead's URL rewriting (race conditions, __proc$Html fallback, etc.).
 // Uses MutationObserver to detect iframes with unproxied src attributes.
-// Fallback chain: proxy URL → blob URL (proxy content) → blob URL (raw content).
+// Fallback chain: proxy URL → blob URL (proxy content) → blob URL (raw content via /__rh_raw with bridge).
 const IFRAME_PROXY = [
     'if(typeof window!=="undefined"&&typeof document!=="undefined"&&!window.__rhIframe){window.__rhIframe=1;(function(){',
     'function getHH(){try{return window["%hammerhead%"]}catch(e){return null}}',
+    'var _pOrig,_sid;',
+    'function getCtx(){',
+      'if(_pOrig)return true;',
+      'try{var h=getHH();if(h&&h.settings&&h.settings._settings){',
+        'var s=h.settings._settings;',
+        '_sid=s.sessionId;',
+        '_pOrig=s.forceProxySrcForImage?null:(location.protocol+"//"+location.host)}}catch(e){}',
+      'if(!_pOrig){try{var n=performance.getEntriesByType("navigation");',
+        'if(n&&n[0]){var m=n[0].name.match(/^(https?:\\/\\/[^/]+)\\/([a-f0-9]{32})\\//i);',
+        'if(m){_pOrig=m[1];_sid=m[2]}}}catch(e){}}',
+      'return!!_pOrig&&!!_sid',
+    '}',
     'function proxyUrl(url){',
       'var h=getHH();',
       'if(h&&h.utils&&h.utils.url&&h.utils.url.getProxyUrl){',
         'try{return h.utils.url.getProxyUrl(url,{resourceType:"i"})}catch(e){}}',
-      'try{var n=performance.getEntriesByType("navigation");',
-      'if(n&&n[0]){var m=n[0].name.match(/^(https?:\\/\\/[^/]+)\\/([a-f0-9]{32})\\//i);',
-      'if(m)return m[1]+"/"+m[2]+"/"+url}}catch(e){}',
+      'if(getCtx())return _pOrig+"/"+_sid+"/"+url;',
       'return null',
     '}',
     'function isAbs(s){return!!s&&typeof s==="string"&&/^https?:\\/\\//i.test(s)}',
@@ -68,8 +78,9 @@ const IFRAME_PROXY = [
         'fetch(pu,{credentials:"include"}).then(function(r){',
           'return r.ok?r.text():Promise.reject()}).then(function(h){blobLoad(el,h)',
         '}).catch(function(){',
+          'if(!getCtx())return;',
           'fetch("/__rh_raw",{method:"POST",headers:{"Content-Type":"application/json"},',
-            'body:JSON.stringify({url:src})}).then(function(r){',
+            'body:JSON.stringify({url:src,session:_sid})}).then(function(r){',
             'return r.ok?r.text():null}).then(function(h){blobLoad(el,h)',
           '}).catch(function(){})',
         '})',

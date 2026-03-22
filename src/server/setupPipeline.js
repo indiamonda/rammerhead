@@ -1,5 +1,6 @@
 const http = require('http');
 const https = require('https');
+const zlib = require('zlib');
 const config = require('../config');
 const getSessionId = require('../util/getSessionId');
 const { injectBrowserLikeHeaders } = require('../util/browserLikeHeaders');
@@ -72,11 +73,138 @@ function printConsoleMessage(entry) {
     else process.stdout.write(line + '\n');
 }
 
+// Apparatus-style bridge script: lightweight URL interception without JS rewriting.
+// Injected into raw-mode pages so fetch/XHR/dynamic elements route through the proxy.
+function buildBridgeScript(proxyOrigin, sessionId) {
+    return `<script>(function(){
+var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sessionId)};
+function px(u){return O+'/'+S+'/'+u}
+function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
+return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
+var oF=window.fetch;if(oF)window.fetch=function(u,o){
+if(typeof u==='string'&&isExt(u))u=px(u);
+else if(u&&typeof u==='object'&&u.url&&isExt(u.url)){try{u=new Request(px(u.url),u)}catch(e){}}
+return oF.call(this,u,o)};
+var XP=XMLHttpRequest.prototype,oX=XP.open;
+XP.open=function(m,u){if(typeof u==='string'&&isExt(u))arguments[1]=px(u);return oX.apply(this,arguments)};
+if(typeof EventSource!=='undefined'){var oE=EventSource;
+window.EventSource=function(u,o){if(isExt(u))u=px(u);return new oE(u,o)};
+window.EventSource.prototype=oE.prototype}
+var oW=window.open;if(oW)window.open=function(u){
+if(typeof u==='string'&&isExt(u))arguments[0]=px(u);return oW.apply(this,arguments)};
+function fixEl(el){if(!el||el.nodeType!==1||el.__rhRaw)return;el.__rhRaw=1;
+var t=el.tagName;
+if((t==='IFRAME'||t==='SCRIPT'||t==='IMG'||t==='SOURCE'||t==='VIDEO'||t==='AUDIO'||t==='EMBED')&&isExt(el.getAttribute('src')))el.setAttribute('src',px(el.getAttribute('src')));
+if((t==='LINK'||t==='A'||t==='AREA')&&isExt(el.getAttribute('href')))el.setAttribute('href',px(el.getAttribute('href')));
+if(t==='FORM'&&isExt(el.getAttribute('action')))el.setAttribute('action',px(el.getAttribute('action')));
+if(t==='OBJECT'&&isExt(el.getAttribute('data')))el.setAttribute('data',px(el.getAttribute('data')))}
+function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
+for(var i=0;i<els.length;i++)fixEl(els[i])}catch(e){}}
+function startObs(){var r=document.documentElement;if(!r){document.addEventListener('DOMContentLoaded',startObs);return}
+new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){var m=ml[i];
+if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++)fixTree(m.addedNodes[j])}
+else if(m.type==='attributes')fixEl(m.target)}
+}).observe(r,{childList:true,subtree:true,attributes:true,attributeFilter:['src','href','action','data']})}
+startObs();
+document.addEventListener('click',function(e){var a=e.target.closest('a[href]');
+if(a&&isExt(a.getAttribute('href'))){a.setAttribute('href',px(a.getAttribute('href')))}},true);
+document.addEventListener('submit',function(e){var f=e.target;
+if(f&&f.tagName==='FORM'&&isExt(f.getAttribute('action'))){f.setAttribute('action',px(f.getAttribute('action')))}},true);
+})()</script>`;
+}
+
+// Fetch a URL with browser-like headers, following redirects. Returns {status, headers, body} via callback.
+function rawFetch(url, callback, hops) {
+    if (!hops) hops = 0;
+    if (hops > 5) return callback(new Error('too many redirects'));
+    let parsed;
+    try { parsed = new URL(url); } catch (_) { return callback(new Error('bad url')); }
+    const lib = parsed.protocol === 'https:' ? https : http;
+    const opts = {
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        headers: {
+            'Host': parsed.host,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Upgrade-Insecure-Requests': '1',
+        },
+        timeout: 15000,
+        rejectUnauthorized: false,
+    };
+    const req = lib.get(opts, fetchRes => {
+        if (fetchRes.statusCode >= 300 && fetchRes.statusCode < 400 && fetchRes.headers.location) {
+            try { return rawFetch(new URL(fetchRes.headers.location, url).href, callback, hops + 1); }
+            catch (_) { return callback(new Error('redirect failed')); }
+        }
+        let stream = fetchRes;
+        const enc = (fetchRes.headers['content-encoding'] || '').toLowerCase();
+        if (enc === 'gzip') stream = fetchRes.pipe(zlib.createGunzip());
+        else if (enc === 'deflate') stream = fetchRes.pipe(zlib.createInflate());
+        else if (enc === 'br') stream = fetchRes.pipe(zlib.createBrotliDecompress());
+        const chunks = [];
+        stream.on('data', c => chunks.push(c));
+        stream.on('end', () => callback(null, fetchRes.statusCode, fetchRes.headers, Buffer.concat(chunks)));
+        stream.on('error', e => callback(e));
+    });
+    req.on('error', e => callback(e));
+    req.on('timeout', () => { req.destroy(); callback(new Error('timeout')); });
+}
+
 /**
  * @param {import('../classes/RammerheadProxy')} proxyServer
  * @param {import('../classes/RammerheadSessionAbstractStore')} sessionStore
  */
 module.exports = function setupPipeline(proxyServer, sessionStore) {
+    // Raw proxy mode (Apparatus-style): bypasses hammerhead's JS rewriting entirely.
+    // URL format: /SESSION!raw/https://example.com/
+    // Serves content with a lightweight bridge script that intercepts fetch/XHR/DOM
+    // mutations at runtime instead of rewriting all JS at compile time.
+    proxyServer.addToOnRequestPipeline((req, res) => {
+        const m = (req.url || '').match(/^\/([a-f0-9]{32})!raw\/(https?:\/\/.+)$/i);
+        if (!m) return false;
+        const sessionId = m[1];
+        const targetUrl = m[2];
+        const serverInfo = proxyServer.getServerInfo(req);
+        const proxyOrigin = `${serverInfo.protocol}//${serverInfo.hostname}${serverInfo.port == 443 || serverInfo.port == 80 ? '' : ':' + serverInfo.port}`;
+
+        rawFetch(targetUrl, (err, status, headers, body) => {
+            if (err) { res.writeHead(502); res.end('Raw proxy error: ' + err.message); return; }
+            const ct = (headers['content-type'] || '').toLowerCase();
+            const isHtml = ct.includes('text/html') || ct.includes('application/xhtml');
+
+            if (isHtml) {
+                let html = body.toString('utf-8');
+                const base = `<base href="${targetUrl.replace(/"/g, '&quot;')}">`;
+                const bridge = buildBridgeScript(proxyOrigin, sessionId + '!raw');
+                const inject = base + bridge;
+                if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, '$&' + inject);
+                else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, '$&<head>' + inject + '</head>');
+                else html = '<head>' + inject + '</head>' + html;
+                res.writeHead(200, {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'Cache-Control': 'no-store',
+                    'Access-Control-Allow-Origin': '*',
+                });
+                res.end(html);
+            } else {
+                const outHeaders = {};
+                if (headers['content-type']) outHeaders['Content-Type'] = headers['content-type'];
+                if (headers['cache-control']) outHeaders['Cache-Control'] = headers['cache-control'];
+                outHeaders['Access-Control-Allow-Origin'] = '*';
+                res.writeHead(status || 200, outHeaders);
+                res.end(body);
+            }
+        });
+        return true;
+    }, true);
+
     // Console capture endpoint — intercepts /__rh_console at the end of any proxied URL path
     proxyServer.addToOnRequestPipeline((req, res) => {
         if (!req.url || !req.url.includes('/__rh_console')) return false;
@@ -99,18 +227,13 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     }, true);
 
     // Raw content proxy for Apparatus-style iframe blob loading.
-    // When hammerhead's JS rewriting breaks iframe content (games, SPAs), the client
-    // falls back to fetching raw HTML without hammerhead processing. A <base> tag is
-    // injected so relative URLs resolve correctly from the blob: context.
+    // POST { url, session } → fetches raw HTML, injects <base> + bridge script.
+    // Used by the IFRAME_PROXY client-side fallback when hammerhead-processed iframes fail.
     proxyServer.addToOnRequestPipeline((req, res) => {
         if (!req.url || !req.url.includes('/__rh_raw')) return false;
 
         if (req.method === 'OPTIONS') {
-            res.writeHead(204, {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST',
-                'Access-Control-Allow-Headers': 'Content-Type',
-            });
+            res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' });
             res.end();
             return true;
         }
@@ -119,50 +242,25 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         let body = '';
         req.on('data', chunk => { body += chunk; if (body.length > 4096) body = body.substring(0, 4096); });
         req.on('end', () => {
-            let targetUrl;
-            try { targetUrl = JSON.parse(body).url; } catch (_) { res.writeHead(400); res.end(); return; }
+            let targetUrl, sessionId;
+            try { const p = JSON.parse(body); targetUrl = p.url; sessionId = p.session; } catch (_) { res.writeHead(400); res.end(); return; }
             if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) { res.writeHead(400); res.end(); return; }
 
-            function doFetch(url, hops) {
-                if (hops > 5) { res.writeHead(502); res.end(); return; }
-                let parsed;
-                try { parsed = new URL(url); } catch (_) { res.writeHead(400); res.end(); return; }
-                const lib = parsed.protocol === 'https:' ? https : http;
-                const opts = {
-                    hostname: parsed.hostname,
-                    port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-                    path: parsed.pathname + parsed.search,
-                    headers: {
-                        'Host': parsed.host,
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Language': 'en-US,en;q=0.9',
-                        'Accept-Encoding': 'identity',
-                    },
-                    timeout: 12000,
-                    rejectUnauthorized: false,
-                };
-                const fetchReq = lib.get(opts, fetchRes => {
-                    if (fetchRes.statusCode >= 300 && fetchRes.statusCode < 400 && fetchRes.headers.location) {
-                        try { doFetch(new URL(fetchRes.headers.location, url).href, hops + 1); } catch (_) { res.writeHead(502); res.end(); }
-                        return;
-                    }
-                    const chunks = [];
-                    fetchRes.on('data', c => chunks.push(c));
-                    fetchRes.on('end', () => {
-                        let html = Buffer.concat(chunks).toString('utf-8');
-                        const base = `<base href="${url.replace(/"/g, '&quot;')}">`;
-                        if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, '$&' + base);
-                        else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, '$&<head>' + base + '</head>');
-                        else html = base + html;
-                        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
-                        res.end(html);
-                    });
-                });
-                fetchReq.on('error', () => { try { res.writeHead(502); res.end(); } catch (_) {} });
-                fetchReq.on('timeout', () => { fetchReq.destroy(); try { res.writeHead(504); res.end(); } catch (_) {} });
-            }
-            doFetch(targetUrl, 0);
+            const serverInfo = proxyServer.getServerInfo(req);
+            const proxyOrigin = `${serverInfo.protocol}//${serverInfo.hostname}${serverInfo.port == 443 || serverInfo.port == 80 ? '' : ':' + serverInfo.port}`;
+
+            rawFetch(targetUrl, (err, status, headers, buf) => {
+                if (err) { res.writeHead(502); res.end(); return; }
+                let html = buf.toString('utf-8');
+                const base = `<base href="${targetUrl.replace(/"/g, '&quot;')}">`;
+                const bridge = sessionId ? buildBridgeScript(proxyOrigin, sessionId + '!raw') : '';
+                const inject = base + bridge;
+                if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, '$&' + inject);
+                else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, '$&<head>' + inject + '</head>');
+                else html = '<head>' + inject + '</head>' + html;
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+                res.end(html);
+            });
         });
         return true;
     }, true);
