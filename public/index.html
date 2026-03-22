@@ -409,7 +409,7 @@
             };
             
             function getSearchEngine() {
-                return localStorage.getItem('searchEngine') || 'bing';
+                return localStorage.getItem('searchEngine') || 'duckduckgo';
             }
             
             function setSearchEngine(engine) {
@@ -496,6 +496,12 @@
                 if (url.startsWith('jq://')) {
                     return url;
                 }
+                // Handle raw! prefix (Apparatus-style raw proxy mode)
+                let rawPrefix = '';
+                if (url.startsWith('raw!')) {
+                    rawPrefix = 'raw!';
+                    url = url.slice(4);
+                }
                 // Check if it looks like a URL
                 if (url.match(/^https?:\/\//i) || url.match(/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}/)) {
                     if (!url.match(/^https?:\/\//i)) {
@@ -513,7 +519,7 @@
                     const engine = searchEngines[getSearchEngine()];
                     url = engine.url + encodeURIComponent(url);
                 }
-                return url;
+                return rawPrefix + url;
             }
 
             function createTab(url = 'jq://newtab/', title = 'New Tab') {
@@ -2059,7 +2065,8 @@
                     const url = searchInput.value.trim();
                     if (!url) return;
                     if (activeTabId) {
-                        loadTabContent(activeTabId, 'https://www.bing.com/search?q=' + encodeURIComponent(url));
+                        const engine = searchEngines[getSearchEngine()];
+                        loadTabContent(activeTabId, engine.url + encodeURIComponent(url));
                     }
                 });
 
