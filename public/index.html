@@ -404,7 +404,7 @@
             const searchEngines = {
                 google: { name: 'Google', url: 'https://www.google.com/search?q=' },
                 bing: { name: 'Bing', url: 'https://www.bing.com/search?q=' },
-                duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
+                duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/search?q=' },
                 yahoo: { name: 'Yahoo', url: 'https://search.yahoo.com/search?p=' }
             };
             
@@ -738,6 +738,28 @@
                             syncUrlFromIframe();
                             iframeWindow.addEventListener('hashchange', syncUrlFromIframe);
                             iframeWindow.addEventListener('popstate', syncUrlFromIframe);
+
+                            // Poll the iframe's __rhQ (populated by injected CONSOLE_CAPTURE)
+                            // and forward batches to the server from the parent's context.
+                            (function pollConsole(win) {
+                                if (!win || win.__rhPoll) return;
+                                win.__rhPoll = 1;
+                                var iv = setInterval(function() {
+                                    try {
+                                        var q = win.__rhQ;
+                                        if (!q || !q.length) return;
+                                        var batch = q.splice(0, 50);
+                                        fetch('/__rh_console', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify(batch),
+                                            keepalive: true
+                                        }).catch(function(){});
+                                    } catch(e) {
+                                        clearInterval(iv);
+                                    }
+                                }, 300);
+                            })(iframeWindow);
                             
                             const title = iframeDoc.title || new URL(normalizedUrl).hostname;
                             updateTabTitle(tabId, title);
@@ -2851,6 +2873,7 @@
                 }
             };
         })();
+
     </script>
 </body>
 </html>

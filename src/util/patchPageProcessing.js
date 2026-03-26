@@ -1,0 +1,160 @@
+/**
+ * Patch Hammerhead's PageProcessor to inject DevTools instrumentation into
+ * every proxied HTML page. The script is inserted right after <head> so it
+ * runs BEFORE Hammerhead's own runtime and before any page scripts.
+ *
+ * Provides three data channels on `window`:
+ *   __rhQ[]   - console messages  (polled by parent → /__rh_console)
+ *   __rhNet[] - network requests  (polled by parent → DevTools Network tab)
+ *   __rhSrc[] - resource URLs     (polled by parent → DevTools Sources tab)
+ */
+
+const pageProcessor = require('testcafe-hammerhead/lib/processing/resources/page');
+
+const DEVTOOLS_SCRIPT = [
+    '<script>',
+    '(function(){',
+    'if(typeof window==="undefined"||window.__rhC)return;window.__rhC=1;',
+
+    // ── Console capture ──────────────────────────────────────────────
+    'window.__rhQ=[];',
+    'var _oC=window.console||{};',
+    'function _ser(a){',
+        'if(a===void 0)return"undefined";if(a===null)return"null";',
+        'if(a instanceof Error)return(a.stack||a.message||""+a).slice(0,1500);',
+        'if(typeof a==="function")return"f "+(a.name||"anon");',
+        'if(typeof a==="symbol")return a.toString();',
+        'if(typeof a==="object"){try{var s=JSON.stringify(a);return s.length>2000?s.slice(0,2000)+"\\u2026":s}catch(e){return""+a}}',
+        'var s=""+a;return s.length>2000?s.slice(0,2000)+"\\u2026":s',
+    '}',
+    '["log","warn","error","info","debug"].forEach(function(m){',
+        'var o=_oC[m]||function(){};',
+        '_oC[m]=function(){',
+            'try{o.apply(_oC,arguments)}catch(e){}',
+            'var a=[];for(var i=0;i<arguments.length;i++)a.push(_ser(arguments[i]));',
+            'var u="";try{u=(""+location.href).slice(0,200)}catch(e){}',
+            'window.__rhQ.push({l:m,a:a,u:u,t:Date.now()})',
+        '}',
+    '});',
+    'window.console=_oC;',
+    'window.addEventListener("error",function(e){',
+        'var msg=e.error?(e.error.stack||e.error.message):e.message;',
+        'var u="";try{u=(""+location.href).slice(0,200)}catch(e2){}',
+        'window.__rhQ.push({l:"error",a:["[Uncaught] "+_ser(msg)],u:u,t:Date.now()})',
+    '});',
+    'window.addEventListener("unhandledrejection",function(e){',
+        'var r=e.reason;var u="";try{u=(""+location.href).slice(0,200)}catch(e2){}',
+        'window.__rhQ.push({l:"error",a:["[Promise] "+_ser(r&&r.stack?r.stack:r)],u:u,t:Date.now()})',
+    '});',
+
+    // ── Network capture (fetch + XHR) ────────────────────────────────
+    'window.__rhNet=[];',
+    // Wrap fetch
+    'if(typeof fetch==="function"){',
+        'var _oF=fetch;',
+        'window.fetch=function(){',
+            'var a=arguments,u="",m="GET",st=Date.now();',
+            'try{if(typeof a[0]==="string")u=a[0];',
+            'else if(a[0]&&a[0].url)u=a[0].url;',
+            'if(a[1]&&a[1].method)m=a[1].method}catch(e){}',
+            'var entry={m:m,u:u.slice(0,300),s:0,tp:"fetch",sz:0,t0:st,t1:0};',
+            'window.__rhNet.push(entry);',
+            'return _oF.apply(this,a).then(function(r){',
+                'entry.s=r.status;entry.t1=Date.now();',
+                'try{var ct=r.headers.get("content-type");if(ct)entry.ct=ct.split(";")[0]}catch(e){}',
+                'return r',
+            '},function(e){entry.s=-1;entry.t1=Date.now();throw e})',
+        '}',
+    '}',
+    // Wrap XMLHttpRequest
+    'if(typeof XMLHttpRequest!=="undefined"){',
+        'var _oXO=XMLHttpRequest.prototype.open;',
+        'var _oXS=XMLHttpRequest.prototype.send;',
+        'XMLHttpRequest.prototype.open=function(m,u){',
+            'this.__rhM=m;this.__rhU=(""+u).slice(0,300);this.__rhT0=Date.now();',
+            'return _oXO.apply(this,arguments)',
+        '};',
+        'XMLHttpRequest.prototype.send=function(){',
+            'var x=this,entry={m:x.__rhM||"GET",u:x.__rhU||"",s:0,tp:"xhr",sz:0,t0:x.__rhT0||Date.now(),t1:0};',
+            'window.__rhNet.push(entry);',
+            'x.addEventListener("loadend",function(){',
+                'entry.s=x.status;entry.t1=Date.now();',
+                'try{entry.sz=+(x.getResponseHeader("content-length"))||0}catch(e){}',
+                'try{var ct=x.getResponseHeader("content-type");if(ct)entry.ct=ct.split(";")[0]}catch(e){}',
+            '});',
+            'return _oXS.apply(this,arguments)',
+        '}',
+    '}',
+
+    // ── Source/resource URL collection ────────────────────────────────
+    'window.__rhSrc=[];',
+    'var _srcSeen={};',
+    'function _addSrc(url,type){',
+        'if(!url||typeof url!=="string"||_srcSeen[url])return;',
+        '_srcSeen[url]=1;',
+        'window.__rhSrc.push({u:url,tp:type})',
+    '}',
+    // Scan existing DOM on DOMContentLoaded
+    'function _scanDOM(){',
+        'try{document.querySelectorAll("script[src]").forEach(function(e){_addSrc(e.src,"js")})}catch(e){}',
+        'try{document.querySelectorAll("link[rel=stylesheet]").forEach(function(e){_addSrc(e.href,"css")})}catch(e){}',
+        'try{document.querySelectorAll("link[href]").forEach(function(e){_addSrc(e.href,"link")})}catch(e){}',
+        'try{document.querySelectorAll("img[src]").forEach(function(e){_addSrc(e.src,"img")})}catch(e){}',
+        'try{document.querySelectorAll("iframe[src]").forEach(function(e){_addSrc(e.src,"iframe")})}catch(e){}',
+    '}',
+    'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_scanDOM);',
+    'else _scanDOM();',
+    // MutationObserver for dynamically added resources
+    'try{new MutationObserver(function(ml){',
+        'for(var i=0;i<ml.length;i++){var m=ml[i];',
+            'for(var j=0;j<m.addedNodes.length;j++){var n=m.addedNodes[j];',
+                'if(n.nodeType!==1)continue;',
+                'if(n.tagName==="SCRIPT"&&n.src)_addSrc(n.src,"js");',
+                'else if(n.tagName==="LINK"&&n.href)_addSrc(n.href,n.rel==="stylesheet"?"css":"link");',
+                'else if(n.tagName==="IMG"&&n.src)_addSrc(n.src,"img");',
+                'else if(n.tagName==="IFRAME"&&n.src)_addSrc(n.src,"iframe");',
+                'try{n.querySelectorAll&&n.querySelectorAll("script[src],link[href],img[src],iframe[src]").forEach(function(c){',
+                    'if(c.tagName==="SCRIPT")_addSrc(c.src,"js");',
+                    'else if(c.tagName==="LINK")_addSrc(c.href,c.rel==="stylesheet"?"css":"link");',
+                    'else if(c.tagName==="IMG")_addSrc(c.src,"img");',
+                    'else if(c.tagName==="IFRAME")_addSrc(c.src,"iframe");',
+                '})}catch(e){}',
+            '}',
+        '}',
+    '}).observe(document.documentElement||document.body,{childList:true,subtree:true})}catch(e){}',
+    // PerformanceObserver for all fetched resources
+    'try{new PerformanceObserver(function(list){',
+        'list.getEntries().forEach(function(e){',
+            'var n=e.name||"";',
+            'var tp="other";',
+            'if(e.initiatorType==="script")tp="js";',
+            'else if(e.initiatorType==="css"||e.initiatorType==="link")tp="css";',
+            'else if(e.initiatorType==="img")tp="img";',
+            'else if(e.initiatorType==="xmlhttprequest"||e.initiatorType==="fetch")tp="xhr";',
+            'else if(e.initiatorType==="iframe")tp="iframe";',
+            'else if(n.match(/\\.js(\\?|$)/i))tp="js";',
+            'else if(n.match(/\\.css(\\?|$)/i))tp="css";',
+            'else if(n.match(/\\.(png|jpe?g|gif|svg|webp|ico)(\\?|$)/i))tp="img";',
+            'else if(n.match(/\\.(woff2?|ttf|otf|eot)(\\?|$)/i))tp="font";',
+            '_addSrc(n,tp)',
+        '})',
+    '}).observe({type:"resource",buffered:true})}catch(e){}',
+
+    '})();</script>',
+].join('\n');
+
+const origProcess = pageProcessor.processResource.bind(pageProcessor);
+
+pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
+    let result;
+    try {
+        result = origProcess(html, ctx, charset, urlReplacer, isSrcdoc);
+    } catch (e) {
+        if (typeof html === 'string') {
+            return html.replace(/<head[^>]*>/i, '$&' + DEVTOOLS_SCRIPT);
+        }
+        throw e;
+    }
+    if (typeof result !== 'string') return result;
+    return result.replace(/<head[^>]*>/i, '$&' + DEVTOOLS_SCRIPT);
+};

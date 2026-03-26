@@ -226,6 +226,53 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return true;
     }, true);
 
+    // Source file fetch endpoint for DevTools Sources tab.
+    // GET /__rh_sources?url=<encoded-url> → fetches raw content and returns as text.
+    proxyServer.addToOnRequestPipeline((req, res) => {
+        if (!req.url || !req.url.includes('/__rh_sources')) return false;
+        if (req.method === 'OPTIONS') {
+            res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Allow-Headers': 'Content-Type' });
+            res.end();
+            return true;
+        }
+        try {
+            const parsed = new URL(req.url, 'http://localhost');
+            const targetUrl = parsed.searchParams.get('url');
+            if (!targetUrl) { res.writeHead(400); res.end('Missing url param'); return true; }
+
+            const urlObj = new URL(targetUrl);
+            const mod = urlObj.protocol === 'https:' ? https : http;
+            const fetchOpts = {
+                hostname: urlObj.hostname,
+                port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+                path: urlObj.pathname + urlObj.search,
+                method: 'GET',
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                    'Accept': '*/*',
+                    'Accept-Encoding': 'identity',
+                },
+                rejectUnauthorized: false,
+                timeout: 10000,
+            };
+            const upstream = mod.request(fetchOpts, (upRes) => {
+                const ct = upRes.headers['content-type'] || 'text/plain';
+                res.writeHead(200, {
+                    'Content-Type': ct,
+                    'Access-Control-Allow-Origin': '*',
+                    'Cache-Control': 'no-store',
+                });
+                upRes.pipe(res);
+            });
+            upstream.on('error', () => { try { res.writeHead(502); res.end('Fetch failed'); } catch(_){} });
+            upstream.on('timeout', () => { upstream.destroy(); });
+            upstream.end();
+        } catch (e) {
+            res.writeHead(500); res.end('Error: ' + e.message);
+        }
+        return true;
+    }, true);
+
     // Raw content proxy for Apparatus-style iframe blob loading.
     // POST { url, session } → fetches raw HTML, injects <base> + bridge script.
     // Used by the IFRAME_PROXY client-side fallback when hammerhead-processed iframes fail.
