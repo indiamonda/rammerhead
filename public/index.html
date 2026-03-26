@@ -460,19 +460,295 @@
                 saveStats(stats);
             }
             
-            // Network Inspector
+            // DevTools data stores
+            let consoleMessages = [];
             let networkRequests = [];
-            
-            function addNetworkRequest(request) {
-                networkRequests.push({
-                    ...request,
-                    id: Date.now().toString() + Math.random(),
-                    timestamp: Date.now()
-                });
-                // Keep only last 500 requests
-                if (networkRequests.length > 500) {
-                    networkRequests = networkRequests.slice(-500);
+            let sourceFiles = [];
+            let _devtoolsErrorCount = 0;
+            let _dtActiveTab = 'console';
+            let _dtStoreSub = 'cookies';
+            let _dtHeight = parseInt(localStorage.getItem('devtoolsHeight')) || 350;
+
+            function _dtIsVisible() {
+                const p = document.getElementById('devtools-panel');
+                return p && p.classList.contains('active');
+            }
+            function _renderConsoleIfVisible() {
+                if (_dtIsVisible() && _dtActiveTab === 'console') renderConsoleTab();
+            }
+            function _renderNetworkIfVisible() {
+                if (_dtIsVisible() && _dtActiveTab === 'network') renderNetworkTab();
+            }
+            function _updateErrorBadge() {
+                const badge = document.getElementById('console-error-badge');
+                if (!badge) return;
+                if (_devtoolsErrorCount > 0 && _dtActiveTab !== 'console') {
+                    badge.textContent = _devtoolsErrorCount > 99 ? '99+' : _devtoolsErrorCount;
+                    badge.style.display = '';
+                } else {
+                    badge.style.display = 'none';
                 }
+            }
+            function _esc(s) {
+                return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            }
+            function _refreshCurrentDtTab() {
+                if (_dtActiveTab === 'console') renderConsoleTab();
+                else if (_dtActiveTab === 'network') renderNetworkTab();
+                else if (_dtActiveTab === 'storage') renderStorageTab();
+                else if (_dtActiveTab === 'source') renderSourceTab();
+            }
+            function renderConsoleTab() {
+                const area = document.getElementById('console-log-area');
+                if (!area) return;
+                const errOnly = document.getElementById('console-filter-errors')?.checked;
+                const msgs = errOnly ? consoleMessages.filter(m => m.l === 'error') : consoleMessages;
+                if (msgs.length === 0) {
+                    area.innerHTML = '<div class="dt-empty">No console messages</div>';
+                    return;
+                }
+                const wasAtBottom = area.scrollTop + area.clientHeight >= area.scrollHeight - 30;
+                let html = '';
+                const levelClass = { log: 'console-log', warn: 'console-warn', error: 'console-error', info: 'console-info', debug: 'console-debug' };
+                msgs.forEach(m => {
+                    const cls = levelClass[m.l] || 'console-log';
+                    const ts = new Date(m.t).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+                    let src = '';
+                    try { const u = new URL(m.u); src = u.hostname + u.pathname; if (src.length > 50) src = src.slice(0, 47) + '...'; } catch(_) { src = (m.u || '').slice(0, 50); }
+                    const text = _esc((m.a || []).join(' '));
+                    html += `<div class="console-line ${cls}"><span class="cl-time">${ts}</span><span class="cl-level">${m.l}</span><span class="cl-msg">${text}</span><span class="cl-src" title="${_esc(m.u || '')}">${_esc(src)}</span></div>`;
+                });
+                area.innerHTML = html;
+                if (wasAtBottom) area.scrollTop = area.scrollHeight;
+            }
+            function renderNetworkTab() {
+                const tbody = document.getElementById('network-table-body');
+                const countEl = document.getElementById('network-count');
+                if (!tbody) return;
+                if (countEl) countEl.textContent = networkRequests.length + ' request' + (networkRequests.length !== 1 ? 's' : '');
+                if (networkRequests.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="dt-empty">No requests captured yet</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = networkRequests.slice(-100).reverse().map(req => {
+                    const dur = req.endTime ? (req.endTime - req.startTime) + 'ms' : 'pending';
+                    const sc = req.status >= 400 ? ' class="net-err"' : req.status >= 300 ? ' class="net-redirect"' : '';
+                    let shortUrl = req.url || '';
+                    try { const u = new URL(shortUrl); shortUrl = u.pathname + u.search; } catch(_) {}
+                    if (shortUrl.length > 70) shortUrl = shortUrl.slice(0, 67) + '...';
+                    const tp = req.contentType ? req.contentType.split('/').pop().split('+')[0] : req.type || '';
+                    return `<tr><td>${_esc(req.method || 'GET')}</td><td class="net-url" title="${_esc(req.url || '')}">${_esc(shortUrl)}</td><td${sc}>${req.status || '-'}</td><td>${_esc(tp)}</td><td>${dur}</td></tr>`;
+                }).join('');
+            }
+            function _getActiveIframe() {
+                const el = document.getElementById(`content-${activeTabId}`);
+                return el?.querySelector('iframe');
+            }
+            function renderStorageTab() {
+                const display = document.getElementById('storage-display');
+                if (!display) return;
+                const iframe = _getActiveIframe();
+                if (!iframe) { display.innerHTML = '<div class="dt-empty">No active page</div>'; return; }
+                try {
+                    const win = iframe.contentWindow;
+                    const doc = iframe.contentDocument || win.document;
+                    let items = [];
+                    if (_dtStoreSub === 'cookies') {
+                        const raw = doc.cookie || '';
+                        if (raw) {
+                            raw.split(';').forEach(c => {
+                                const eq = c.indexOf('=');
+                                if (eq > 0) items.push([c.slice(0, eq).trim(), c.slice(eq + 1).trim()]);
+                            });
+                        }
+                    } else if (_dtStoreSub === 'local') {
+                        const ls = win.localStorage;
+                        for (let i = 0; i < ls.length; i++) { const k = ls.key(i); items.push([k, ls.getItem(k)]); }
+                    } else if (_dtStoreSub === 'session') {
+                        const ss = win.sessionStorage;
+                        for (let i = 0; i < ss.length; i++) { const k = ss.key(i); items.push([k, ss.getItem(k)]); }
+                    }
+                    if (items.length === 0) {
+                        display.innerHTML = '<div class="dt-empty">No ' + _dtStoreSub + ' data</div>';
+                        return;
+                    }
+                    display.innerHTML = '<table class="data-table"><thead><tr><th>Key</th><th>Value</th><th></th></tr></thead><tbody>' +
+                        items.map(([k, v]) => {
+                            const dv = v.length > 120 ? v.slice(0, 120) + '...' : v;
+                            return `<tr><td class="dt-key">${_esc(k)}</td><td class="dt-val" title="${_esc(v)}">${_esc(dv)}</td><td><button class="dt-del-btn" data-key="${_esc(k)}">x</button></td></tr>`;
+                        }).join('') + '</tbody></table>';
+                    display.querySelectorAll('.dt-del-btn').forEach(btn => {
+                        btn.addEventListener('click', () => _storageDelete(btn.dataset.key));
+                    });
+                } catch (e) {
+                    display.innerHTML = '<div class="dt-empty">Cannot access storage: ' + _esc(e.message) + '</div>';
+                }
+            }
+            function _storageDelete(key) {
+                const iframe = _getActiveIframe();
+                if (!iframe) return;
+                try {
+                    const win = iframe.contentWindow;
+                    const doc = iframe.contentDocument || win.document;
+                    if (_dtStoreSub === 'cookies') {
+                        doc.cookie = key + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+                    } else if (_dtStoreSub === 'local') {
+                        win.localStorage.removeItem(key);
+                    } else if (_dtStoreSub === 'session') {
+                        win.sessionStorage.removeItem(key);
+                    }
+                } catch(_) {}
+                renderStorageTab();
+            }
+            function _storageAddEntry() {
+                const key = prompt('Key:');
+                if (!key) return;
+                const val = prompt('Value:') || '';
+                const iframe = _getActiveIframe();
+                if (!iframe) return;
+                try {
+                    const win = iframe.contentWindow;
+                    const doc = iframe.contentDocument || win.document;
+                    if (_dtStoreSub === 'cookies') {
+                        doc.cookie = key + '=' + val + '; path=/';
+                    } else if (_dtStoreSub === 'local') {
+                        win.localStorage.setItem(key, val);
+                    } else if (_dtStoreSub === 'session') {
+                        win.sessionStorage.setItem(key, val);
+                    }
+                } catch(_) {}
+                renderStorageTab();
+            }
+            function renderSourceTab() {
+                const tree = document.getElementById('sources-tree');
+                const viewer = document.getElementById('sources-viewer');
+                if (!tree) return;
+                const pageUrl = tabs.find(t => t.id === activeTabId)?.url;
+                if (pageUrl && !pageUrl.startsWith('jq://')) {
+                    const seen = {};
+                    sourceFiles.forEach(f => { seen[f.url] = 1; });
+                    if (!seen[pageUrl]) sourceFiles.unshift({ url: pageUrl, type: 'html' });
+                }
+                if (sourceFiles.length === 0) {
+                    tree.innerHTML = '<div class="dt-empty">No resources detected</div>';
+                    return;
+                }
+                const groups = {};
+                sourceFiles.forEach(f => {
+                    let domain = '(other)';
+                    try { domain = new URL(f.url).hostname; } catch(_) {}
+                    if (!groups[domain]) groups[domain] = [];
+                    groups[domain].push(f);
+                });
+                const typeIcon = { js: 'fa-js', css: 'fa-css3-alt', html: 'fa-html5', img: 'fa-image', font: 'fa-font', link: 'fa-link', iframe: 'fa-window-maximize', xhr: 'fa-exchange-alt', other: 'fa-file' };
+                let html = '';
+                Object.keys(groups).sort().forEach(domain => {
+                    html += `<div class="src-folder"><span class="src-folder-name"><i class="fas fa-folder"></i> ${_esc(domain)}</span>`;
+                    groups[domain].forEach(f => {
+                        let name = f.url;
+                        try { const u = new URL(f.url); name = u.pathname.split('/').pop() || u.pathname || '/'; } catch(_) {}
+                        if (name.length > 40) name = name.slice(0, 37) + '...';
+                        const ic = typeIcon[f.type] || typeIcon.other;
+                        html += `<div class="src-file" data-url="${_esc(f.url)}" title="${_esc(f.url)}"><i class="fas ${ic}"></i> ${_esc(name)}</div>`;
+                    });
+                    html += '</div>';
+                });
+                tree.innerHTML = html;
+                tree.querySelectorAll('.src-file').forEach(el => {
+                    el.addEventListener('click', () => {
+                        tree.querySelectorAll('.src-file').forEach(e => e.classList.remove('active'));
+                        el.classList.add('active');
+                        _loadSourceFile(el.dataset.url);
+                    });
+                });
+                tree.querySelectorAll('.src-folder-name').forEach(el => {
+                    el.addEventListener('click', () => el.parentElement.classList.toggle('collapsed'));
+                });
+            }
+            async function _loadSourceFile(url) {
+                const viewer = document.getElementById('sources-viewer');
+                if (!viewer) return;
+                viewer.innerHTML = '<div class="dt-empty">Loading...</div>';
+                try {
+                    const resp = await fetch('/__rh_sources?url=' + encodeURIComponent(url));
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const text = await resp.text();
+                    viewer.innerHTML = '<pre class="source-code">' + _esc(text) + '</pre>';
+                } catch (e) {
+                    viewer.innerHTML = '<div class="dt-empty">Failed to load: ' + _esc(e.message) + '</div>';
+                }
+            }
+
+            function toggleDevTools() {
+                let panel = document.getElementById('devtools-panel');
+                if (!panel) {
+                    document.body.insertAdjacentHTML('beforeend', getDevToolsHTML());
+                    panel = document.getElementById('devtools-panel');
+                    panel.style.height = _dtHeight + 'px';
+                    initDevTools();
+                }
+                const opening = !panel.classList.contains('active');
+                panel.classList.toggle('active');
+                if (opening) { _refreshCurrentDtTab(); }
+            }
+
+            function initDevTools() {
+                document.querySelectorAll('.devtools-tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        document.querySelectorAll('.devtools-tab').forEach(t => t.classList.remove('active'));
+                        document.querySelectorAll('.devtools-tab-content').forEach(c => c.style.display = 'none');
+                        tab.classList.add('active');
+                        _dtActiveTab = tab.dataset.tab;
+                        const content = document.getElementById(`devtools-${_dtActiveTab}`);
+                        if (content) content.style.display = '';
+                        if (_dtActiveTab === 'console') { _devtoolsErrorCount = 0; _updateErrorBadge(); }
+                        _refreshCurrentDtTab();
+                    });
+                });
+                document.getElementById('devtools-close')?.addEventListener('click', () => {
+                    document.getElementById('devtools-panel')?.classList.remove('active');
+                });
+                document.getElementById('console-clear-btn')?.addEventListener('click', () => {
+                    consoleMessages = []; _devtoolsErrorCount = 0;
+                    renderConsoleTab(); _updateErrorBadge();
+                });
+                document.getElementById('network-clear-btn')?.addEventListener('click', () => {
+                    networkRequests = []; renderNetworkTab();
+                });
+                document.querySelectorAll('.storage-subtab').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.storage-subtab').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        _dtStoreSub = btn.dataset.store;
+                        renderStorageTab();
+                    });
+                });
+                document.getElementById('storage-refresh-btn')?.addEventListener('click', () => renderStorageTab());
+                document.getElementById('storage-add-btn')?.addEventListener('click', _storageAddEntry);
+                const handle = document.getElementById('devtools-resize-handle');
+                if (handle) {
+                    let resizing = false, startY = 0, startH = 0;
+                    handle.addEventListener('mousedown', (e) => {
+                        resizing = true; startY = e.clientY;
+                        startH = document.getElementById('devtools-panel').offsetHeight;
+                        document.body.style.userSelect = 'none';
+                    });
+                    document.addEventListener('mousemove', (e) => {
+                        if (!resizing) return;
+                        const h = Math.max(120, Math.min(window.innerHeight - 80, startH + (startY - e.clientY)));
+                        const panel = document.getElementById('devtools-panel');
+                        if (panel) panel.style.height = h + 'px';
+                        _dtHeight = h;
+                    });
+                    document.addEventListener('mouseup', () => {
+                        if (resizing) {
+                            resizing = false;
+                            document.body.style.userSelect = '';
+                            localStorage.setItem('devtoolsHeight', _dtHeight);
+                        }
+                    });
+                }
+                document.getElementById('console-filter-errors')?.addEventListener('change', renderConsoleTab);
             }
             
             // Tab Management
@@ -632,6 +908,11 @@
                 if (typeof updateBookmarkButton === 'function') {
                     setTimeout(updateBookmarkButton, 50);
                 }
+                
+                // Refresh DevTools for the new active tab
+                if (typeof _refreshCurrentDtTab === 'function' && typeof _dtIsVisible === 'function' && _dtIsVisible()) {
+                    setTimeout(_refreshCurrentDtTab, 100);
+                }
             }
 
             async function loadTabContent(tabId, url, addToHistory = true) {
@@ -739,22 +1020,52 @@
                             iframeWindow.addEventListener('hashchange', syncUrlFromIframe);
                             iframeWindow.addEventListener('popstate', syncUrlFromIframe);
 
-                            // Poll the iframe's __rhQ (populated by injected CONSOLE_CAPTURE)
-                            // and forward batches to the server from the parent's context.
-                            (function pollConsole(win) {
+                            // Poll injected DevTools data from iframe
+                            (function pollDevTools(win) {
                                 if (!win || win.__rhPoll) return;
                                 win.__rhPoll = 1;
                                 var iv = setInterval(function() {
                                     try {
+                                        // Console messages
                                         var q = win.__rhQ;
-                                        if (!q || !q.length) return;
-                                        var batch = q.splice(0, 50);
-                                        fetch('/__rh_console', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify(batch),
-                                            keepalive: true
-                                        }).catch(function(){});
+                                        if (q && q.length) {
+                                            var batch = q.splice(0, 50);
+                                            batch.forEach(function(e) { consoleMessages.push(e); });
+                                            if (consoleMessages.length > 1000) consoleMessages = consoleMessages.slice(-1000);
+                                            batch.forEach(function(e) { if (e.l === 'error') _devtoolsErrorCount++; });
+                                            _renderConsoleIfVisible();
+                                            _updateErrorBadge();
+                                            fetch('/__rh_console', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify(batch),
+                                                keepalive: true
+                                            }).catch(function(){});
+                                        }
+                                        // Network requests
+                                        var net = win.__rhNet;
+                                        if (net && net.length) {
+                                            var nb = net.splice(0, 100);
+                                            nb.forEach(function(e) {
+                                                networkRequests.push({
+                                                    method: e.m, url: e.u, status: e.s, type: e.tp,
+                                                    contentType: e.ct || '', size: e.sz || 0,
+                                                    startTime: e.t0, endTime: e.t1, timestamp: e.t0
+                                                });
+                                            });
+                                            if (networkRequests.length > 500) networkRequests = networkRequests.slice(-500);
+                                            _renderNetworkIfVisible();
+                                        }
+                                        // Source files
+                                        var src = win.__rhSrc;
+                                        if (src && src.length) {
+                                            var sb = src.splice(0, 200);
+                                            var seen = {};
+                                            sourceFiles.forEach(function(f) { seen[f.url] = 1; });
+                                            sb.forEach(function(e) {
+                                                if (!seen[e.u]) { seen[e.u] = 1; sourceFiles.push({ url: e.u, type: e.tp }); }
+                                            });
+                                        }
                                     } catch(e) {
                                         clearInterval(iv);
                                     }
@@ -1780,43 +2091,67 @@
             function getDevToolsHTML() {
                 return `
                     <div class="devtools-panel" id="devtools-panel">
+                        <div class="devtools-resize-handle" id="devtools-resize-handle"></div>
                         <div class="devtools-header">
                             <div class="devtools-tabs">
-                                <button class="devtools-tab active" data-tab="console">Console</button>
+                                <button class="devtools-tab active" data-tab="console">Console<span class="devtools-badge" id="console-error-badge" style="display:none;">0</span></button>
                                 <button class="devtools-tab" data-tab="network">Network</button>
                                 <button class="devtools-tab" data-tab="storage">Storage</button>
-                                <button class="devtools-tab" data-tab="source">Source</button>
+                                <button class="devtools-tab" data-tab="source">Sources</button>
                             </div>
                             <button class="devtools-close" id="devtools-close"><i class="fas fa-times"></i></button>
                         </div>
                         <div class="devtools-content">
+                            <!-- Console Tab -->
                             <div id="devtools-console" class="devtools-tab-content active">
-                                <h3>Console</h3>
-                                <p style="color: var(--color-text-secondary);">Console output will appear here</p>
+                                <div class="devtools-toolbar">
+                                    <button class="devtools-toolbar-btn" id="console-clear-btn">Clear</button>
+                                    <label class="devtools-toolbar-label"><input type="checkbox" id="console-filter-errors"> Errors only</label>
+                                </div>
+                                <div class="console-log-area" id="console-log-area"></div>
                             </div>
-                            <div id="devtools-network" class="devtools-tab-content" style="display: none;">
-                                <h3>Network Requests</h3>
+                            <!-- Network Tab -->
+                            <div id="devtools-network" class="devtools-tab-content" style="display:none;">
+                                <div class="devtools-toolbar">
+                                    <button class="devtools-toolbar-btn" id="network-clear-btn">Clear</button>
+                                    <span class="devtools-toolbar-info" id="network-count">0 requests</span>
+                                </div>
                                 <table class="network-table">
                                     <thead>
                                         <tr>
                                             <th>Method</th>
                                             <th>URL</th>
                                             <th>Status</th>
+                                            <th>Type</th>
                                             <th>Time</th>
                                         </tr>
                                     </thead>
                                     <tbody id="network-table-body">
-                                        <tr><td colspan="4" style="text-align: center; color: var(--color-text-secondary);">No requests yet</td></tr>
+                                        <tr><td colspan="5" class="dt-empty">No requests captured yet</td></tr>
                                     </tbody>
                                 </table>
                             </div>
-                            <div id="devtools-storage" class="devtools-tab-content" style="display: none;">
-                                <h3>Local Storage</h3>
+                            <!-- Storage Tab -->
+                            <div id="devtools-storage" class="devtools-tab-content" style="display:none;">
+                                <div class="storage-subtabs">
+                                    <button class="storage-subtab active" data-store="cookies">Cookies</button>
+                                    <button class="storage-subtab" data-store="local">Local Storage</button>
+                                    <button class="storage-subtab" data-store="session">Session Storage</button>
+                                </div>
+                                <div class="devtools-toolbar">
+                                    <button class="devtools-toolbar-btn" id="storage-refresh-btn">Refresh</button>
+                                    <button class="devtools-toolbar-btn" id="storage-add-btn">+ Add</button>
+                                </div>
                                 <div id="storage-display"></div>
                             </div>
-                            <div id="devtools-source" class="devtools-tab-content" style="display: none;">
-                                <h3>Page Source</h3>
-                                <div id="source-display" style="font-family: var(--font-family-mono); font-size: 12px; white-space: pre-wrap; background: var(--color-bg-secondary); padding: 16px; border-radius: 4px; overflow: auto; max-height: 600px;"></div>
+                            <!-- Sources Tab -->
+                            <div id="devtools-source" class="devtools-tab-content" style="display:none;">
+                                <div class="sources-layout">
+                                    <div class="sources-tree" id="sources-tree"></div>
+                                    <div class="sources-viewer" id="sources-viewer">
+                                        <div class="dt-empty">Select a file to view its source</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2585,120 +2920,6 @@
                 };
                 window.updateDownloadsBadge();
                 
-                // DevTools toggle
-                function toggleDevTools() {
-                    let panel = document.getElementById('devtools-panel');
-                    if (!panel) {
-                        document.body.insertAdjacentHTML('beforeend', getDevToolsHTML());
-                        panel = document.getElementById('devtools-panel');
-                        initDevTools();
-                    }
-                    panel.classList.toggle('active');
-                }
-                
-                function initDevTools() {
-                    // DevTools tabs
-                    document.querySelectorAll('.devtools-tab').forEach(tab => {
-                        tab.addEventListener('click', () => {
-                            document.querySelectorAll('.devtools-tab').forEach(t => t.classList.remove('active'));
-                            document.querySelectorAll('.devtools-tab-content').forEach(c => c.style.display = 'none');
-                            tab.classList.add('active');
-                            const tabName = tab.dataset.tab;
-                            const content = document.getElementById(`devtools-${tabName}`);
-                            if (content) {
-                                content.style.display = 'block';
-                                if (tabName === 'network') updateNetworkTab();
-                                if (tabName === 'storage') updateStorageTab();
-                                if (tabName === 'source') updateSourceTab();
-                            }
-                        });
-                    });
-                    
-                    // Close DevTools
-                    document.getElementById('devtools-close')?.addEventListener('click', () => {
-                        document.getElementById('devtools-panel')?.classList.remove('active');
-                    });
-                    
-                    // F12 shortcut
-                    document.addEventListener('keydown', (e) => {
-                        if (e.key === 'F12') {
-                            e.preventDefault();
-                            toggleDevTools();
-                        }
-                    });
-                }
-                
-                function updateNetworkTab() {
-                    const tbody = document.getElementById('network-table-body');
-                    if (networkRequests.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--color-text-secondary);">No requests yet</td></tr>';
-                    } else {
-                        tbody.innerHTML = networkRequests.slice(-50).reverse().map(req => `
-                            <tr>
-                                <td>${req.method || 'GET'}</td>
-                                <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis;">${req.url || ''}</td>
-                                <td>${req.status || '-'}</td>
-                                <td>${req.timestamp ? new Date(req.timestamp).toLocaleTimeString() : '-'}</td>
-                            </tr>
-                        `).join('');
-                    }
-                }
-                
-                function updateStorageTab() {
-                    const display = document.getElementById('storage-display');
-                    const items = Object.entries(localStorage);
-                    if (items.length === 0) {
-                        display.innerHTML = '<p style="color: var(--color-text-secondary);">No localStorage items</p>';
-                    } else {
-                        display.innerHTML = '<table class="data-table"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>' +
-                            items.map(([key, value]) => {
-                                let displayValue = value;
-                                if (value.length > 100) displayValue = value.substring(0, 100) + '...';
-                                return `<tr><td>${key}</td><td style="max-width: 500px; overflow: hidden; text-overflow: ellipsis;">${displayValue}</td></tr>`;
-                            }).join('') +
-                            '</tbody></table>';
-                    }
-                }
-                
-                function updateSourceTab() {
-                    const display = document.getElementById('source-display');
-                    const activeTab = tabs.find(t => t.id === activeTabId);
-                    if (!activeTab || activeTab.url.startsWith('jq://')) {
-                        display.textContent = 'Source view is only available for web pages.';
-                        return;
-                    }
-                    const contentElement = document.getElementById(`content-${activeTabId}`);
-                    const iframe = contentElement?.querySelector('iframe');
-                    if (iframe) {
-                        try {
-                            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                            const html = iframeDoc.documentElement.outerHTML;
-                            // Format HTML with basic indentation
-                            display.textContent = formatHTML(html);
-                        } catch (e) {
-                            display.textContent = 'Cannot access iframe content due to cross-origin restrictions.\n\nThis is normal for most websites due to browser security policies.';
-                        }
-                    } else {
-                        display.textContent = 'No content available.';
-                    }
-                }
-                
-                function formatHTML(html) {
-                    // Basic HTML formatting
-                    let formatted = '';
-                    let indent = 0;
-                    const indentSize = 2;
-                    html = html.replace(/></g, '>\n<');
-                    html.split('\n').forEach(line => {
-                        line = line.trim();
-                        if (!line) return;
-                        if (line.startsWith('</')) indent--;
-                        formatted += ' '.repeat(indent * indentSize) + line + '\n';
-                        if (line.startsWith('<') && !line.startsWith('</') && !line.endsWith('/>')) indent++;
-                    });
-                    return formatted;
-                }
-                
                 // Hook into tab switching to update bookmark button
                 // We'll call updateBookmarkButton after tab switches
                 // This is done by wrapping the switchToTab calls
@@ -2872,6 +3093,11 @@
                     }
                 }
             };
+
+            // Global F12 shortcut for DevTools
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'F12') { e.preventDefault(); toggleDevTools(); }
+            });
         })();
 
     </script>
