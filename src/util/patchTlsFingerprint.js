@@ -3,14 +3,16 @@
  *
  * Without this, Cloudflare/AWS WAF block requests based on:
  *   - JA3/JA4 TLS fingerprint (cipher order, curves, sigalgs)
- *   - HTTP/2 fingerprint (SETTINGS frame values, WINDOW_UPDATE, ALPN)
+ *   - HTTP/2 fingerprint (SETTINGS frame values, WINDOW_UPDATE, ALPN, pseudo-header order)
  *
  * Patches:
  *  1. agent.assign – injects Chrome TLS options into HTTPS request options
  *  2. http2.connect – injects Chrome TLS options + Chrome HTTP/2 SETTINGS
+ *  3. formatRequestHttp2Headers – Chrome pseudo-header order (:method :authority :scheme :path)
  */
 
 const agentModule = require('testcafe-hammerhead/lib/request-pipeline/destination-request/agent');
+const http2Module = require('testcafe-hammerhead/lib/request-pipeline/destination-request/http2');
 const http2 = require('http2');
 
 const CHROME_CIPHERS = [
@@ -87,4 +89,26 @@ http2.connect = function (authority, options, listener) {
         } catch (_) {}
     }
     return session;
+};
+
+// 3. Patch HTTP/2 pseudo-header order to match Chrome: :method :authority :scheme :path
+const { HTTP2_HEADER_METHOD, HTTP2_HEADER_PATH, HTTP2_HEADER_AUTHORITY, HTTP2_HEADER_SCHEME,
+    HTTP2_HEADER_CONNECTION, HTTP2_HEADER_UPGRADE, HTTP2_HEADER_KEEP_ALIVE,
+    HTTP2_HEADER_PROXY_CONNECTION, HTTP2_HEADER_TRANSFER_ENCODING, HTTP2_HEADER_HTTP2_SETTINGS,
+    HTTP2_HEADER_HOST } = http2.constants;
+const H2_UNSUPPORTED = new Set([
+    HTTP2_HEADER_CONNECTION, HTTP2_HEADER_UPGRADE, HTTP2_HEADER_HTTP2_SETTINGS,
+    HTTP2_HEADER_KEEP_ALIVE, HTTP2_HEADER_PROXY_CONNECTION,
+    HTTP2_HEADER_TRANSFER_ENCODING, HTTP2_HEADER_HOST,
+]);
+http2Module.formatRequestHttp2Headers = function chromeOrderHeaders(opts) {
+    const out = Object.create(null);
+    out[HTTP2_HEADER_METHOD] = opts.method;
+    out[HTTP2_HEADER_AUTHORITY] = opts.headers.host;
+    out[HTTP2_HEADER_SCHEME] = 'https';
+    out[HTTP2_HEADER_PATH] = opts.path;
+    for (const key of Object.keys(opts.headers)) {
+        if (!H2_UNSUPPORTED.has(key)) out[key] = opts.headers[key];
+    }
+    return out;
 };

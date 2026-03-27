@@ -108,10 +108,33 @@ const IFRAME_PROXY = [
 
 // Console capture is now handled by patchPageProcessing.js via HTML injection.
 
-// Skip JS rewriting for Cloudflare challenge/Turnstile scripts.
-// Hammerhead's AST rewriting breaks the obfuscated challenge code, causing
-// Cloudflare managed challenges to never resolve on datacenter IPs.
-const CF_SKIP_RE = /\/cdn-cgi\/|challenges\.cloudflare\.com|cloudflareinsights\.com|captcha\.js|hcaptcha\.com|recaptcha|challenge-platform|aws-waf-token/i;
+// Skip JS rewriting for anti-bot / CAPTCHA scripts.
+// Hammerhead's AST rewriting breaks obfuscated challenge code.
+const CF_SKIP_RE = new RegExp([
+    // Cloudflare
+    '\\/cdn-cgi\\/', 'challenges\\.cloudflare\\.com', 'cloudflareinsights\\.com',
+    'challenge-platform', 'turnstile',
+    // Google reCAPTCHA
+    'gstatic\\.com\\/recaptcha', 'google\\.com\\/recaptcha', 'recaptcha', 'grecaptcha',
+    // hCaptcha
+    'hcaptcha\\.com',
+    // AWS WAF
+    'aws-waf-token',
+    // PerimeterX / HUMAN
+    'px-cdn\\.net', 'px-cloud\\.net', 'perimeterx', 'human-challenge',
+    // DataDome
+    'datadome',
+    // Kasada
+    'kasada',
+    // Akamai Bot Manager
+    'akamaized\\.net\\/akam',
+    // Imperva / Incapsula
+    'imperva', 'incapsula',
+    // Shape Security
+    'shape\\.com\\/captcha',
+    // Generic
+    'captcha\\.js',
+].join('|'), 'i');
 const scriptProcessor = require('testcafe-hammerhead/lib/processing/resources/script');
 const _origShouldProcess = scriptProcessor.shouldProcessResource.bind(scriptProcessor);
 scriptProcessor.shouldProcessResource = function (ctx) {

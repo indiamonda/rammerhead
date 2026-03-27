@@ -14,6 +14,33 @@ const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 
 // Use gzip, deflate only to avoid ERR_CONTENT_DECODING_FAILED when pipeline decompresses/rewrites then re-encodes (br/zstd often mis-handled)
 const ACCEPT_ENCODING_SAFE = 'gzip, deflate';
 
+// Chrome HTTP/1.1 header wire order (fingerprinted by anti-bot services)
+const CHROME_DOC_ORDER = [
+    'host', 'connection', 'sec-ch-ua', 'sec-ch-ua-mobile',
+    'sec-ch-ua-full-version-list', 'sec-ch-ua-platform',
+    'upgrade-insecure-requests', 'user-agent', 'accept',
+    'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-user', 'sec-fetch-dest',
+    'referer', 'accept-encoding', 'accept-language', 'dnt',
+    'cache-control', 'cookie', 'priority',
+];
+const CHROME_SUB_ORDER = [
+    'host', 'connection', 'sec-ch-ua', 'sec-ch-ua-mobile',
+    'sec-ch-ua-full-version-list', 'sec-ch-ua-platform',
+    'user-agent', 'accept', 'x-requested-with',
+    'referer', 'origin',
+    'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest',
+    'accept-encoding', 'accept-language', 'dnt',
+    'cookie', 'priority',
+];
+function _reorderHeaders(headers, order) {
+    const snapshot = Object.assign(Object.create(null), headers);
+    for (const k of Object.keys(headers)) delete headers[k];
+    for (const k of order) {
+        if (k in snapshot) { headers[k] = snapshot[k]; delete snapshot[k]; }
+    }
+    for (const k of Object.keys(snapshot)) headers[k] = snapshot[k];
+}
+
 const DOCUMENT_HEADERS = {
     'user-agent': CHROME_UA,
     'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -22,6 +49,7 @@ const DOCUMENT_HEADERS = {
     'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"Windows"',
+    'sec-ch-ua-full-version-list': '"Google Chrome";v="131.0.6778.265", "Chromium";v="131.0.6778.265", "Not_A Brand";v="24.0.0.0"',
     'sec-fetch-dest': 'document',
     'sec-fetch-mode': 'navigate',
     'sec-fetch-site': 'none',
@@ -40,6 +68,7 @@ const SUBRESOURCE_HEADERS = {
     'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"Windows"',
+    'sec-ch-ua-full-version-list': '"Google Chrome";v="131.0.6778.265", "Chromium";v="131.0.6778.265", "Not_A Brand";v="24.0.0.0"',
     'sec-fetch-site': 'cross-site',
     'sec-fetch-mode': 'cors',
     'dnt': '0',
@@ -495,6 +524,8 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
             req.headers['accept'] = 'font/woff2,font/woff,*/*;q=0.9';
         }
     }
+
+    _reorderHeaders(req.headers, isDoc ? CHROME_DOC_ORDER : CHROME_SUB_ORDER);
 }
 
 module.exports = { injectBrowserLikeHeaders, getDestinationOrigin };

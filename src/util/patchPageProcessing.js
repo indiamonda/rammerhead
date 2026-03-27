@@ -10,6 +10,53 @@
  */
 
 const pageProcessor = require('testcafe-hammerhead/lib/processing/resources/page');
+const scriptModule = require('testcafe-hammerhead/lib/processing/script');
+
+function _isChallengeResponse(ctx) {
+    if (!ctx || !ctx.destRes) return false;
+    const h = ctx.destRes.headers;
+    if (!h) return false;
+    const cfm = h['cf-mitigated'];
+    if (cfm && /challenge/i.test(cfm)) return true;
+    if (ctx.destRes.statusCode === 403 || ctx.destRes.statusCode === 503) {
+        const srv = h['server'];
+        if (srv && /cloudflare/i.test(srv)) return true;
+    }
+    return false;
+}
+
+const ANTIDETECT_SCRIPT = [
+    '<script>',
+    '(function(){',
+    'if(typeof window==="undefined"||window.__rhAD)return;window.__rhAD=1;',
+    'try{Object.defineProperty(navigator,"webdriver",{get:function(){return undefined},configurable:true})}catch(e){}',
+    'try{if(!navigator.plugins||!navigator.plugins.length){',
+        'var _mkP=function(n,d,fn,mt){var p=Object.create(Plugin.prototype);',
+            'Object.defineProperties(p,{name:{value:n},description:{value:d},filename:{value:fn},length:{value:1}});',
+            'var mi=Object.create(MimeType.prototype);',
+            'Object.defineProperties(mi,{type:{value:mt},suffixes:{value:"pdf"},description:{value:d},enabledPlugin:{value:p}});',
+            'p[0]=mi;return p};',
+        'var _pList=[',
+            '_mkP("Chrome PDF Plugin","Portable Document Format","internal-pdf-viewer","application/x-google-chrome-pdf"),',
+            '_mkP("Chrome PDF Viewer","","mhjfbmdgcfjbbpaeojofohoefgiehjai","application/pdf"),',
+            '_mkP("Native Client","","internal-nacl-plugin","application/x-nacl")];',
+        'Object.defineProperty(navigator,"plugins",{get:function(){',
+            'var a=Object.create(PluginArray.prototype);',
+            'for(var i=0;i<_pList.length;i++){a[i]=_pList[i];a[_pList[i].name]=_pList[i]}',
+            'Object.defineProperty(a,"length",{value:_pList.length});',
+            'a.refresh=function(){};a.item=function(i){return a[i]};a.namedItem=function(n){return a[n]};',
+            'return a},configurable:true})',
+    '}}catch(e){}',
+    'try{if(!window.chrome){window.chrome={runtime:{connect:function(){},sendMessage:function(){}},',
+        'csi:function(){return{}},loadTimes:function(){return{}}}}}catch(e){}',
+    'try{if(navigator.languages&&navigator.languages.length===0){',
+        'Object.defineProperty(navigator,"languages",{get:function(){return["en-US","en"]},configurable:true})}}catch(e){}',
+    'try{var _hh="%hammerhead%";if(_hh in window){',
+        'Object.defineProperty(window,_hh,{enumerable:false,configurable:true,writable:true,value:window[_hh]})}}catch(e){}',
+    'try{var _ih="%is-hammerhead%";if(_ih in window){',
+        'Object.defineProperty(window,_ih,{enumerable:false,configurable:true,writable:true,value:window[_ih]})}}catch(e){}',
+    '})();</script>',
+].join('\n');
 
 const DEVTOOLS_SCRIPT = [
     '<script>',
@@ -149,15 +196,26 @@ const DEVTOOLS_SCRIPT = [
 const origProcess = pageProcessor.processResource.bind(pageProcessor);
 
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
+    const isChallenge = _isChallengeResponse(ctx);
+    let savedProcessScript;
+
+    if (isChallenge) {
+        savedProcessScript = scriptModule.processScript;
+        scriptModule.processScript = function passthrough(src) { return src; };
+    }
+
+    const inject = ANTIDETECT_SCRIPT + DEVTOOLS_SCRIPT;
     let result;
     try {
         result = origProcess(html, ctx, charset, urlReplacer, isSrcdoc);
     } catch (e) {
         if (typeof html === 'string') {
-            return html.replace(/<head[^>]*>/i, '$&' + DEVTOOLS_SCRIPT);
+            return html.replace(/<head[^>]*>/i, '$&' + inject);
         }
         throw e;
+    } finally {
+        if (isChallenge) scriptModule.processScript = savedProcessScript;
     }
     if (typeof result !== 'string') return result;
-    return result.replace(/<head[^>]*>/i, '$&' + DEVTOOLS_SCRIPT);
+    return result.replace(/<head[^>]*>/i, '$&' + inject);
 };
