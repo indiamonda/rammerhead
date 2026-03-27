@@ -10,20 +10,6 @@
  */
 
 const pageProcessor = require('testcafe-hammerhead/lib/processing/resources/page');
-const scriptModule = require('testcafe-hammerhead/lib/processing/script');
-
-function _isChallengeResponse(ctx) {
-    if (!ctx || !ctx.destRes) return false;
-    const h = ctx.destRes.headers;
-    if (!h) return false;
-    const cfm = h['cf-mitigated'];
-    if (cfm && /challenge/i.test(cfm)) return true;
-    if (ctx.destRes.statusCode === 403 || ctx.destRes.statusCode === 503) {
-        const srv = h['server'];
-        if (srv && /cloudflare/i.test(srv)) return true;
-    }
-    return false;
-}
 
 const ANTIDETECT_SCRIPT = [
     '<script>',
@@ -51,10 +37,8 @@ const ANTIDETECT_SCRIPT = [
         'csi:function(){return{}},loadTimes:function(){return{}}}}}catch(e){}',
     'try{if(navigator.languages&&navigator.languages.length===0){',
         'Object.defineProperty(navigator,"languages",{get:function(){return["en-US","en"]},configurable:true})}}catch(e){}',
-    'try{var _hh="%hammerhead%";if(_hh in window){',
-        'Object.defineProperty(window,_hh,{enumerable:false,configurable:true,writable:true,value:window[_hh]})}}catch(e){}',
-    'try{var _ih="%is-hammerhead%";if(_ih in window){',
-        'Object.defineProperty(window,_ih,{enumerable:false,configurable:true,writable:true,value:window[_ih]})}}catch(e){}',
+    'try{Object.defineProperty(window,"%hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
+    'try{Object.defineProperty(window,"%is-hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
     '})();</script>',
 ].join('\n');
 
@@ -196,14 +180,6 @@ const DEVTOOLS_SCRIPT = [
 const origProcess = pageProcessor.processResource.bind(pageProcessor);
 
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
-    const isChallenge = _isChallengeResponse(ctx);
-    let savedProcessScript;
-
-    if (isChallenge) {
-        savedProcessScript = scriptModule.processScript;
-        scriptModule.processScript = function passthrough(src) { return src; };
-    }
-
     const inject = ANTIDETECT_SCRIPT + DEVTOOLS_SCRIPT;
     let result;
     try {
@@ -213,8 +189,6 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
             return html.replace(/<head[^>]*>/i, '$&' + inject);
         }
         throw e;
-    } finally {
-        if (isChallenge) scriptModule.processScript = savedProcessScript;
     }
     if (typeof result !== 'string') return result;
     return result.replace(/<head[^>]*>/i, '$&' + inject);
