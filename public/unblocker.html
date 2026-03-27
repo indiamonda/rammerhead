@@ -7,19 +7,29 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f13;color:#e0e0e0;height:100vh;overflow:hidden;display:flex;align-items:center;justify-content:center}
-.loader-wrap{text-align:center;display:flex;flex-direction:column;align-items:center;gap:28px}
-.spinner{width:56px;height:56px;border:4px solid rgba(255,255,255,.08);border-top-color:#6c63ff;border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
+.loader-wrap{text-align:center;display:flex;flex-direction:column;align-items:center;gap:24px;width:100%;max-width:420px;padding:0 20px}
 .loader-text{font-size:18px;font-weight:500;letter-spacing:.5px;color:#b0b0c0}
-.loader-url{font-size:13px;color:#6c6c80;max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 20px}
+.progress-wrap{width:100%;display:flex;flex-direction:column;gap:10px}
+.progress-track{width:100%;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
+.progress-bar{height:100%;width:0%;background:linear-gradient(90deg,#6c63ff,#a78bfa);border-radius:3px;transition:width .4s cubic-bezier(.4,0,.2,1)}
+.progress-info{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#6c6c80}
+.progress-stage{text-align:left}
+.progress-pct{font-variant-numeric:tabular-nums}
+.loader-url{font-size:13px;color:#6c6c80;max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .error{color:#e74c3c;font-size:14px;display:none;max-width:480px;line-height:1.5}
 iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:none;z-index:10}
 </style>
 </head>
 <body>
 <div class="loader-wrap" id="loader">
-    <div class="spinner"></div>
     <div class="loader-text">Loading via Proxy</div>
+    <div class="progress-wrap">
+        <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+        <div class="progress-info">
+            <span class="progress-stage" id="progress-stage">Initializing&hellip;</span>
+            <span class="progress-pct" id="progress-pct">0%</span>
+        </div>
+    </div>
     <div class="loader-url" id="target-url"></div>
     <div class="error" id="error"></div>
 </div>
@@ -32,6 +42,33 @@ iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:no
     var errorEl = document.getElementById('error');
     var loader = document.getElementById('loader');
     var frame = document.getElementById('frame');
+    var barEl = document.getElementById('progress-bar');
+    var stageEl = document.getElementById('progress-stage');
+    var pctEl = document.getElementById('progress-pct');
+
+    var progress = 0;
+    var trickleTimer = null;
+
+    function setProgress(value, stage) {
+        progress = Math.min(value, 100);
+        barEl.style.width = progress + '%';
+        pctEl.textContent = Math.round(progress) + '%';
+        if (stage) stageEl.textContent = stage;
+    }
+
+    function startTrickle(from, ceiling) {
+        clearInterval(trickleTimer);
+        progress = from;
+        setProgress(from);
+        trickleTimer = setInterval(function() {
+            if (progress >= ceiling) { clearInterval(trickleTimer); return; }
+            var remaining = ceiling - progress;
+            var step = Math.max(0.15, remaining * 0.04);
+            setProgress(progress + step);
+        }, 200);
+    }
+
+    function stopTrickle() { clearInterval(trickleTimer); }
 
     if (!url) {
         errorEl.textContent = 'Missing ?url= parameter.';
@@ -58,8 +95,33 @@ iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:no
         localStorage.setItem('deviceSessionId', sessionId);
     }
 
+    function showFrame() {
+        stopTrickle();
+        setProgress(100, 'Complete');
+        setTimeout(function() {
+            loader.style.display = 'none';
+            frame.style.display = 'block';
+        }, 300);
+    }
+
+    function loadFrame(proxied) {
+        setProgress(50, 'Loading page\u2026');
+        startTrickle(50, 95);
+        frame.src = proxied;
+        frame.onload = function() {
+            showFrame();
+            try { document.title = frame.contentDocument.title || url; } catch(e) { document.title = url; }
+        };
+    }
+
+    setProgress(5, 'Setting up session\u2026');
+    startTrickle(5, 25);
+
     fetch(basePath + '/ensuresession?id=' + encodeURIComponent(sessionId))
         .then(function() {
+            stopTrickle();
+            setProgress(30, 'Resolving proxy URL\u2026');
+            startTrickle(30, 48);
             return fetch(basePath + '/getproxiedurl?id=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(url));
         })
         .then(function(r) {
@@ -67,29 +129,18 @@ iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:no
             return r.json();
         })
         .then(function(data) {
+            stopTrickle();
             var proxied = data.proxiedUrl || (basePath + '/' + sessionId + '/' + url);
-            frame.src = proxied;
-            frame.onload = function() {
-                loader.style.display = 'none';
-                frame.style.display = 'block';
-                try { document.title = frame.contentDocument.title || url; } catch(e) { document.title = url; }
-            };
+            loadFrame(proxied);
         })
-        .catch(function(err) {
+        .catch(function() {
+            stopTrickle();
             var proxied = basePath + '/' + sessionId + '/' + url;
-            frame.src = proxied;
-            frame.onload = function() {
-                loader.style.display = 'none';
-                frame.style.display = 'block';
-                try { document.title = frame.contentDocument.title || url; } catch(e) { document.title = url; }
-            };
+            loadFrame(proxied);
         });
 
     setTimeout(function() {
-        if (frame.style.display !== 'block') {
-            loader.style.display = 'none';
-            frame.style.display = 'block';
-        }
+        if (frame.style.display !== 'block') showFrame();
     }, 15000);
 })();
 </script>
