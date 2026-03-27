@@ -238,6 +238,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     const PROXY_URL_RE = /\/[a-z0-9]{32}(?:![a-z]*)?\/(https?:\/\/.+)/i;
     function _extractRealUrl(url) {
         if (!url) return null;
+        if (/^raw!/i.test(url)) url = url.slice(4);
         if (/^data:|^blob:|^javascript:/i.test(url)) return null;
         const m = url.match(PROXY_URL_RE);
         if (m) return m[1];

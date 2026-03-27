@@ -1659,7 +1659,7 @@ body {
 }
 .dt-scope-btn:not(:last-child) { border-right: 1px solid var(--color-border); }
 .dt-scope-btn:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
-.dt-scope-btn.active { background: var(--color-accent); color: #fff; }
+.dt-scope-btn.active { background: var(--color-accent); }
 
 .devtools-close {
     margin-left: 8px;

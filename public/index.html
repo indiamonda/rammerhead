@@ -848,6 +848,29 @@
             let activeTabId = null;
             let tabIdCounter = 0;
 
+            function _saveTabs() {
+                try {
+                    const data = tabs.map(t => ({
+                        url: t.url,
+                        title: t.title,
+                        favicon: (t.favicon || '').startsWith('data:') ? '' : t.favicon,
+                        history: t.history.slice(-20),
+                        historyIndex: Math.min(t.historyIndex, 19),
+                    }));
+                    localStorage.setItem('rh_tabs', JSON.stringify({ tabs: data, active: tabs.findIndex(t => t.id === activeTabId) }));
+                } catch(_) {}
+            }
+
+            function _restoreTabs() {
+                try {
+                    const raw = localStorage.getItem('rh_tabs');
+                    if (!raw) return null;
+                    const saved = JSON.parse(raw);
+                    if (!saved || !Array.isArray(saved.tabs) || saved.tabs.length === 0) return null;
+                    return saved;
+                } catch(_) { return null; }
+            }
+
             const tabBar = document.getElementById('tab-bar');
             const browserContent = document.getElementById('browser-content');
             const newTabButton = document.getElementById('new-tab-button');
@@ -941,6 +964,7 @@
 
                 // Make it active
                 switchToTab(tabId);
+                _saveTabs();
 
                 return tabId;
             }
@@ -968,6 +992,7 @@
                         createTab();
                     }
                 }
+                _saveTabs();
             }
 
             function switchToTab(tabId) {
@@ -1005,6 +1030,7 @@
                 if (typeof _refreshCurrentDtTab === 'function' && typeof _dtIsVisible === 'function' && _dtIsVisible()) {
                     _refreshCurrentDtTab();
                 }
+                _saveTabs();
             }
 
             async function loadTabContent(tabId, url, addToHistory = true) {
@@ -1070,6 +1096,7 @@
                 if (tabId === activeTabId) {
                     urlInput.value = tab.url;
                 }
+                _saveTabs();
 
                 // Clear any wallpaper background from newtab
                 contentElement.style.backgroundImage = '';
@@ -1112,8 +1139,9 @@
                             const iframeWindow = iframe.contentWindow;
                             
                             syncUrlFromIframe();
-                            iframeWindow.addEventListener('hashchange', syncUrlFromIframe);
-                            iframeWindow.addEventListener('popstate', syncUrlFromIframe);
+                            _saveTabs();
+                            iframeWindow.addEventListener('hashchange', () => { syncUrlFromIframe(); _saveTabs(); });
+                            iframeWindow.addEventListener('popstate', () => { syncUrlFromIframe(); _saveTabs(); });
 
                             // Poll injected DevTools data from iframe
                             (function pollDevTools(win) {
@@ -2412,6 +2440,7 @@
                         const titleElement = tabElement.querySelector('.tab-title');
                         if (titleElement) titleElement.textContent = title;
                     }
+                    _saveTabs();
                 }
             }
 
@@ -3157,8 +3186,29 @@
             // Update bookmark bar
             updateBookmarkBar();
 
-            // Create initial tab
-            createTab('jq://home/');
+            // Restore saved tabs or create initial tab
+            (function initTabs() {
+                const saved = _restoreTabs();
+                if (saved) {
+                    const activeIdx = typeof saved.active === 'number' ? saved.active : 0;
+                    saved.tabs.forEach((t, i) => {
+                        const id = createTab(t.url, t.title || 'New Tab');
+                        const tab = tabs.find(tb => tb.id === id);
+                        if (tab) {
+                            tab.favicon = t.favicon || '';
+                            tab.history = t.history || [t.url];
+                            tab.historyIndex = typeof t.historyIndex === 'number' ? t.historyIndex : tab.history.length - 1;
+                            tab.canGoBack = tab.historyIndex > 0;
+                            tab.canGoForward = tab.historyIndex < tab.history.length - 1;
+                            if (t.favicon) updateTabFavicon(id, t.favicon);
+                        }
+                    });
+                    const targetTab = tabs[activeIdx] || tabs[0];
+                    if (targetTab) switchToTab(targetTab.id);
+                } else {
+                    createTab('jq://home/');
+                }
+            })();
 
             // Re-initialize new tab handlers when content is loaded
             const observer = new MutationObserver((mutations) => {
@@ -3174,6 +3224,10 @@
                 });
             });
             observer.observe(browserContent, { childList: true, subtree: true });
+
+            // Save tabs before page unload
+            window.addEventListener('beforeunload', _saveTabs);
+            window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') _saveTabs(); });
 
             // Make closeTab and createTab available globally
             window.closeTab = closeTab;
