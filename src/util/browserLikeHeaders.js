@@ -47,7 +47,7 @@ const SUBRESOURCE_HEADERS = {
 };
 
 // Region-specific Accept-Language (host pattern -> value)
-const ZH_FIRST_HOST_RE = /\.?bilibili\.(com|cn)$|\.?douyin\.com$|\.?biliapi\.|\.?hdslb\.com$|\.?bilivideo\.|\.?taobao\.com$|\.?tmall\.|\.?weibo\.com$|\.?zhihu\.com$|\.?qq\.com$|\.?baidu\.com$|\.?jd\.com$|\.?163\.com$/i;
+const ZH_FIRST_HOST_RE = /\.?bilibili\.(com|cn)$|\.?douyin\.com$|\.?biliapi\.|\.?hdslb\.com$|\.?bilivideo\.|\.?taobao\.com$|\.?tmall\.|\.?weibo\.com$|\.?zhihu\.com$|\.?qq\.com$|\.?baidu\.com$|\.?jd\.com$|\.?163\.com$|\.?deepseek\.(com|ai)$/i;
 const JA_FIRST_HOST_RE = /\.?nicovideo\.jp$|\.?yahoo\.co\.jp$|\.?rakuten\.co\.jp$|\.?dmm\.co\.jp$|\.?pixiv\.net$|\.?line\.me$|\.?fc2\.com$/i;
 const KO_FIRST_HOST_RE = /\.?naver\.(com|co\.kr)$|\.?daum\.net$|\.?kakao\.(com|co\.kr)$|\.?nate\.com$|\.?tistory\.com$/i;
 
@@ -221,6 +221,21 @@ const CDN_REFERER_MAP = [
     [/\.?googleapis\.com$/i, 'https://www.google.com'],
     [/\.?gstatic\.com$/i, 'https://www.google.com'],
     [/\.?googleusercontent\.com$/i, 'https://www.google.com'],
+    // ChatGPT / OpenAI
+    [/\.?chatgpt\.com$/i, 'https://chatgpt.com'],
+    [/\.?openai\.com$/i, 'https://chatgpt.com'],
+    [/\.?oaistatic\.com$/i, 'https://chatgpt.com'],
+    [/\.?oaiusercontent\.com$/i, 'https://chatgpt.com'],
+    [/\.?oaistatic\.net$/i, 'https://chatgpt.com'],
+    [/\.?auth0\.openai\.com$/i, 'https://chatgpt.com'],
+    // DeepSeek
+    [/\.?deepseek\.com$/i, 'https://chat.deepseek.com'],
+    [/\.?deepseek\.ai$/i, 'https://chat.deepseek.com'],
+    // Claude / Anthropic
+    [/\.?claude\.ai$/i, 'https://claude.ai'],
+    [/\.?anthropic\.com$/i, 'https://claude.ai'],
+    // Gemini
+    [/\.?gemini\.google\.com$/i, 'https://gemini.google.com'],
 ];
 
 // Match both unshuffled (https://...) and shuffled (_rhs...) proxy URLs (indicator is _rhs, no tilde).
@@ -356,6 +371,10 @@ function getRefererOriginFallback(url, referer) {
     if (/figma\.com|figmacdn/.test(combined)) return 'https://www.figma.com';
     if (/vercel\.com|vercel\.app|vercel-insights/.test(combined)) return 'https://vercel.com';
     if (/netlify\.com|netlify\.app/.test(combined)) return 'https://www.netlify.com';
+    if (/chatgpt\.com|openai\.com|oaistatic|oaiusercontent/.test(combined)) return 'https://chatgpt.com';
+    if (/deepseek\.com|deepseek\.ai/.test(combined)) return 'https://chat.deepseek.com';
+    if (/claude\.ai|anthropic\.com/.test(combined)) return 'https://claude.ai';
+    if (/gemini\.google\.com/.test(combined)) return 'https://gemini.google.com';
     return null;
 }
 
@@ -414,7 +433,7 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     } catch (_) {}
 
     // Sites that expect same-origin sec-fetch-site for document requests
-    const SAME_ORIGIN_DOC_RE = /\.?bilibili\.(com|cn)$|\.?twitter\.com$|\.?x\.com$|\.?instagram\.com$|\.?facebook\.com$|\.?tiktok\.com$|\.?reddit\.com$|\.?netflix\.com$|\.?discord\.com$|\.?amazon\.(com|co\.\w+)$|\.?linkedin\.com$|\.?canva\.com$|\.?slack\.com$|\.?gitlab\.com$|\.?figma\.com$|\.?youtube\.com$|\.?docs\.google\.com$|\.?vercel\.com$|\.?netlify\.com$/i;
+    const SAME_ORIGIN_DOC_RE = /\.?bilibili\.(com|cn)$|\.?twitter\.com$|\.?x\.com$|\.?instagram\.com$|\.?facebook\.com$|\.?tiktok\.com$|\.?reddit\.com$|\.?netflix\.com$|\.?discord\.com$|\.?amazon\.(com|co\.\w+)$|\.?linkedin\.com$|\.?canva\.com$|\.?slack\.com$|\.?gitlab\.com$|\.?figma\.com$|\.?youtube\.com$|\.?docs\.google\.com$|\.?vercel\.com$|\.?netlify\.com$|\.?chatgpt\.com$|\.?openai\.com$|\.?deepseek\.com$|\.?claude\.ai$|\.?anthropic\.com$|\.?gemini\.google\.com$/i;
     const docOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
     if (isDoc && docOrigin) {
         try {

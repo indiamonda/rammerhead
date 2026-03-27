@@ -4,9 +4,9 @@
 
 app = "rammerhead"
 
-# 512MB to avoid OOM; 256MB was too tight for Node + jsCache
+# 1GB to handle complex proxied sites with JS rewriting
 [[vm]]
-  memory = "512mb"
+  memory = "1024mb"
 
 # Try IAD (US East) if ams has connection issues
 primary_region = "iad"
@@ -29,18 +29,11 @@ primary_region = "iad"
 
   [http_service.concurrency]
     type = "requests"
-    hard_limit = 25
-    soft_limit = 20
+    hard_limit = 250
+    soft_limit = 200
 
   [http_service.http_options]
-    idle_timeout = 300
-
-  # Cache fly-replay decisions by session cookie so only first request per session hits the app
-  [[http_service.http_options.replay_cache]]
-    path_prefix = "/"
-    ttl_seconds = 300
-    type = "cookie"
-    name = "rh_sid"
+    idle_timeout = 900
 
   [[http_service.checks]]
     grace_period = "60s"

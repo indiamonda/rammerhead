@@ -14,8 +14,11 @@ hGuard.isConnectionResetError = function (err) {
     ) {
         return true;
     }
-    console.error('Unknown crash-inducing error:', err);
-    // never return false as to avoid crashing the server
+    if (process.env.DEVELOPMENT) {
+        console.error('Unknown crash-inducing error:', err.stack || err);
+    } else {
+        console.error('Unknown crash-inducing error:', err);
+    }
     return true;
 };
 
@@ -27,8 +30,11 @@ process.on('uncaughtException', (err) => {
         err.message.includes('ETIMEDOUT') ||
         err.message.includes('ERR_INVALID_')
     ) {
-        // crash avoided!
-        console.error('Avoided crash:' + err.message);
+        if (process.env.DEVELOPMENT) {
+            console.error('Avoided crash:', err.stack || err.message);
+        } else {
+            console.error('Avoided crash:' + err.message);
+        }
     } else {
         // probably a TypeError or something important
         console.error('About to throw: ' + err.message);

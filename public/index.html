@@ -19,6 +19,9 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
     <link rel="stylesheet" href="embedded-styles.css" id="embedded-styles" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-css.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.min.js" defer></script>
 
     <script>
         // Fallback: Load CSS dynamically if link fails
@@ -664,6 +667,49 @@
                 tree.querySelectorAll('.src-folder-name').forEach(el => {
                     el.addEventListener('click', () => el.parentElement.classList.toggle('collapsed'));
                 });
+                if (pageUrl && !pageUrl.startsWith('jq://')) {
+                    const match = tree.querySelector(`.src-file[data-url="${CSS.escape(pageUrl)}"]`)
+                               || tree.querySelector('.src-file[data-url]');
+                    if (match) {
+                        const folder = match.closest('.src-folder');
+                        if (folder) folder.classList.remove('collapsed');
+                        match.classList.add('active');
+                        match.scrollIntoView({ block: 'nearest' });
+                        _loadSourceFile(match.dataset.url);
+                    }
+                }
+            }
+            function _detectSourceType(url, text) {
+                const lower = url.toLowerCase();
+                if (/\.css(\?|$)/.test(lower)) return 'css';
+                if (/\.html?(\?|$)/.test(lower) || /\.xhtml(\?|$)/.test(lower)) return 'html';
+                if (/\.json(\?|$)/.test(lower)) return 'json';
+                if (/\.jsx?(\?|$)/.test(lower) || /\.mjs(\?|$)/.test(lower) || /\.ts(\?|$)/.test(lower) || /\.tsx(\?|$)/.test(lower)) return 'js';
+                const trimmed = text.trimStart();
+                if (trimmed.startsWith('<!') || trimmed.startsWith('<html') || trimmed.startsWith('<head') || /^<\?xml/i.test(trimmed)) return 'html';
+                if (/^\s*[\{[]/.test(trimmed)) { try { JSON.parse(text); return 'json'; } catch(_){} }
+                if (/^\s*(@import|@charset|@media|\*\s*\{|body\s*\{|html\s*\{|\.\w+\s*\{|#\w+\s*\{)/.test(trimmed)) return 'css';
+                return 'js';
+            }
+            function _beautifySource(text, type) {
+                const opts = { indent_size: 2, max_preserve_newlines: 2, end_with_newline: true };
+                try {
+                    if (type === 'html' && typeof html_beautify === 'function') return html_beautify(text, opts);
+                    if (type === 'css'  && typeof css_beautify  === 'function') return css_beautify(text, opts);
+                    if (type === 'json') return JSON.stringify(JSON.parse(text), null, 2);
+                    if (typeof js_beautify === 'function') return js_beautify(text, opts);
+                } catch(_) {}
+                return text;
+            }
+            function _renderSourceWithLines(text) {
+                const lines = text.split('\n');
+                const gutterW = String(lines.length).length;
+                let html = '';
+                lines.forEach((line, i) => {
+                    const num = String(i + 1).padStart(gutterW, ' ');
+                    html += '<div class="src-line"><span class="src-ln">' + num + '</span><span class="src-lc">' + _esc(line) + '</span></div>';
+                });
+                return html;
             }
             async function _loadSourceFile(url) {
                 const viewer = document.getElementById('sources-viewer');
@@ -672,8 +718,10 @@
                 try {
                     const resp = await fetch('/__rh_sources?url=' + encodeURIComponent(url));
                     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                    const text = await resp.text();
-                    viewer.innerHTML = '<pre class="source-code">' + _esc(text) + '</pre>';
+                    const raw = await resp.text();
+                    const type = _detectSourceType(url, raw);
+                    const formatted = _beautifySource(raw, type);
+                    viewer.innerHTML = '<pre class="source-code">' + _renderSourceWithLines(formatted) + '</pre>';
                 } catch (e) {
                     viewer.innerHTML = '<div class="dt-empty">Failed to load: ' + _esc(e.message) + '</div>';
                 }

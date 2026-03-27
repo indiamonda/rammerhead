@@ -15,4 +15,4 @@ RUN npm run build
 ENV NODE_ENV=production
 EXPOSE 8080
 
-CMD ["node", "--max-old-space-size=350", "src/server.js"]
+CMD ["node", "--max-old-space-size=768", "src/server.js"]

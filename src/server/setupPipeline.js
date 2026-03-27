@@ -16,7 +16,13 @@ const PROXY_LEAK_HEADERS = [
     'cdn-loop', 'true-client-ip', 'x-client-ip', 'x-original-url', 'x-rewrite-url'
 ];
 
+const DEV = !!process.env.DEVELOPMENT;
 const ANSI = { reset: '\x1b[0m', red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', cyan: '\x1b[36m', gray: '\x1b[90m', white: '\x1b[37m', magenta: '\x1b[35m' };
+function devErr(label, err) {
+    if (!DEV) return;
+    const msg = err instanceof Error ? err.stack || err.message : String(err);
+    process.stderr.write(`${ANSI.red}[DEV ERR]${ANSI.reset} ${ANSI.yellow}${label}${ANSI.reset} ${msg}\n`);
+}
 const LEVEL_STYLE = {
     error: { color: ANSI.red, label: 'ERR' },
     warn:  { color: ANSI.yellow, label: 'WRN' },
@@ -116,9 +122,9 @@ if(f&&f.tagName==='FORM'&&isExt(f.getAttribute('action'))){f.setAttribute('actio
 // Fetch a URL with browser-like headers, following redirects. Returns {status, headers, body} via callback.
 function rawFetch(url, callback, hops) {
     if (!hops) hops = 0;
-    if (hops > 5) return callback(new Error('too many redirects'));
+    if (hops > 5) { devErr('rawFetch', 'too many redirects: ' + url); return callback(new Error('too many redirects')); }
     let parsed;
-    try { parsed = new URL(url); } catch (_) { return callback(new Error('bad url')); }
+    try { parsed = new URL(url); } catch (e) { devErr('rawFetch bad url', url); return callback(new Error('bad url')); }
     const lib = parsed.protocol === 'https:' ? https : http;
     const opts = {
         hostname: parsed.hostname,
@@ -175,7 +181,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         const proxyOrigin = `${serverInfo.protocol}//${serverInfo.hostname}${serverInfo.port == 443 || serverInfo.port == 80 ? '' : ':' + serverInfo.port}`;
 
         rawFetch(targetUrl, (err, status, headers, body) => {
-            if (err) { res.writeHead(502); res.end('Raw proxy error: ' + err.message); return; }
+            if (err) { devErr('rawFetch ' + targetUrl, err); res.writeHead(502); res.end('Raw proxy error: ' + err.message); return; }
             const ct = (headers['content-type'] || '').toLowerCase();
             const isHtml = ct.includes('text/html') || ct.includes('application/xhtml');
 
@@ -215,7 +221,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 try {
                     const batch = JSON.parse(body);
                     (Array.isArray(batch) ? batch : [batch]).forEach(printConsoleMessage);
-                } catch (_) {}
+                } catch (e) { devErr('/__rh_console parse', e); }
                 res.writeHead(204);
                 res.end();
             });
@@ -264,10 +270,11 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 });
                 upRes.pipe(res);
             });
-            upstream.on('error', () => { try { res.writeHead(502); res.end('Fetch failed'); } catch(_){} });
+            upstream.on('error', (e) => { devErr('/__rh_sources upstream', e); try { res.writeHead(502); res.end('Fetch failed'); } catch(_){} });
             upstream.on('timeout', () => { upstream.destroy(); });
             upstream.end();
         } catch (e) {
+            devErr('/__rh_sources', e);
             res.writeHead(500); res.end('Error: ' + e.message);
         }
         return true;
@@ -290,14 +297,14 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         req.on('data', chunk => { body += chunk; if (body.length > 4096) body = body.substring(0, 4096); });
         req.on('end', () => {
             let targetUrl, sessionId;
-            try { const p = JSON.parse(body); targetUrl = p.url; sessionId = p.session; } catch (_) { res.writeHead(400); res.end(); return; }
+            try { const p = JSON.parse(body); targetUrl = p.url; sessionId = p.session; } catch (e) { devErr('/__rh_raw parse', e); res.writeHead(400); res.end(); return; }
             if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) { res.writeHead(400); res.end(); return; }
 
             const serverInfo = proxyServer.getServerInfo(req);
             const proxyOrigin = `${serverInfo.protocol}//${serverInfo.hostname}${serverInfo.port == 443 || serverInfo.port == 80 ? '' : ':' + serverInfo.port}`;
 
             rawFetch(targetUrl, (err, status, headers, buf) => {
-                if (err) { res.writeHead(502); res.end(); return; }
+                if (err) { devErr('/__rh_raw fetch ' + targetUrl, err); res.writeHead(502); res.end(); return; }
                 let html = buf.toString('utf-8');
                 const base = `<base href="${targetUrl.replace(/"/g, '&quot;')}">`;
                 const bridge = sessionId ? buildBridgeScript(proxyOrigin, sessionId + '!raw') : '';
@@ -382,7 +389,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             if (session && typeof session.serializeSession === 'function') {
                 proxyServer.openSessions.addSerializedSession(sessionId, session.serializeSession());
             }
-        } catch (_) { /* ignore */ }
+        } catch (e) { devErr('session warm-up', e); }
         return false;
     }, true);
 
@@ -401,7 +408,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             if (session && typeof session.serializeSession === 'function') {
                 proxyServer.openSessions.addSerializedSession(sessionId, session.serializeSession());
             }
-        } catch (_) { /* ignore */ }
+        } catch (e) { devErr('task.js session warm-up', e); }
         return false;
     }, true);
 
@@ -410,7 +417,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // tokens get lost. Going directly to /v3/signin/identifier with flowName works.
     proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
         if (!req.url) return false;
-        const GOOGLE_SERVICES_RE = /\/([a-z0-9]{32})\/(https?:\/\/(docs|drive|sheets|slides|forms|sites|keep|calendar|meet|chat|mail|groups)\.google\.com)(\/.*)?$/i;
+        const GOOGLE_SERVICES_RE = /\/([a-z0-9]{32})\/(https?:\/\/(docs|drive|sheets|slides|forms|sites|keep|calendar|meet|chat|mail|groups|gemini)\.google\.com)(\/.*)?$/i;
         const m = req.url.match(GOOGLE_SERVICES_RE);
         if (m) {
             const [, sessionId, origin] = m;
@@ -442,7 +449,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                     return true;
                 }
             } catch (error) {
-                // Let other handlers process it
+                devErr('styles.css serve', error);
             }
         }
         return false;

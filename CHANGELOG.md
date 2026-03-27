@@ -1,4 +1,4 @@
-## v2.0.0 (Custom Fork - Chrome-like UI)
+## v1.3.0 (Custom Fork - Browser UI)
 
 ### Major Features
 - **Chrome-inspired Interface**: Complete UI redesign matching Google Chrome's aesthetics
