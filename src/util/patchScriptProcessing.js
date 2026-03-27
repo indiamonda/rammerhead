@@ -108,6 +108,17 @@ const IFRAME_PROXY = [
 
 // Console capture is now handled by patchPageProcessing.js via HTML injection.
 
+// Skip JS rewriting for Cloudflare challenge/Turnstile scripts.
+// Hammerhead's AST rewriting breaks the obfuscated challenge code, causing
+// Cloudflare managed challenges to never resolve on datacenter IPs.
+const CF_SKIP_RE = /\/cdn-cgi\/|challenges\.cloudflare\.com|cloudflareinsights\.com|captcha\.js|hcaptcha\.com|recaptcha|challenge-platform|aws-waf-token/i;
+const scriptProcessor = require('testcafe-hammerhead/lib/processing/resources/script');
+const _origShouldProcess = scriptProcessor.shouldProcessResource.bind(scriptProcessor);
+scriptProcessor.shouldProcessResource = function (ctx) {
+    if (ctx && ctx.dest && ctx.dest.url && CF_SKIP_RE.test(ctx.dest.url)) return false;
+    return _origShouldProcess(ctx);
+};
+
 const END_HEADER = headerModule.SCRIPT_PROCESSING_END_HEADER_COMMENT;
 const originalAdd = headerModule.add;
 

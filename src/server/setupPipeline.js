@@ -234,6 +234,16 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
 
     // Source file fetch endpoint for DevTools Sources tab.
     // GET /__rh_sources?url=<encoded-url> → fetches raw content and returns as text.
+    // Handles proxy-rewritten URLs by extracting the real target URL.
+    const PROXY_URL_RE = /\/[a-z0-9]{32}(?:![a-z]*)?\/(https?:\/\/.+)/i;
+    function _extractRealUrl(url) {
+        if (!url) return null;
+        if (/^data:|^blob:|^javascript:/i.test(url)) return null;
+        const m = url.match(PROXY_URL_RE);
+        if (m) return m[1];
+        if (/^https?:\/\//i.test(url)) return url;
+        return null;
+    }
     proxyServer.addToOnRequestPipeline((req, res) => {
         if (!req.url || !req.url.includes('/__rh_sources')) return false;
         if (req.method === 'OPTIONS') {
@@ -243,39 +253,25 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         }
         try {
             const parsed = new URL(req.url, 'http://localhost');
-            const targetUrl = parsed.searchParams.get('url');
-            if (!targetUrl) { res.writeHead(400); res.end('Missing url param'); return true; }
+            const rawParam = parsed.searchParams.get('url');
+            if (!rawParam) { res.writeHead(400); res.end('Missing url param'); return true; }
 
-            const urlObj = new URL(targetUrl);
-            const mod = urlObj.protocol === 'https:' ? https : http;
-            const fetchOpts = {
-                hostname: urlObj.hostname,
-                port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
-                path: urlObj.pathname + urlObj.search,
-                method: 'GET',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                    'Accept': '*/*',
-                    'Accept-Encoding': 'identity',
-                },
-                rejectUnauthorized: false,
-                timeout: 10000,
-            };
-            const upstream = mod.request(fetchOpts, (upRes) => {
-                const ct = upRes.headers['content-type'] || 'text/plain';
+            const targetUrl = _extractRealUrl(rawParam);
+            if (!targetUrl) { res.writeHead(400); res.end('Non-fetchable URL'); return true; }
+
+            rawFetch(targetUrl, (err, status, headers, body) => {
+                if (err) { devErr('/__rh_sources fetch', err); try { res.writeHead(502); res.end('Fetch failed: ' + err.message); } catch(_){} return; }
+                const ct = headers['content-type'] || 'text/plain';
                 res.writeHead(200, {
                     'Content-Type': ct,
                     'Access-Control-Allow-Origin': '*',
                     'Cache-Control': 'no-store',
                 });
-                upRes.pipe(res);
+                res.end(body);
             });
-            upstream.on('error', (e) => { devErr('/__rh_sources upstream', e); try { res.writeHead(502); res.end('Fetch failed'); } catch(_){} });
-            upstream.on('timeout', () => { upstream.destroy(); });
-            upstream.end();
         } catch (e) {
             devErr('/__rh_sources', e);
-            res.writeHead(500); res.end('Error: ' + e.message);
+            try { res.writeHead(500); res.end('Error: ' + e.message); } catch(_){}
         }
         return true;
     }, true);
