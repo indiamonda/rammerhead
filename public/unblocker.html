@@ -6,8 +6,8 @@
 <title>Loading via Proxy</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f13;color:#e0e0e0;height:100vh;overflow:hidden;display:flex;align-items:center;justify-content:center}
-.loader-wrap{text-align:center;display:flex;flex-direction:column;align-items:center;gap:24px;width:100%;max-width:420px;padding:0 20px}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f13;color:#e0e0e0;height:100vh;overflow:hidden}
+.loader-wrap{text-align:center;display:flex;flex-direction:column;align-items:center;gap:24px;width:100%;max-width:420px;padding:0 20px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
 .loader-text{font-size:18px;font-weight:500;letter-spacing:.5px;color:#b0b0c0}
 .progress-wrap{width:100%;display:flex;flex-direction:column;gap:10px}
 .progress-track{width:100%;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
@@ -17,7 +17,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .progress-pct{font-variant-numeric:tabular-nums}
 .loader-url{font-size:13px;color:#6c6c80;max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .error{color:#e74c3c;font-size:14px;display:none;max-width:480px;line-height:1.5}
-iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:none;z-index:10}
+#frame{position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:none;z-index:10}
 </style>
 </head>
 <body>
@@ -36,65 +36,229 @@ iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:no
 <iframe id="frame"></iframe>
 <script>
 (function() {
-    var params = new URLSearchParams(location.search);
-    var url = params.get('url');
+    var params  = new URLSearchParams(location.search);
+    var url     = params.get('url');
     var targetEl = document.getElementById('target-url');
-    var errorEl = document.getElementById('error');
-    var loader = document.getElementById('loader');
-    var frame = document.getElementById('frame');
-    var barEl = document.getElementById('progress-bar');
-    var stageEl = document.getElementById('progress-stage');
-    var pctEl = document.getElementById('progress-pct');
+    var errorEl  = document.getElementById('error');
+    var loader   = document.getElementById('loader');
+    var frame    = document.getElementById('frame');
+    var barEl    = document.getElementById('progress-bar');
+    var stageEl  = document.getElementById('progress-stage');
+    var pctEl    = document.getElementById('progress-pct');
 
-    var progress = 0;
-    var trickleTimer = null;
-
-    function setProgress(value, stage) {
-        progress = Math.min(value, 100);
+    // ========== Progress helpers ==========
+    var progress = 0, trickleTimer = null;
+    function setProgress(v, stage) {
+        progress = Math.min(v, 100);
         barEl.style.width = progress + '%';
         pctEl.textContent = Math.round(progress) + '%';
         if (stage) stageEl.textContent = stage;
     }
-
-    function startTrickle(from, ceiling) {
+    function startTrickle(from, ceil) {
         clearInterval(trickleTimer);
-        progress = from;
-        setProgress(from);
+        progress = from; setProgress(from);
         trickleTimer = setInterval(function() {
-            if (progress >= ceiling) { clearInterval(trickleTimer); return; }
-            var remaining = ceiling - progress;
-            var step = Math.max(0.15, remaining * 0.04);
-            setProgress(progress + step);
+            if (progress >= ceil) { clearInterval(trickleTimer); return; }
+            setProgress(progress + Math.max(0.15, (ceil - progress) * 0.04));
         }, 200);
     }
-
     function stopTrickle() { clearInterval(trickleTimer); }
 
-    if (!url) {
-        errorEl.textContent = 'Missing ?url= parameter.';
-        errorEl.style.display = 'block';
-        return;
-    }
-
-    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-    try { var u = new URL(url); if (u.pathname === '') url = u.origin + '/'; } catch(e) {}
-
-    targetEl.textContent = url;
-    document.title = 'Loading ' + url;
-
+    // ========== Base path ==========
     var basePath = location.pathname.startsWith('/rammerhead') ? '/rammerhead' : '';
 
+    // ========== URL Shuffler (mirror of server StrShuffler) ==========
+    var _shufflerBase = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
+    var _shuffledInd  = '_rhs';
+    var _mod = function(n, m) { return ((n % m) + m) % m; };
+    var _shuffler = null;
+
+    function StrShuffler(dict) { this.dictionary = dict; }
+    StrShuffler.prototype.shuffle = function(str) {
+        if (str.indexOf(_shuffledInd) === 0) return str;
+        var out = '';
+        for (var i = 0; i < str.length; i++) {
+            var ch = str.charAt(i), idx = _shufflerBase.indexOf(ch);
+            if (ch === '%' && str.length - i >= 3) { out += ch; out += str.charAt(++i); out += str.charAt(++i); }
+            else if (idx === -1) { out += ch; }
+            else { out += this.dictionary.charAt(_mod(idx + i, _shufflerBase.length)); }
+        }
+        return _shuffledInd + out;
+    };
+    StrShuffler.prototype.unshuffle = function(str) {
+        if (str.indexOf(_shuffledInd) !== 0) return str;
+        str = str.slice(_shuffledInd.length);
+        var out = '';
+        for (var i = 0; i < str.length; i++) {
+            var ch = str.charAt(i), idx = this.dictionary.indexOf(ch);
+            if (ch === '%' && str.length - i >= 3) { out += ch; out += str.charAt(++i); out += str.charAt(++i); }
+            else if (idx === -1) { out += ch; }
+            else { out += _shufflerBase.charAt(_mod(idx - i, _shufflerBase.length)); }
+        }
+        return out;
+    };
+
+    function ensureUnshuffled(candidate) {
+        if (!candidate || typeof candidate !== 'string') return candidate;
+        if (candidate.indexOf('http://') === 0 || candidate.indexOf('https://') === 0) return candidate;
+        if (!_shuffler) return null;
+        var toUn = candidate.indexOf(_shuffledInd) === 0 ? candidate : (_shuffledInd + candidate);
+        try {
+            var real = _shuffler.unshuffle(toUn);
+            return (real && (real.indexOf('http://') === 0 || real.indexOf('https://') === 0)) ? real : null;
+        } catch (_) {}
+        return null;
+    }
+
+    function extractRealUrl(proxyUrl, iframeWin) {
+        var raw = null;
+        try {
+            if (iframeWin) {
+                var hh = iframeWin['%hammerhead%'];
+                if (hh && hh.utils && hh.utils.url && hh.utils.url.parseProxyUrl) {
+                    var parsed = hh.utils.url.parseProxyUrl(proxyUrl);
+                    if (parsed && parsed.destUrl) raw = parsed.destUrl;
+                }
+            }
+        } catch (_) {}
+        if (raw !== null) {
+            var un = ensureUnshuffled(raw);
+            if (un) return un;
+        }
+        try {
+            var match = proxyUrl.match(/\/([a-f0-9]{32})[^\/]*\/(.+)/);
+            if (match) {
+                var urlPart = match[2];
+                var un2 = ensureUnshuffled(urlPart);
+                if (un2) return un2;
+                if (urlPart.indexOf(_shuffledInd) !== 0) return urlPart.indexOf('http') === 0 ? urlPart : null;
+            }
+        } catch (_) {}
+        return null;
+    }
+
+    // ========== Session management ==========
     function genSession() {
         return Array.from(crypto.getRandomValues(new Uint8Array(16)))
             .map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
     }
-
     var sessionId = localStorage.getItem('deviceSessionId');
-    if (!sessionId) {
-        sessionId = genSession();
-        localStorage.setItem('deviceSessionId', sessionId);
+    if (!sessionId) { sessionId = genSession(); localStorage.setItem('deviceSessionId', sessionId); }
+
+    // ========== URL normalization (same as main proxy) ==========
+    function normalizeUrl(raw) {
+        raw = raw.trim();
+        var rawPrefix = '';
+        if (raw.indexOf('raw!') === 0) { rawPrefix = 'raw!'; raw = raw.slice(4); }
+        if (/^https?:\/\//i.test(raw) || /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}/.test(raw)) {
+            if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+            try { var u = new URL(raw); if (u.pathname === '' || u.pathname === '/') raw = u.origin + '/'; } catch (_) {}
+        } else {
+            raw = 'https://www.google.com/search?q=' + encodeURIComponent(raw);
+        }
+        return rawPrefix + raw;
     }
 
+    // ========== Current state ==========
+    var currentRealUrl = '';
+
+    // ========== Core: load a URL through the proxy ==========
+    function navigateProxy(inputUrl) {
+        var rawMode = false;
+        if (inputUrl.indexOf('raw!') === 0) { rawMode = true; inputUrl = inputUrl.slice(4); }
+        var normalized = normalizeUrl(inputUrl);
+        currentRealUrl = rawMode ? 'raw!' + normalized : normalized;
+        document.title = currentRealUrl;
+
+        if (rawMode) {
+            frame.src = basePath + '/' + sessionId + '!raw/' + normalized;
+            return;
+        }
+
+        fetch(basePath + '/getproxiedurl?id=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(normalized))
+            .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+            .then(function(data) {
+                frame.src = data.proxiedUrl || (basePath + '/' + sessionId + '/' + normalized);
+            })
+            .catch(function() {
+                fetch(basePath + '/ensuresession?id=' + encodeURIComponent(sessionId)).catch(function(){});
+                frame.src = basePath + '/' + sessionId + '/' + normalized;
+            });
+    }
+
+    // ========== iframe onload: sync title, intercept window.open/close ==========
+    function onFrameLoad() {
+        try { if (!_shuffler) fetchShuffler(); } catch (_) {}
+
+        var iframeWin, iframeDoc;
+        try { iframeWin = frame.contentWindow; iframeDoc = frame.contentDocument || iframeWin.document; } catch (_) { return; }
+
+        // Sync real URL for title
+        try {
+            var href = iframeWin.location.href;
+            var dest = extractRealUrl(href, iframeWin);
+            if (dest) currentRealUrl = dest;
+        } catch (_) {}
+
+        // Title & favicon
+        try { document.title = iframeDoc.title || currentRealUrl; } catch (_) { document.title = currentRealUrl; }
+        try {
+            var fav = iframeDoc.querySelector('link[rel="icon"]') || iframeDoc.querySelector('link[rel="shortcut icon"]');
+            if (fav) {
+                var favHref = fav.getAttribute('href');
+                if (favHref) {
+                    var favUrl = (favHref.indexOf('http') === 0 || favHref.indexOf('data:') === 0)
+                        ? favHref : new URL(favHref, iframeWin.location.href).href;
+                    var link = document.querySelector('link[rel="icon"]');
+                    if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+                    link.href = favUrl;
+                }
+            }
+        } catch (_) {}
+
+        // Intercept window.open → navigate in this same proxy frame
+        try {
+            iframeWin.open = function(openUrl, target) {
+                if (!openUrl) return makeMockWindow();
+                var resolved;
+                try { resolved = new URL(openUrl, currentRealUrl).href; } catch (_) { resolved = openUrl; }
+                navigateProxy(normalizeUrl(resolved));
+                return makeMockWindow();
+            };
+        } catch (_) {}
+
+        // Intercept window.close
+        try {
+            iframeWin.close = function() { frame.src = 'about:blank'; };
+        } catch (_) {}
+    }
+
+    function makeMockWindow() {
+        return {
+            closed: false, focus: function(){}, blur: function(){},
+            close: function() { this.closed = true; },
+            postMessage: function(){},
+            location: { href: '', replace: function(){}, assign: function(){} },
+            document: { write: function(){}, writeln: function(){}, close: function(){} },
+            opener: null
+        };
+    }
+
+    frame.onload = onFrameLoad;
+
+    // ========== Fetch shuffler dict ==========
+    function fetchShuffler() {
+        if (_shuffler) return;
+        fetch(basePath + '/api/shuffleDict?id=' + encodeURIComponent(sessionId))
+            .then(function(r) { return r.ok ? r.text() : Promise.reject(); })
+            .then(function(t) {
+                var dict = JSON.parse(t);
+                if (dict) _shuffler = new StrShuffler(dict);
+            })
+            .catch(function(){});
+    }
+
+    // ========== Show frame (transition from loader) ==========
     function showFrame() {
         stopTrickle();
         setProgress(100, 'Complete');
@@ -104,15 +268,17 @@ iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:no
         }, 300);
     }
 
-    function loadFrame(proxied) {
-        setProgress(50, 'Loading page\u2026');
-        startTrickle(50, 95);
-        frame.src = proxied;
-        frame.onload = function() {
-            showFrame();
-            try { document.title = frame.contentDocument.title || url; } catch(e) { document.title = url; }
-        };
+    // ========== Entry point ==========
+    if (!url) {
+        errorEl.textContent = 'Missing ?url= parameter.';
+        errorEl.style.display = 'block';
+        return;
     }
+
+    var normalized = normalizeUrl(url);
+    currentRealUrl = normalized;
+    targetEl.textContent = normalized;
+    document.title = 'Loading ' + normalized;
 
     setProgress(5, 'Setting up session\u2026');
     startTrickle(5, 25);
@@ -122,7 +288,8 @@ iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:no
             stopTrickle();
             setProgress(30, 'Resolving proxy URL\u2026');
             startTrickle(30, 48);
-            return fetch(basePath + '/getproxiedurl?id=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(url));
+            fetchShuffler();
+            return fetch(basePath + '/getproxiedurl?id=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(normalized));
         })
         .then(function(r) {
             if (!r.ok) throw new Error('Server error: ' + r.status);
@@ -130,13 +297,17 @@ iframe{position:fixed;top:0;left:0;width:100%;height:100%;border:none;display:no
         })
         .then(function(data) {
             stopTrickle();
-            var proxied = data.proxiedUrl || (basePath + '/' + sessionId + '/' + url);
-            loadFrame(proxied);
+            setProgress(50, 'Loading page\u2026');
+            startTrickle(50, 95);
+            frame.src = data.proxiedUrl || (basePath + '/' + sessionId + '/' + normalized);
+            frame.onload = function() { showFrame(); onFrameLoad(); };
         })
         .catch(function() {
             stopTrickle();
-            var proxied = basePath + '/' + sessionId + '/' + url;
-            loadFrame(proxied);
+            setProgress(50, 'Loading page\u2026');
+            startTrickle(50, 95);
+            frame.src = basePath + '/' + sessionId + '/' + normalized;
+            frame.onload = function() { showFrame(); onFrameLoad(); };
         });
 
     setTimeout(function() {

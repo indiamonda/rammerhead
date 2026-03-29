@@ -235,10 +235,17 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             if (!sessionStore.has(id)) {
                 logger.debug(`(ensureSession) Creating session: ${id}`);
                 const session = new RammerheadSession();
-                session.data.restrictIP = null; // Don't restrict IP for device sessions
+                session.data.restrictIP = null;
+                session.data.neverExpire = true;
                 session.shuffleDict = StrShuffler.generateDictionary();
                 sessionStore.addSerializedSession(id, session.serializeSession());
                 sessionAffinity.registerSessionMachineSync(id);
+            } else {
+                // Upgrade existing sessions to never-expire
+                const session = sessionStore.get(id);
+                if (session && !session.data.neverExpire) {
+                    session.data.neverExpire = true;
+                }
             }
             
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -277,6 +284,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             if (!sessionStore.has(id)) {
                 const session = new RammerheadSession();
                 session.data.restrictIP = null;
+                session.data.neverExpire = true;
                 session.shuffleDict = StrShuffler.generateDictionary();
                 sessionStore.addSerializedSession(id, session.serializeSession());
                 sessionAffinity.registerSessionMachineSync(id);
@@ -284,6 +292,9 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
 
             // Get session and shuffle URL
             const session = sessionStore.get(id);
+            if (!session.data.neverExpire) {
+                session.data.neverExpire = true;
+            }
             if (!session.shuffleDict) {
                 session.shuffleDict = StrShuffler.generateDictionary();
             }
