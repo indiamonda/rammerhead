@@ -55,7 +55,10 @@ if (wreq) {
         const headers = {};
         const raw = opts.headers || (opts.prepare ? opts.prepare().headers : null) || {};
         for (const [k, v] of Object.entries(raw)) {
-            if (v !== undefined && v !== null) headers[k] = String(v);
+            if (v === undefined || v === null) continue;
+            const lower = k.toLowerCase();
+            if (lower === 'host') continue;
+            headers[k] = String(v);
         }
         return headers;
     }
