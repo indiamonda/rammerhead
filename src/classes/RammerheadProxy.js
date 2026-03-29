@@ -23,6 +23,7 @@ require('../util/patchScriptProcessing');
 require('../util/patchSameOriginPolicy');
 require('../util/patchResponseHeaders');
 require('../util/patchPageProcessing');
+require('../util/patchUrlRewrites');
 let addJSDiskCache = function (jsCache) {
     require('../util/addJSDiskCache')(jsCache);
     // modification only works once

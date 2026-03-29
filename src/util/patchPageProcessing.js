@@ -177,10 +177,35 @@ const DEVTOOLS_SCRIPT = [
     '})();</script>',
 ].join('\n');
 
+// DDG HTML search: rewrite //duckduckgo.com/l/?uddg=<encoded-url>&rut=... → direct URL.
+// Must happen BEFORE Hammerhead processes the page (URL shuffling corrupts uddg values).
+const DDG_LINK_RE = /href="(\/\/duckduckgo\.com\/l\/\?[^"]*)"/gi;
+function _rewriteDdgLinks(html) {
+    return html.replace(DDG_LINK_RE, (_match, rawHref) => {
+        try {
+            const m = rawHref.match(/[?&]uddg=([^&"]+)/);
+            if (m) {
+                const decoded = decodeURIComponent(m[1]).replace(/"/g, '&quot;');
+                return `href="${decoded}"`;
+            }
+        } catch (_) {}
+        return _match;
+    });
+}
+
 const origProcess = pageProcessor.processResource.bind(pageProcessor);
 
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
     const inject = ANTIDETECT_SCRIPT + DEVTOOLS_SCRIPT;
+
+    // Pre-process DDG HTML pages to fix result links before shuffling
+    if (typeof html === 'string' && ctx && ctx.dest) {
+        const destHost = (ctx.dest.host || '').toLowerCase();
+        if (destHost === 'html.duckduckgo.com' || destHost === 'lite.duckduckgo.com') {
+            html = _rewriteDdgLinks(html);
+        }
+    }
+
     let result;
     try {
         result = origProcess(html, ctx, charset, urlReplacer, isSrcdoc);
