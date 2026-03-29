@@ -21,11 +21,11 @@ try {
 
 if (wreq) {
     const DestinationRequest = require('testcafe-hammerhead/lib/request-pipeline/destination-request/index');
-    const logger = require('testcafe-hammerhead/lib/utils/logger').default || require('testcafe-hammerhead/lib/utils/logger');
     const requestCache = require('testcafe-hammerhead/lib/request-pipeline/cache');
     const { connectionResetGuard } = require('testcafe-hammerhead/lib/request-pipeline/connection-reset-guard');
 
     const BROWSER_PROFILE = 'chrome_131';
+    const WREQ_TIMEOUT_MS = 30000;
 
     function headersObjFromWreq(wreqHeaders) {
         const out = Object.create(null);
@@ -53,10 +53,9 @@ if (wreq) {
 
     function buildWreqHeaders(opts) {
         const headers = {};
-        if (opts.headers) {
-            for (const [k, v] of Object.entries(opts.headers)) {
-                if (v !== undefined && v !== null) headers[k] = String(v);
-            }
+        const raw = opts.headers || (opts.prepare ? opts.prepare().headers : null) || {};
+        for (const [k, v] of Object.entries(raw)) {
+            if (v !== undefined && v !== null) headers[k] = String(v);
         }
         return headers;
     }
@@ -65,6 +64,10 @@ if (wreq) {
 
     DestinationRequest.prototype._send = async function patchedSend(waitForData) {
         if (!this.opts.isHttps) {
+            return _origSend.call(this, waitForData);
+        }
+
+        if (this.opts.isWebSocket) {
             return _origSend.call(this, waitForData);
         }
 
@@ -91,9 +94,27 @@ if (wreq) {
             fetchOpts.body = body;
         }
 
+        const self = this;
+        self.req = {
+            destroy: () => {},
+            on: () => {},
+            setTimeout: () => {},
+            write: () => {},
+            end: () => {},
+            socket: { destroyed: false },
+        };
+
         connectionResetGuard(async () => {
+            let timer;
             try {
-                const wreqRes = await wreq.fetch(url, fetchOpts);
+                const wreqPromise = wreq.fetch(url, fetchOpts);
+                const timeoutPromise = new Promise((_, reject) => {
+                    timer = setTimeout(() => reject(new Error('wreq-js timeout')), WREQ_TIMEOUT_MS);
+                });
+
+                const wreqRes = await Promise.race([wreqPromise, timeoutPromise]);
+                clearTimeout(timer);
+
                 const statusCode = wreqRes.status;
                 const resHeaders = headersObjFromWreq(wreqRes.headers);
                 const buf = Buffer.from(await wreqRes.arrayBuffer());
@@ -110,23 +131,23 @@ if (wreq) {
                     }
                 }
                 fakeRes.trailers = {};
-                fakeRes.setEncoding = function (enc) { this._readableState.encoding = enc; return this; };
-
-                this.req = {
-                    destroy: () => {},
-                    on: () => {},
-                    setTimeout: () => {},
-                    write: () => {},
-                    end: () => {},
-                    socket: { destroyed: false },
+                fakeRes.setEncoding = function (enc) {
+                    this._readableState.encoding = enc;
+                    return this;
                 };
 
                 fakeRes.push(buf);
                 fakeRes.push(null);
 
-                this._onResponse(fakeRes);
+                self._onResponse(fakeRes);
             } catch (err) {
-                this._onError(err);
+                clearTimeout(timer);
+                // Fall back to the original Node.js pipeline on wreq-js failure
+                try {
+                    _origSend.call(self, waitForData);
+                } catch (_) {
+                    self._onError(err);
+                }
             }
         });
     };
