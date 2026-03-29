@@ -13,7 +13,7 @@ RequestPipelineContext.prototype.dispatch = function (openSessions) {
     const result = _origDispatch.call(this, openSessions);
 
     if (result && this.dest) {
-        const host = (this.dest.host || '').toLowerCase().replace(/^www\./, '');
+        const host = (this.dest.host || '').toLowerCase().replace(/:\d+$/, '').replace(/^www\./, '');
 
         // DuckDuckGo SPA → server-rendered HTML version
         if (host === 'duckduckgo.com') {
