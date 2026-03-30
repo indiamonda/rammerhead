@@ -51,6 +51,21 @@
     --color-success: #137333;
     --color-success-bg: #e6f4ea;
     --color-success-border: #34a853;
+    --color-accent: #1a73e8;
+    --color-accent-hover: #1557b0;
+    --color-warning: #e6a817;
+    --color-warning-bg: rgba(255, 204, 0, 0.06);
+    --color-danger: #e74c3c;
+    --color-danger-bg: rgba(231, 76, 60, 0.08);
+    --color-danger-hover-bg: rgba(231, 76, 60, 0.15);
+    --color-info: #3498db;
+    --color-debug: #7f8c8d;
+    --color-net-redirect: #e6a817;
+    --color-folder-icon: #f0c040;
+    --color-icon-js: #f7df1e;
+    --color-icon-css: #264de4;
+    --color-icon-html: #e34f26;
+    --color-icon-image: #27ae60;
     --font-family: 'Red Hat Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
     --font-family-mono: 'Consolas', 'Courier New', monospace;
     --font-family-jq: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -117,6 +132,24 @@
     --color-success: #81c995;
     --color-success-bg: #1e3a2e;
     --color-success-border: #2e7d32;
+    --color-accent: #8ab4f8;
+    --color-accent-hover: #aecbfa;
+    --color-warning: #fdd663;
+    --color-warning-bg: rgba(253, 214, 99, 0.08);
+    --color-danger: #f28b82;
+    --color-danger-bg: rgba(242, 139, 130, 0.08);
+    --color-danger-hover-bg: rgba(242, 139, 130, 0.18);
+    --color-info: #8ab4f8;
+    --color-debug: #9aa0a6;
+    --color-net-redirect: #fdd663;
+    --color-folder-icon: #fdd663;
+    --color-icon-js: #f7df1e;
+    --color-icon-css: #8ab4f8;
+    --color-icon-html: #f28b82;
+    --color-icon-image: #81c995;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+    --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
 }
 
 * {
@@ -157,7 +190,7 @@ body {
    Tab Bar (top row) - Google Material Icons, aligned
    ============================================ */
 .tab-bar {
-    background: var(--color-bg-secondary);
+    background: var(--color-chrome-tab-bar, var(--color-bg-secondary));
     border-bottom: 1px solid var(--color-border);
     display: flex;
     align-items: center;
@@ -320,7 +353,7 @@ body {
    Browser Chrome (Top Bar) - Google Material Icons
    ============================================ */
 .browser-chrome {
-    background: var(--color-bg-primary);
+    background: var(--color-chrome-bar, var(--color-bg-primary));
     border-bottom: 1px solid var(--color-border);
     padding: 6px 10px;
     display: flex;
@@ -1511,7 +1544,7 @@ body {
    Bookmark Bar
    ============================================ */
 .bookmark-bar {
-    background: var(--color-bg-secondary);
+    background: var(--color-chrome-tab-bar, var(--color-bg-secondary));
     border-bottom: 1px solid var(--color-border);
     padding: 4px 8px;
     display: flex;
@@ -1691,7 +1724,7 @@ body {
     flex-shrink: 0;
 }
 .devtools-resize-handle:hover {
-    background: var(--color-accent, #4a9eff);
+    background: var(--color-accent);
     opacity: 0.5;
 }
 
@@ -1735,8 +1768,8 @@ body {
 
 .devtools-badge {
     display: inline-block;
-    background: #e74c3c;
-    color: #fff;
+    background: var(--color-danger);
+    color: var(--color-white);
     font-size: 10px;
     font-weight: 600;
     padding: 0 5px;
@@ -1784,7 +1817,7 @@ body {
 }
 .dt-scope-btn:not(:last-child) { border-right: 1px solid var(--color-border); }
 .dt-scope-btn:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
-.dt-scope-btn.active { background: var(--color-accent); }
+.dt-scope-btn.active { background: var(--color-primary-light); color: var(--color-primary); }
 
 .devtools-close {
     margin-left: 8px;
@@ -1862,14 +1895,14 @@ body {
 .cl-msg { flex: 1; white-space: pre-wrap; }
 .cl-src { color: var(--color-text-secondary); flex-shrink: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; text-align: right; }
 .console-log .cl-level { color: var(--color-text-primary); }
-.console-warn { background: rgba(255, 204, 0, 0.06); }
-.console-warn .cl-level { color: #e6a817; }
-.console-warn .cl-msg { color: #e6a817; }
-.console-error { background: rgba(255, 50, 50, 0.06); }
-.console-error .cl-level { color: #e74c3c; }
-.console-error .cl-msg { color: #e74c3c; }
-.console-info .cl-level { color: #3498db; }
-.console-debug .cl-level { color: #7f8c8d; }
+.console-warn { background: var(--color-warning-bg); }
+.console-warn .cl-level { color: var(--color-warning); }
+.console-warn .cl-msg { color: var(--color-warning); }
+.console-error { background: var(--color-danger-bg); }
+.console-error .cl-level { color: var(--color-danger); }
+.console-error .cl-msg { color: var(--color-danger); }
+.console-info .cl-level { color: var(--color-info); }
+.console-debug .cl-level { color: var(--color-debug); }
 .console-debug .cl-msg { color: var(--color-text-secondary); }
 
 /* ── Network Tab ────────────────────────── */
@@ -1902,8 +1935,8 @@ body {
 .network-table th:nth-child(5) { width: 60px; }
 .network-table tr:hover td { background: var(--color-bg-hover); }
 .net-url { font-size: 11px; }
-.net-err { color: #e74c3c; font-weight: 600; }
-.net-redirect { color: #e6a817; }
+.net-err { color: var(--color-danger); font-weight: 600; }
+.net-redirect { color: var(--color-net-redirect); }
 
 /* ── Storage Tab ────────────────────────── */
 .storage-subtabs {
@@ -1950,7 +1983,7 @@ body {
     border: none; background: transparent; color: var(--color-text-secondary);
     cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 3px;
 }
-.dt-del-btn:hover { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
+.dt-del-btn:hover { background: var(--color-danger-hover-bg); color: var(--color-danger); }
 
 /* ── Sources Tab ────────────────────────── */
 .sources-layout {
@@ -1987,7 +2020,7 @@ body {
     user-select: none;
 }
 .src-folder-name:hover { background: var(--color-bg-hover); }
-.src-folder-name i { font-size: 12px; color: #f0c040; width: 14px; text-align: center; }
+.src-folder-name i { font-size: 12px; color: var(--color-folder-icon); width: 14px; text-align: center; }
 .src-file {
     display: flex;
     align-items: center;
@@ -2003,10 +2036,10 @@ body {
 .src-file:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
 .src-file.active { background: var(--color-bg-hover); color: var(--color-text-primary); font-weight: 600; }
 .src-file i { width: 14px; text-align: center; font-size: 11px; }
-.src-file .fa-js { color: #f7df1e; }
-.src-file .fa-css3-alt { color: #264de4; }
-.src-file .fa-html5 { color: #e34f26; }
-.src-file .fa-image { color: #27ae60; }
+.src-file .fa-js { color: var(--color-icon-js); }
+.src-file .fa-css3-alt { color: var(--color-icon-css); }
+.src-file .fa-html5 { color: var(--color-icon-html); }
+.src-file .fa-image { color: var(--color-icon-image); }
 .source-code {
     margin: 0;
     padding: 4px 0;

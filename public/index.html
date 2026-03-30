@@ -429,6 +429,7 @@
                 localStorage.setItem('theme', theme);
                 document.documentElement.setAttribute('data-theme', theme);
                 updateThemeUI();
+                try { _adaptiveChrome.reapply(); } catch (_) {}
             }
             
             function updateThemeUI() {
@@ -1031,6 +1032,9 @@
                 if (typeof _refreshCurrentDtTab === 'function' && typeof _dtIsVisible === 'function' && _dtIsVisible()) {
                     _refreshCurrentDtTab();
                 }
+
+                _adaptiveChrome.updateForTab(tabId);
+
                 _saveTabs();
             }
 
@@ -1141,6 +1145,11 @@
                             
                             syncUrlFromIframe();
                             _saveTabs();
+
+                            if (tabId === activeTabId) {
+                                const iframeColor = _adaptiveChrome.extractIframeBodyColor(iframe);
+                                _adaptiveChrome.apply(iframeColor);
+                            }
                             iframeWindow.addEventListener('hashchange', () => { syncUrlFromIframe(); _saveTabs(); });
                             iframeWindow.addEventListener('popstate', () => { syncUrlFromIframe(); _saveTabs(); });
 
@@ -1373,6 +1382,7 @@
                 // Clear wallpaper background when navigating away from newtab
                 if (url !== 'jq://newtab/') {
                     contentElement.style.backgroundImage = '';
+                    _adaptiveChrome.reset();
                 }
                 
                 const defaultFav = localStorage.getItem('faviconData') || document.getElementById('favicon')?.getAttribute('href') || 'favicon.png';
@@ -1388,8 +1398,12 @@
                         contentElement.style.backgroundSize = 'cover';
                         contentElement.style.backgroundPosition = 'center';
                         contentElement.style.backgroundRepeat = 'no-repeat';
+                        _adaptiveChrome.extractWallpaperColor(bg).then(c => {
+                            if (tabId === activeTabId) _adaptiveChrome.apply(c);
+                        });
                     } else {
                         contentElement.style.backgroundImage = '';
+                        _adaptiveChrome.reset();
                     }
                     contentElement.innerHTML = getNewTabHTML();
                     contentElement._newtabInit = false;
@@ -2841,6 +2855,126 @@
                     observer.observe(dropdown, { childList: true });
 
                     return { resetIndex() { activeIdx = -1; } };
+                }
+            };
+
+            // ============================================
+            // Adaptive Chrome Background Color
+            // ============================================
+            const _adaptiveChrome = {
+                _current: null,
+
+                _parseRgb(str) {
+                    if (!str || str === 'transparent') return null;
+                    const m = str.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\s*\)/);
+                    if (!m) return null;
+                    if (m[4] !== undefined && parseFloat(m[4]) === 0) return null;
+                    return { r: +m[1], g: +m[2], b: +m[3] };
+                },
+
+                extractWallpaperColor(imageUrl) {
+                    return new Promise((resolve) => {
+                        if (!imageUrl) return resolve(null);
+                        const img = new Image();
+                        if (!imageUrl.startsWith('data:')) img.crossOrigin = 'anonymous';
+                        img.onload = () => {
+                            try {
+                                const c = document.createElement('canvas');
+                                const size = 64;
+                                c.width = size;
+                                c.height = size;
+                                const ctx = c.getContext('2d');
+                                ctx.drawImage(img, 0, 0, size, size);
+                                const data = ctx.getImageData(0, 0, size, size).data;
+                                let rT = 0, gT = 0, bT = 0, count = 0;
+                                for (let i = 0; i < data.length; i += 16) {
+                                    rT += data[i];
+                                    gT += data[i + 1];
+                                    bT += data[i + 2];
+                                    count++;
+                                }
+                                resolve({ r: Math.round(rT / count), g: Math.round(gT / count), b: Math.round(bT / count) });
+                            } catch (_) { resolve(null); }
+                        };
+                        img.onerror = () => resolve(null);
+                        img.src = imageUrl;
+                    });
+                },
+
+                extractIframeBodyColor(iframe) {
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                        if (!doc || !doc.body) return null;
+                        const bodyColor = this._parseRgb(getComputedStyle(doc.body).backgroundColor);
+                        if (bodyColor) return bodyColor;
+                        const htmlColor = this._parseRgb(getComputedStyle(doc.documentElement).backgroundColor);
+                        if (htmlColor) return htmlColor;
+                        return { r: 255, g: 255, b: 255 };
+                    } catch (_) { return null; }
+                },
+
+                _adjustColor(r, g, b) {
+                    const isDark = getTheme() === 'dark';
+                    const tR = isDark ? 32 : 255;
+                    const tG = isDark ? 33 : 255;
+                    const tB = isDark ? 36 : 255;
+                    const mix = isDark ? 0.15 : 0.12;
+                    return {
+                        r: Math.round(tR * (1 - mix) + r * mix),
+                        g: Math.round(tG * (1 - mix) + g * mix),
+                        b: Math.round(tB * (1 - mix) + b * mix)
+                    };
+                },
+
+                apply(color) {
+                    if (!color) { this.reset(); return; }
+                    this._current = color;
+                    const adj = this._adjustColor(color.r, color.g, color.b);
+                    const isDark = getTheme() === 'dark';
+                    const tabMix = isDark ? 0.22 : 0.18;
+                    const tabR = Math.round((isDark ? 32 : 255) * (1 - tabMix) + color.r * tabMix);
+                    const tabG = Math.round((isDark ? 33 : 255) * (1 - tabMix) + color.g * tabMix);
+                    const tabB = Math.round((isDark ? 36 : 255) * (1 - tabMix) + color.b * tabMix);
+                    const s = document.documentElement.style;
+                    s.setProperty('--color-chrome-bar', `rgb(${adj.r}, ${adj.g}, ${adj.b})`);
+                    s.setProperty('--color-chrome-tab-bar', `rgb(${tabR}, ${tabG}, ${tabB})`);
+                },
+
+                reset() {
+                    this._current = null;
+                    const s = document.documentElement.style;
+                    s.removeProperty('--color-chrome-bar');
+                    s.removeProperty('--color-chrome-tab-bar');
+                },
+
+                reapply() {
+                    if (this._current) this.apply(this._current);
+                },
+
+                async updateForTab(tabId) {
+                    const tab = tabs.find(t => t.id === tabId);
+                    if (!tab) { this.reset(); return; }
+                    const url = tab.url;
+                    if (url === 'jq://newtab/') {
+                        const bg = localStorage.getItem('newTabBackground') || '';
+                        if (bg) {
+                            const color = await this.extractWallpaperColor(bg);
+                            this.apply(color);
+                        } else {
+                            this.reset();
+                        }
+                    } else if (url.startsWith('jq://')) {
+                        this.reset();
+                    } else {
+                        const contentEl = document.getElementById(`content-${tabId}`);
+                        const iframe = contentEl?.querySelector('iframe');
+                        if (iframe) {
+                            const color = this.extractIframeBodyColor(iframe);
+                            this.apply(color);
+                        } else {
+                            this.reset();
+                        }
+                    }
                 }
             };
 

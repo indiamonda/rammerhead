@@ -32,6 +32,21 @@
     --color-error-text: #c5221f;
     --color-success: #137333;
     --color-success-bg: #e6f4ea;
+    --color-accent: #1a73e8;
+    --color-accent-hover: #1557b0;
+    --color-warning: #e6a817;
+    --color-warning-bg: rgba(255, 204, 0, 0.06);
+    --color-danger: #e74c3c;
+    --color-danger-bg: rgba(231, 76, 60, 0.08);
+    --color-danger-hover-bg: rgba(231, 76, 60, 0.15);
+    --color-info: #3498db;
+    --color-debug: #7f8c8d;
+    --color-net-redirect: #e6a817;
+    --color-folder-icon: #f0c040;
+    --color-icon-js: #f7df1e;
+    --color-icon-css: #264de4;
+    --color-icon-html: #e34f26;
+    --color-icon-image: #27ae60;
     --font-family: 'Red Hat Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
     --font-family-mono: 'Consolas', 'Courier New', monospace;
     --font-family-jq: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -58,6 +73,52 @@
     --success: #2ecc71;
     --error: #e74c3c;
     --white: #ffffff;
+    --color-text-primary: #e8eaed;
+    --color-text-secondary: #bdc1c6;
+    --color-text-muted: #9aa0a6;
+    --color-text-placeholder: #80868b;
+    --color-text-icon: #5f6368;
+    --color-bg-primary: #202124;
+    --color-bg-secondary: #2d2e30;
+    --color-bg-tertiary: #35363a;
+    --color-bg-hover: rgba(255, 255, 255, 0.1);
+    --color-bg-active: rgba(255, 255, 255, 0.15);
+    --color-bg-tab-active: #2d2e30;
+    --color-bg-tab-hover: rgba(255, 255, 255, 0.08);
+    --color-bg-tab-inactive: #35363a;
+    --color-border: #3c4043;
+    --color-border-light: #5f6368;
+    --color-border-hover: #80868b;
+    --color-border-divider: #3c4043;
+    --color-primary: #8ab4f8;
+    --color-primary-hover: #aecbfa;
+    --color-primary-active: #669df6;
+    --color-primary-light: #1e3a5f;
+    --color-link: #8ab4f8;
+    --color-link-hover: #aecbfa;
+    --color-error-bg: #3c1e1e;
+    --color-error-border: #8b5a5a;
+    --color-error-text: #f28b82;
+    --color-success: #81c995;
+    --color-success-bg: #1e3a2e;
+    --color-accent: #8ab4f8;
+    --color-accent-hover: #aecbfa;
+    --color-warning: #fdd663;
+    --color-warning-bg: rgba(253, 214, 99, 0.08);
+    --color-danger: #f28b82;
+    --color-danger-bg: rgba(242, 139, 130, 0.08);
+    --color-danger-hover-bg: rgba(242, 139, 130, 0.18);
+    --color-info: #8ab4f8;
+    --color-debug: #9aa0a6;
+    --color-net-redirect: #fdd663;
+    --color-folder-icon: #fdd663;
+    --color-icon-js: #f7df1e;
+    --color-icon-css: #8ab4f8;
+    --color-icon-html: #f28b82;
+    --color-icon-image: #81c995;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+    --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
 }
 
 /* ============================================
@@ -206,7 +267,7 @@ body {
    Browser Chrome (Top Bar)
    ============================================ */
 .browser-chrome {
-    background: var(--color-bg-primary);
+    background: var(--color-chrome-bar, var(--color-bg-primary));
     border-bottom: 1px solid var(--color-border);
     padding: 6px 12px;
     display: flex;
