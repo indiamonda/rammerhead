@@ -168,42 +168,48 @@ function rawFetch(url, callback, hops) {
  * @param {import('../classes/RammerheadSessionAbstractStore')} sessionStore
  */
 module.exports = function setupPipeline(proxyServer, sessionStore) {
-    // Cloudflare challenge iframe fix: CF's managed challenge creates a blank iframe
-    // that loads /cdn-cgi/challenge-platform/scripts/jsd/main.js with no session ID.
-    // Without this handler, the request hits 404 and the challenge never completes.
-    // We extract the session from the Referer header and internally redirect.
-    const CF_CHALLENGE_PATH_RE = /^\/(cdn-cgi\/|\.well-known\/|__cf)/i;
-    proxyServer.addToOnRequestPipeline((req, res) => {
-        const url = req.url || '';
-        if (!CF_CHALLENGE_PATH_RE.test(url)) return false;
+    // Relative-path rescue: when Hammerhead fails to process a page (e.g. ChatGPT,
+    // Claude), URLs stay as relative paths (/cdn/assets/..., /cdn-cgi/..., etc.).
+    // The browser resolves them to http://proxy/path without a session ID.
+    // We extract the session from the Referer and rewrite to the correct proxy URL.
+    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getproxiedurl|generatelink|health|debug-proxy|syncLocalStorage|api\/|__rh_|styles\.css|favicon|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|[a-f0-9]{32}[\/?!])/i;
+    const StrShuffler = require('../util/StrShuffler');
 
-        const referer = req.headers['referer'] || '';
+    function _extractOriginFromReferer(referer) {
         const sessionId = getSessionId(referer);
-        if (!sessionId) return false;
+        if (!sessionId) return null;
 
         const session = sessionStore.get(sessionId) || proxyServer.openSessions.get(sessionId);
-        if (!session) return false;
+        if (!session) return null;
 
-        let destOrigin = null;
         const originMatch = referer.match(/\/[a-z0-9]{32}(?:![^/]*)?\/(https?:\/\/[^/]+)/i);
-        if (originMatch) {
-            destOrigin = originMatch[1];
-        } else if (session.shuffleDict) {
-            const StrShuffler = require('../util/StrShuffler');
+        if (originMatch) return { sessionId, origin: originMatch[1] };
+
+        if (session.shuffleDict) {
             const pathMatch = referer.match(/\/[a-z0-9]{32}(?:![^/]*)?\/(.+?)(?:\?|$)/i);
             if (pathMatch && pathMatch[1].startsWith(StrShuffler.shuffledIndicator)) {
                 try {
                     const shuffler = new StrShuffler(session.shuffleDict);
                     const unshuffled = shuffler.unshuffle(pathMatch[1]);
                     const m2 = unshuffled.match(/^(https?:\/\/[^/]+)/i);
-                    if (m2) destOrigin = m2[1];
+                    if (m2) return { sessionId, origin: m2[1] };
                 } catch (_) {}
             }
         }
-        if (!destOrigin) return false;
+        return null;
+    }
 
-        const newUrl = `/${sessionId}/${destOrigin}${url}`;
-        req.url = newUrl;
+    proxyServer.addToOnRequestPipeline((req, res) => {
+        const url = req.url || '';
+        if (!url.startsWith('/')) return false;
+        if (KNOWN_ROUTE_RE.test(url)) return false;
+        if (url === '/' || url === '/rammerhead' || url === '/rammerhead/') return false;
+
+        const referer = req.headers['referer'] || '';
+        const info = _extractOriginFromReferer(referer);
+        if (!info) return false;
+
+        req.url = `/${info.sessionId}/${info.origin}${url}`;
         return false;
     }, true);
 

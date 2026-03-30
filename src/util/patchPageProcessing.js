@@ -233,7 +233,24 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
     try {
         result = origProcess(html, ctx, charset, urlReplacer, isSrcdoc);
     } catch (e) {
+        const host = ctx && ctx.dest && ctx.dest.host || '?';
+        console.error(`[patchPageProcessing] processResource FAILED for ${host}: ${e.message}\n${e.stack}`);
         if (typeof html === 'string') {
+            // Hammerhead couldn't process the page. Do basic URL rewriting
+            // so resources still load through the proxy.
+            if (ctx && ctx.dest) {
+                const proto = ctx.dest.protocol || 'https:';
+                const dHost = ctx.dest.host || '';
+                if (dHost) {
+                    const origin = proto + '//' + dHost;
+                    // Convert relative paths to absolute so Hammerhead's runtime
+                    // (if loaded) can proxy them, or the pipeline handler catches them.
+                    html = html.replace(
+                        /((?:href|src|action)\s*=\s*["'])(\/(?!\/)[^"']*)(["'])/gi,
+                        (_m, pre, path, post) => pre + origin + path + post
+                    );
+                }
+            }
             return html.replace(/<head[^>]*>/i, '$&' + inject);
         }
         throw e;
