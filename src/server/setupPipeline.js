@@ -84,6 +84,7 @@ function printConsoleMessage(entry) {
 function buildBridgeScript(proxyOrigin, sessionId, targetUrl) {
     return `<script>(function(){
 var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sessionId)},D=${JSON.stringify(targetUrl || '')};
+try{document.cookie='__rh_sess='+S+'|'+D+';path=/'}catch(e){}
 function px(u){return O+'/'+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
@@ -222,6 +223,17 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return null;
     }
 
+    function _extractFromCookie(req) {
+        const cookie = req.headers['cookie'] || '';
+        const m = cookie.match(/(?:^|;\s*)__rh_sess=([a-f0-9]{32}(?:![^\|]*)?)\|([^;]+)/i);
+        if (!m) return null;
+        const sessionId = m[1];
+        try {
+            const origin = new URL(decodeURIComponent(m[2])).origin;
+            return { sessionId, origin };
+        } catch (_) { return null; }
+    }
+
     proxyServer.addToOnRequestPipeline((req, res) => {
         const url = req.url || '';
         if (!url.startsWith('/')) return false;
@@ -229,7 +241,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         if (url === '/' || url === '/rammerhead' || url === '/rammerhead/') return false;
 
         const referer = req.headers['referer'] || '';
-        const info = _extractOriginFromReferer(referer);
+        const info = _extractOriginFromReferer(referer) || _extractFromCookie(req);
         if (!info) return false;
 
         const proxiedUrl = `/${info.sessionId}/${info.origin}${url}`;

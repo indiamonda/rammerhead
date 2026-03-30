@@ -296,19 +296,24 @@ function _liteProcess(html, ctx, inject) {
         (_m, url) => url.startsWith(proxyOrigin) ? _m : 'url(' + proxyPrefix + url + ')'
     );
 
-    // Rewrite import paths inside inline <script type="module"> blocks so
-    // ES module imports resolve to the full proxied URL directly (avoids
-    // needing a server-side redirect that can break redirect:'manual' fetch).
+    // Rewrite paths in ALL inline scripts — both module imports and JSON data
+    // like __reactRouterManifest which contains "/cdn/assets/..." paths that
+    // React Router uses for dynamic import() (which can't be monkey-patched).
     if (origin) {
         html = html.replace(
-            /(<script[^>]*type\s*=\s*["']module["'][^>]*>)([\s\S]*?)(<\/script>)/gi,
+            /(<script(?:[^>]*)>)([\s\S]*?)(<\/script>)/gi,
             (_m, open, body, close) => {
-                body = body.replace(/((?:^|[\s;,{(])import\s*["'])(\/[^"']+)(["'])/gm,
-                    (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
-                body = body.replace(/(from\s*["'])(\/[^"']+)(["'])/g,
-                    (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
-                body = body.replace(/(import\(\s*["'])(\/[^"']+)(["']\s*\))/g,
-                    (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
+                if (/type\s*=\s*["'](?:application\/(?:ld\+)?json)["']/i.test(open)) return _m;
+                body = body.replace(/(["'])(\/cdn\/[^"']+)(["'])/g,
+                    (_m2, q1, path, q2) => q1 + proxyPrefix + origin + path + q2);
+                if (/type\s*=\s*["']module["']/i.test(open)) {
+                    body = body.replace(/((?:^|[\s;,{(])import\s*["'])(\/[^"']+)(["'])/gm,
+                        (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
+                    body = body.replace(/(from\s*["'])(\/[^"']+)(["'])/g,
+                        (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
+                    body = body.replace(/(import\(\s*["'])(\/[^"']+)(["']\s*\))/g,
+                        (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
+                }
                 return open + body + close;
             }
         );
@@ -318,6 +323,7 @@ function _liteProcess(html, ctx, inject) {
 
     const bridge = `<script>(function(){
 var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sid)},D=${JSON.stringify(destUrl)};
+try{document.cookie='__rh_sess='+S+'|'+D+';path=/'}catch(e){}
 function px(u){return O+'/'+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
