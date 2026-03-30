@@ -168,6 +168,45 @@ function rawFetch(url, callback, hops) {
  * @param {import('../classes/RammerheadSessionAbstractStore')} sessionStore
  */
 module.exports = function setupPipeline(proxyServer, sessionStore) {
+    // Cloudflare challenge iframe fix: CF's managed challenge creates a blank iframe
+    // that loads /cdn-cgi/challenge-platform/scripts/jsd/main.js with no session ID.
+    // Without this handler, the request hits 404 and the challenge never completes.
+    // We extract the session from the Referer header and internally redirect.
+    const CF_CHALLENGE_PATH_RE = /^\/(cdn-cgi\/|\.well-known\/|__cf)/i;
+    proxyServer.addToOnRequestPipeline((req, res) => {
+        const url = req.url || '';
+        if (!CF_CHALLENGE_PATH_RE.test(url)) return false;
+
+        const referer = req.headers['referer'] || '';
+        const sessionId = getSessionId(referer);
+        if (!sessionId) return false;
+
+        const session = sessionStore.get(sessionId) || proxyServer.openSessions.get(sessionId);
+        if (!session) return false;
+
+        let destOrigin = null;
+        const originMatch = referer.match(/\/[a-z0-9]{32}(?:![^/]*)?\/(https?:\/\/[^/]+)/i);
+        if (originMatch) {
+            destOrigin = originMatch[1];
+        } else if (session.shuffleDict) {
+            const StrShuffler = require('../util/StrShuffler');
+            const pathMatch = referer.match(/\/[a-z0-9]{32}(?:![^/]*)?\/(.+?)(?:\?|$)/i);
+            if (pathMatch && pathMatch[1].startsWith(StrShuffler.shuffledIndicator)) {
+                try {
+                    const shuffler = new StrShuffler(session.shuffleDict);
+                    const unshuffled = shuffler.unshuffle(pathMatch[1]);
+                    const m2 = unshuffled.match(/^(https?:\/\/[^/]+)/i);
+                    if (m2) destOrigin = m2[1];
+                } catch (_) {}
+            }
+        }
+        if (!destOrigin) return false;
+
+        const newUrl = `/${sessionId}/${destOrigin}${url}`;
+        req.url = newUrl;
+        return false;
+    }, true);
+
     // Raw proxy mode (Apparatus-style): bypasses hammerhead's JS rewriting entirely.
     // URL format: /SESSION!raw/https://example.com/
     // Serves content with a lightweight bridge script that intercepts fetch/XHR/DOM

@@ -99,6 +99,7 @@
                 <button class="page-action" id="bookmark-button" title="Bookmark this page">
                     <span class="material-icons" id="bookmark-star-icon">star_border</span>
                 </button>
+                <div class="suggestions-dropdown" id="url-suggestions"></div>
             </div>
             <div class="browser-actions">
                 <button class="browser-button" id="downloads-button" title="Downloads">
@@ -1824,6 +1825,7 @@
                                 </svg>
                                 <input type="text" class="search-input" id="newtab-search-input" placeholder="Search or type a URL" autocomplete="off" />
                 </div>
+                            <div class="suggestions-dropdown" id="newtab-suggestions"></div>
                             <div class="search-buttons">
                                 <button class="search-button" id="newtab-go-button">Open</button>
                                 <button class="search-button" id="newtab-lucky-button">Search</button>
@@ -2552,11 +2554,39 @@
                         searchInput.addEventListener('focus', () => searchBox.classList.add('expanded'));
                         searchInput.addEventListener('blur', () => searchBox.classList.remove('expanded'));
                     }
+
+                    const ntSuggest = contentElement.querySelector('#newtab-suggestions');
+                    if (ntSuggest) {
+                        let ntDebounce = null;
+                        function showNtSuggestions() {
+                            const q = searchInput.value.trim();
+                            _suggestionEngine.render(ntSuggest, q, (url) => {
+                                _suggestionEngine.hide(ntSuggest);
+                                if (activeTabId) loadTabContent(activeTabId, url);
+                            });
+                        }
+                        _suggestionEngine.setupKeyboard(searchInput, ntSuggest, (url) => {
+                            _suggestionEngine.hide(ntSuggest);
+                            if (activeTabId) loadTabContent(activeTabId, url);
+                        });
+                        searchInput.addEventListener('input', () => {
+                            clearTimeout(ntDebounce);
+                            ntDebounce = setTimeout(showNtSuggestions, 120);
+                        });
+                        searchInput.addEventListener('focus', () => showNtSuggestions());
+                        searchInput.addEventListener('blur', () => {
+                            setTimeout(() => _suggestionEngine.hide(ntSuggest), 150);
+                        });
+                    }
                 }
 
                 goButton?.addEventListener('click', handleNavigate);
                 searchInput?.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') handleNavigate();
+                    const ntSuggest = contentElement.querySelector('#newtab-suggestions');
+                    if (e.key === 'Enter' && (!ntSuggest || !ntSuggest.querySelector('.suggestion-item.active'))) {
+                        handleNavigate();
+                        if (ntSuggest) _suggestionEngine.hide(ntSuggest);
+                    }
                 });
 
                 luckyButton?.addEventListener('click', () => {
@@ -2633,20 +2663,218 @@
                 });
             }
 
+            // ============================================
+            // Suggestion Engine (shared by nav bar & newtab)
+            // ============================================
+            const _suggestionEngine = {
+                _escHtml(s) {
+                    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                },
+
+                _highlight(text, query) {
+                    if (!query) return this._escHtml(text);
+                    const escaped = this._escHtml(text);
+                    const qEsc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    return escaped.replace(new RegExp('(' + qEsc + ')', 'gi'), '<mark>$1</mark>');
+                },
+
+                getSuggestions(query) {
+                    if (!query || query.length === 0) return [];
+                    const q = query.toLowerCase();
+                    const seen = new Set();
+                    const results = [];
+
+                    const bookmarks = getBookmarks();
+                    for (const b of bookmarks) {
+                        const titleMatch = (b.title || '').toLowerCase().includes(q);
+                        const urlMatch = (b.url || '').toLowerCase().includes(q);
+                        if (titleMatch || urlMatch) {
+                            const key = b.url;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                results.push({
+                                    type: 'bookmark',
+                                    title: b.title || b.url,
+                                    url: b.url,
+                                    score: titleMatch ? 3 : 2
+                                });
+                            }
+                        }
+                    }
+
+                    const history = getHistory();
+                    for (let i = history.length - 1; i >= 0; i--) {
+                        const h = history[i];
+                        const titleMatch = (h.title || '').toLowerCase().includes(q);
+                        const urlMatch = (h.url || '').toLowerCase().includes(q);
+                        if (titleMatch || urlMatch) {
+                            const key = h.url;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                const recency = 1 + (i / history.length);
+                                results.push({
+                                    type: 'history',
+                                    title: h.title || h.url,
+                                    url: h.url,
+                                    score: (titleMatch ? 2 : 1) + recency
+                                });
+                            }
+                        }
+                        if (results.length >= 8) break;
+                    }
+
+                    results.sort((a, b) => b.score - a.score);
+                    return results.slice(0, 6);
+                },
+
+                render(dropdown, query, onSelect) {
+                    const items = this.getSuggestions(query);
+                    if (items.length === 0 && (!query || query.trim() === '')) {
+                        dropdown.classList.remove('visible');
+                        dropdown.innerHTML = '';
+                        return;
+                    }
+
+                    let html = '';
+                    if (items.length > 0) {
+                        for (let i = 0; i < items.length; i++) {
+                            const item = items[i];
+                            const icon = item.type === 'bookmark' ? 'star' : 'schedule';
+                            html += '<div class="suggestion-item" data-index="' + i + '" data-url="' + this._escHtml(item.url) + '">'
+                                + '<span class="material-icons suggestion-icon">' + icon + '</span>'
+                                + '<div class="suggestion-text">'
+                                + '<div class="suggestion-title">' + this._highlight(item.title, query) + '</div>'
+                                + '<div class="suggestion-url">' + this._highlight(item.url, query) + '</div>'
+                                + '</div></div>';
+                        }
+                    }
+
+                    const engine = searchEngines[getSearchEngine()];
+                    if (query && query.trim()) {
+                        html += '<div class="suggestion-item suggestion-search-item" data-index="' + items.length + '" data-action="search">'
+                            + '<span class="material-icons suggestion-icon">search</span>'
+                            + '<div class="suggestion-text">'
+                            + '<div class="suggestion-title">Search <strong>' + this._escHtml(query) + '</strong> on ' + this._escHtml(engine.name) + '</div>'
+                            + '</div></div>';
+                    }
+
+                    dropdown.innerHTML = html;
+                    dropdown.classList.add('visible');
+
+                    dropdown.querySelectorAll('.suggestion-item').forEach(el => {
+                        el.addEventListener('mousedown', (e) => {
+                            e.preventDefault();
+                            const url = el.dataset.url;
+                            const action = el.dataset.action;
+                            if (action === 'search') {
+                                onSelect(engine.url + encodeURIComponent(query));
+                            } else if (url) {
+                                onSelect(url);
+                            }
+                        });
+                    });
+                },
+
+                hide(dropdown) {
+                    dropdown.classList.remove('visible');
+                    dropdown.innerHTML = '';
+                },
+
+                setupKeyboard(input, dropdown, onSelect) {
+                    let activeIdx = -1;
+
+                    function updateActive() {
+                        const items = dropdown.querySelectorAll('.suggestion-item');
+                        items.forEach((el, i) => {
+                            el.classList.toggle('active', i === activeIdx);
+                        });
+                        if (activeIdx >= 0 && items[activeIdx]) {
+                            items[activeIdx].scrollIntoView({ block: 'nearest' });
+                        }
+                    }
+
+                    input.addEventListener('keydown', (e) => {
+                        const items = dropdown.querySelectorAll('.suggestion-item');
+                        if (!dropdown.classList.contains('visible') || items.length === 0) return;
+
+                        if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            activeIdx = (activeIdx + 1) % items.length;
+                            updateActive();
+                        } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            activeIdx = activeIdx <= 0 ? items.length - 1 : activeIdx - 1;
+                            updateActive();
+                        } else if (e.key === 'Enter' && activeIdx >= 0 && items[activeIdx]) {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            const el = items[activeIdx];
+                            const url = el.dataset.url;
+                            const action = el.dataset.action;
+                            const engine = searchEngines[getSearchEngine()];
+                            if (action === 'search') {
+                                onSelect(engine.url + encodeURIComponent(input.value));
+                            } else if (url) {
+                                onSelect(url);
+                            }
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            _suggestionEngine.hide(dropdown);
+                            activeIdx = -1;
+                        }
+                    });
+
+                    const observer = new MutationObserver(() => { activeIdx = -1; });
+                    observer.observe(dropdown, { childList: true });
+
+                    return { resetIndex() { activeIdx = -1; } };
+                }
+            };
+
+            // --- Nav bar suggestions ---
+            const _urlSuggestionsEl = document.getElementById('url-suggestions');
+            let _urlSuggestDebounce = null;
+
+            function _showUrlSuggestions() {
+                const q = urlInput.value.trim();
+                _suggestionEngine.render(_urlSuggestionsEl, q, (url) => {
+                    _suggestionEngine.hide(_urlSuggestionsEl);
+                    navigateToUrl(url);
+                    urlInput.blur();
+                });
+            }
+
+            _suggestionEngine.setupKeyboard(urlInput, _urlSuggestionsEl, (url) => {
+                _suggestionEngine.hide(_urlSuggestionsEl);
+                navigateToUrl(url);
+                urlInput.blur();
+            });
+
             // Event listeners
             newTabButton.addEventListener('click', () => createTab());
             urlInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !_urlSuggestionsEl.querySelector('.suggestion-item.active')) {
                     navigateToUrl(urlInput.value);
+                    _suggestionEngine.hide(_urlSuggestionsEl);
+                    urlInput.blur();
                 }
             });
-            urlInput.addEventListener('focus', () => urlInput.select());
+            urlInput.addEventListener('focus', () => {
+                urlInput.select();
+                _showUrlSuggestions();
+            });
             clearButton.addEventListener('click', () => {
                 urlInput.value = '';
                 clearButton.style.display = 'none';
+                _suggestionEngine.hide(_urlSuggestionsEl);
             });
             urlInput.addEventListener('input', () => {
                 clearButton.style.display = urlInput.value ? 'block' : 'none';
+                clearTimeout(_urlSuggestDebounce);
+                _urlSuggestDebounce = setTimeout(_showUrlSuggestions, 120);
+            });
+            urlInput.addEventListener('blur', () => {
+                setTimeout(() => _suggestionEngine.hide(_urlSuggestionsEl), 150);
             });
 
             // --- Microphone / Voice Search with live level display ---

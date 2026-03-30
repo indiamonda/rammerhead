@@ -193,17 +193,40 @@ function _rewriteDdgLinks(html) {
     });
 }
 
+// CF challenge iframe fix: rewrite relative /cdn-cgi/ URLs inside inline challenge
+// scripts to absolute proxy paths so they work in blank iframes without Hammerhead.
+function _fixCfChallengeUrls(html, ctx) {
+    if (!ctx || !ctx.dest) return html;
+    if (!html.includes('challenge-platform') && !html.includes('cdn-cgi/challenge')) return html;
+
+    const sessionId = ctx.session && ctx.session.id;
+    const destProto = ctx.dest.protocol || 'https:';
+    const destHost = ctx.dest.host || '';
+    if (!sessionId || !destHost) return html;
+    const origin = destProto + '//' + destHost;
+
+    return html.replace(
+        /(['"])(\/?cdn-cgi\/[^'"]+)(['"])/g,
+        (_m, q1, path, q2) => {
+            const cleanPath = path.startsWith('/') ? path : '/' + path;
+            return q1 + origin + cleanPath + q2;
+        }
+    );
+}
+
 const origProcess = pageProcessor.processResource.bind(pageProcessor);
 
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
     const inject = ANTIDETECT_SCRIPT + DEVTOOLS_SCRIPT;
 
-    // Pre-process DDG HTML pages to fix result links before shuffling
     if (typeof html === 'string' && ctx && ctx.dest) {
         const destHost = (ctx.dest.host || '').toLowerCase();
+        // Pre-process DDG HTML pages to fix result links before shuffling
         if (destHost === 'html.duckduckgo.com' || destHost === 'lite.duckduckgo.com') {
             html = _rewriteDdgLinks(html);
         }
+        // Pre-process CF challenge URLs to absolute paths
+        html = _fixCfChallengeUrls(html, ctx);
     }
 
     let result;

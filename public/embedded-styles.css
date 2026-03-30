@@ -403,6 +403,7 @@ body {
     transition: background var(--transition-smooth), border-color var(--transition-smooth),
                 box-shadow var(--transition-smooth), outline var(--transition-fast);
     box-shadow: var(--shadow-input);
+    position: relative;
 }
 
 .url-bar-wrapper:hover {
@@ -445,6 +446,119 @@ body {
 
 .url-input::placeholder {
     color: var(--color-text-placeholder);
+}
+
+/* ============================================
+   Suggestion Dropdown (shared by nav bar & newtab)
+   ============================================ */
+.suggestions-dropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    margin-top: 4px;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-panel);
+    z-index: 200;
+    max-height: 340px;
+    overflow-y: auto;
+    display: none;
+    padding: 6px 0;
+    overscroll-behavior: contain;
+    animation: suggestionsIn 0.15s ease-out;
+}
+
+@keyframes suggestionsIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.suggestions-dropdown.visible {
+    display: block;
+}
+
+.suggestion-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background 0.1s;
+    min-height: 36px;
+}
+
+.suggestion-item:hover,
+.suggestion-item.active {
+    background: var(--color-bg-hover);
+}
+
+.suggestion-item .suggestion-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    font-size: 18px;
+}
+
+.suggestion-item .suggestion-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.suggestion-item .suggestion-title {
+    font-size: 13px;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.suggestion-item .suggestion-url {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.suggestion-item .suggestion-title mark {
+    background: transparent;
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.suggestion-item .suggestion-url mark {
+    background: transparent;
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.suggestion-category {
+    padding: 6px 14px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    user-select: none;
+}
+
+.suggestion-search-item {
+    border-top: 1px solid var(--color-border-divider);
+    margin-top: 2px;
+    padding-top: 6px;
+}
+
+.suggestion-search-item .suggestion-icon {
+    color: var(--color-primary);
 }
 
 .page-action {

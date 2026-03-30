@@ -132,6 +132,8 @@ const CF_SKIP_RE = new RegExp([
     'imperva', 'incapsula',
     // Shape Security
     'shape\\.com\\/captcha',
+    // Newgrounds NG Guard
+    '\\/_guard\\/',
     // Generic
     'captcha\\.js',
 ].join('|'), 'i');
