@@ -242,15 +242,6 @@ function _liteProcess(html, ctx, inject) {
     const sessionId = ctx.session && ctx.session.id;
     const origin = dHost ? proto + '//' + dHost : '';
 
-    if (origin) {
-        // Convert relative href/src/action to absolute destination URLs.
-        // The pipeline handler will catch resources loaded via these absolute URLs.
-        html = html.replace(
-            /((?:href|src|action)\s*=\s*["'])(\/(?!\/)[^"']*)(["'])/gi,
-            (_m, pre, path, post) => pre + origin + path + post
-        );
-    }
-
     // Build the proxy origin for the bridge script
     const serverInfo = ctx.serverInfo || {};
     const proxyPort = serverInfo.port || '';
@@ -258,6 +249,50 @@ function _liteProcess(html, ctx, inject) {
     const hostname = serverInfo.hostname || 'localhost';
     const proxyOrigin = protocol + '//' + hostname + (proxyPort == 443 || proxyPort == 80 ? '' : ':' + proxyPort);
     const sid = sessionId || '';
+    const proxyPrefix = proxyOrigin + '/' + sid + '/';
+
+    if (origin) {
+        // Convert relative href/src/action to proxied URLs
+        html = html.replace(
+            /((?:href|src|action)\s*=\s*["'])(\/(?!\/)[^"']*)(["'])/gi,
+            (_m, pre, path, post) => pre + proxyPrefix + origin + path + post
+        );
+    }
+
+    // Convert protocol-relative URLs (//domain.com/...) to proxied URLs
+    html = html.replace(
+        /((?:href|src|action)\s*=\s*["'])(\/\/[^"']+)(["'])/gi,
+        (_m, pre, url, post) => pre + proxyPrefix + 'https:' + url + post
+    );
+
+    // Convert absolute external URLs in src/href/action to proxied URLs
+    html = html.replace(
+        /((?:href|src|action)\s*=\s*["'])(https?:\/\/[^"']+)(["'])/gi,
+        (_m, pre, url, post) => {
+            if (url.startsWith(proxyOrigin)) return _m;
+            return pre + proxyPrefix + url + post;
+        }
+    );
+
+    // Rewrite srcset attributes (format: "url size, url size, ...")
+    html = html.replace(
+        /srcset\s*=\s*"([^"]*)"/gi,
+        (_m, val) => 'srcset="' + val.replace(/(https?:\/\/[^\s,]+)/gi, u => u.startsWith(proxyOrigin) ? u : proxyPrefix + u) + '"'
+    );
+
+    // Rewrite CSS url() references in style attributes and <style> blocks
+    html = html.replace(
+        /url\(\s*'(https?:\/\/[^')]+)'\s*\)/gi,
+        (_m, url) => url.startsWith(proxyOrigin) ? _m : "url('" + proxyPrefix + url + "')"
+    );
+    html = html.replace(
+        /url\(\s*"(https?:\/\/[^")]+)"\s*\)/gi,
+        (_m, url) => url.startsWith(proxyOrigin) ? _m : 'url("' + proxyPrefix + url + '")'
+    );
+    html = html.replace(
+        /url\(\s*(https?:\/\/[^)]+?)\s*\)/gi,
+        (_m, url) => url.startsWith(proxyOrigin) ? _m : 'url(' + proxyPrefix + url + ')'
+    );
 
     const destUrl = ctx.dest.url || (origin + (ctx.dest.partAfterHost || '/'));
 
@@ -302,15 +337,18 @@ window.WebSocket.prototype=oWS.prototype;
 Object.keys(oWS).forEach(function(k){try{window.WebSocket[k]=oWS[k]}catch(e){}})}
 function fixEl(el){if(!el||el.nodeType!==1||el.__rhLite)return;el.__rhLite=1;
 var t=el.tagName;
-if((t==='IFRAME'||t==='SCRIPT'||t==='IMG'||t==='SOURCE'||t==='VIDEO'||t==='AUDIO'||t==='EMBED')&&isExt(el.getAttribute('src')))el.setAttribute('src',px(el.getAttribute('src')));
-if((t==='LINK'||t==='A'||t==='AREA')&&isExt(el.getAttribute('href')))el.setAttribute('href',px(el.getAttribute('href')));
-if(t==='FORM'&&isExt(el.getAttribute('action')))el.setAttribute('action',px(el.getAttribute('action')))}
+var s=el.getAttribute('src');if(s&&isExt(s))el.setAttribute('src',px(s));
+var h=el.getAttribute('href');if(h&&isExt(h))el.setAttribute('href',px(h));
+if(t==='FORM'){var a=el.getAttribute('action');if(a&&isExt(a))el.setAttribute('action',px(a))}
+var ss=el.getAttribute('srcset');if(ss)el.setAttribute('srcset',ss.replace(/(https?:\/\/[^\s,]+)/gi,function(u){return isExt(u)?px(u):u}));
+var bg=el.style&&el.style.backgroundImage;if(bg&&/url\(/i.test(bg))el.style.backgroundImage=bg.replace(/url\(['"]?(https?:\/\/[^'")]+)['"]?\)/gi,function(m,u){return isExt(u)?'url('+px(u)+')':m})}
 function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
 for(var i=0;i<els.length;i++)fixEl(els[i])}catch(e){}}
 function startObs(){var r=document.documentElement;if(!r){document.addEventListener('DOMContentLoaded',startObs);return}
+fixTree(r);
 new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){var m=ml[i];
 if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++)fixTree(m.addedNodes[j])}
-else if(m.type==='attributes')fixEl(m.target)}
+else if(m.type==='attributes'){m.target.__rhLite=0;fixEl(m.target)}}
 }).observe(r,{childList:true,subtree:true,attributes:true,attributeFilter:['src','href','action','data']})}
 startObs();
 document.addEventListener('click',function(e){var a=e.target.closest('a[href]');
