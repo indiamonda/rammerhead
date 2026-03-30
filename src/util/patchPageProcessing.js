@@ -324,17 +324,18 @@ return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
 try{var du=new URL(D);var DO=du.origin;
 function isRel(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/'&&u.indexOf('/'+S+'/')!==0}
 function pxRel(u){return O+'/'+S+'/'+DO+u}
+var _rl=window.location,_rr=_rl.replace.bind(_rl),_ra=_rl.assign.bind(_rl),_rrl=_rl.reload.bind(_rl);
 var lp={href:{get:function(){return du.href},set:function(v){
 if(isExt(v))v=px(v);else if(isRel(v))v=pxRel(v);else if(!/^[a-z]+:/i.test(v))v=pxRel('/'+v);
-window.location.replace(v)}},
+_rr(v)}},
 hostname:{get:function(){return du.hostname}},host:{get:function(){return du.host}},
 origin:{get:function(){return du.origin}},protocol:{get:function(){return du.protocol}},
 pathname:{get:function(){return du.pathname}},search:{get:function(){return du.search}},
 hash:{get:function(){return du.hash},set:function(v){du.hash=v}},
 port:{get:function(){return du.port}},
-assign:{value:function(u){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u);window.location.replace(u)}},
-replace:{value:function(u){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u);window.location.replace(u)}},
-reload:{value:function(){window.location.reload()}},
+assign:{value:function(u){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u);_ra(u)}},
+replace:{value:function(u){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u);_rr(u)}},
+reload:{value:function(){_rrl()}},
 toString:{value:function(){return du.href}}};
 Object.defineProperty(window,'location',{configurable:true,enumerable:true,
 get:function(){var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}

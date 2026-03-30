@@ -88,15 +88,16 @@ function px(u){return O+'/'+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
 if(D){try{var du=new URL(D);
-var lp={href:{get:function(){return du.href},set:function(v){window.location.replace(px(v))}},
+var _rl=window.location,_rr=_rl.replace.bind(_rl),_ra=_rl.assign.bind(_rl),_rrl=_rl.reload.bind(_rl);
+var lp={href:{get:function(){return du.href},set:function(v){_rr(isExt(v)?px(v):v)}},
 hostname:{get:function(){return du.hostname}},host:{get:function(){return du.host}},
 origin:{get:function(){return du.origin}},protocol:{get:function(){return du.protocol}},
 pathname:{get:function(){return du.pathname}},search:{get:function(){return du.search}},
 hash:{get:function(){return du.hash},set:function(v){du.hash=v}},
 port:{get:function(){return du.port}},
-assign:{value:function(u){window.location.replace(isExt(u)?px(u):u)}},
-replace:{value:function(u){window.location.replace(isExt(u)?px(u):u)}},
-reload:{value:function(){window.location.reload()}},
+assign:{value:function(u){_ra(isExt(u)?px(u):u)}},
+replace:{value:function(u){_rr(isExt(u)?px(u):u)}},
+reload:{value:function(){_rrl()}},
 toString:{value:function(){return du.href}}};
 Object.defineProperty(window,'location',{configurable:true,enumerable:true,
 get:function(){var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}
