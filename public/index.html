@@ -1392,8 +1392,10 @@
                         contentElement.style.backgroundImage = '';
                     }
                     contentElement.innerHTML = getNewTabHTML();
+                    contentElement._newtabInit = false;
                     updateTabTitle(tabId, 'New Tab');
                     updateTabFavicon(tabId, defaultFav);
+                    initNewTabHandlers(contentElement);
                 } else if (url === 'jq://sessions/') {
                     contentElement.innerHTML = getSessionsPageHTML();
                     updateTabTitle(tabId, 'Sessions');
@@ -2530,6 +2532,8 @@
 
             // Initialize new tab page handlers
             function initNewTabHandlers(contentElement) {
+                if (contentElement._newtabInit) return;
+                contentElement._newtabInit = true;
                 const searchInput = contentElement.querySelector('#newtab-search-input');
                 const goButton = contentElement.querySelector('#newtab-go-button');
                 const luckyButton = contentElement.querySelector('#newtab-lucky-button');
@@ -2550,9 +2554,16 @@
                     setTimeout(() => searchInput.focus(), 50);
 
                     const searchBox = searchInput.closest('.search-box');
+                    const ntContent = searchInput.closest('.new-tab-content');
                     if (searchBox) {
-                        searchInput.addEventListener('focus', () => searchBox.classList.add('expanded'));
-                        searchInput.addEventListener('blur', () => searchBox.classList.remove('expanded'));
+                        searchInput.addEventListener('focus', () => {
+                            searchBox.classList.add('expanded');
+                            if (ntContent) ntContent.classList.add('search-focused');
+                        });
+                        searchInput.addEventListener('blur', () => {
+                            searchBox.classList.remove('expanded');
+                            if (ntContent) ntContent.classList.remove('search-focused');
+                        });
                     }
 
                     const ntSuggest = contentElement.querySelector('#newtab-suggestions');
@@ -2679,15 +2690,15 @@
                 },
 
                 getSuggestions(query) {
-                    if (!query || query.length === 0) return [];
-                    const q = query.toLowerCase();
+                    const q = (query || '').toLowerCase();
+                    const isBlank = !q;
                     const seen = new Set();
                     const results = [];
 
                     const bookmarks = getBookmarks();
                     for (const b of bookmarks) {
-                        const titleMatch = (b.title || '').toLowerCase().includes(q);
-                        const urlMatch = (b.url || '').toLowerCase().includes(q);
+                        const titleMatch = isBlank || (b.title || '').toLowerCase().includes(q);
+                        const urlMatch = !isBlank && (b.url || '').toLowerCase().includes(q);
                         if (titleMatch || urlMatch) {
                             const key = b.url;
                             if (!seen.has(key)) {
@@ -2696,17 +2707,18 @@
                                     type: 'bookmark',
                                     title: b.title || b.url,
                                     url: b.url,
-                                    score: titleMatch ? 3 : 2
+                                    score: isBlank ? 1 : (titleMatch ? 3 : 2)
                                 });
                             }
                         }
+                        if (isBlank && results.length >= 3) break;
                     }
 
                     const history = getHistory();
                     for (let i = history.length - 1; i >= 0; i--) {
                         const h = history[i];
-                        const titleMatch = (h.title || '').toLowerCase().includes(q);
-                        const urlMatch = (h.url || '').toLowerCase().includes(q);
+                        const titleMatch = isBlank || (h.title || '').toLowerCase().includes(q);
+                        const urlMatch = !isBlank && (h.url || '').toLowerCase().includes(q);
                         if (titleMatch || urlMatch) {
                             const key = h.url;
                             if (!seen.has(key)) {
@@ -2716,7 +2728,7 @@
                                     type: 'history',
                                     title: h.title || h.url,
                                     url: h.url,
-                                    score: (titleMatch ? 2 : 1) + recency
+                                    score: isBlank ? recency : ((titleMatch ? 2 : 1) + recency)
                                 });
                             }
                         }
@@ -2729,7 +2741,8 @@
 
                 render(dropdown, query, onSelect) {
                     const items = this.getSuggestions(query);
-                    if (items.length === 0 && (!query || query.trim() === '')) {
+                    const hasQuery = query && query.trim();
+                    if (items.length === 0 && !hasQuery) {
                         dropdown.classList.remove('visible');
                         dropdown.innerHTML = '';
                         return;
@@ -2836,7 +2849,8 @@
             let _urlSuggestDebounce = null;
 
             function _showUrlSuggestions() {
-                const q = urlInput.value.trim();
+                let q = urlInput.value.trim();
+                if (q.startsWith('jq://')) q = '';
                 _suggestionEngine.render(_urlSuggestionsEl, q, (url) => {
                     _suggestionEngine.hide(_urlSuggestionsEl);
                     navigateToUrl(url);
@@ -3448,11 +3462,15 @@
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
                     mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType === 1 && node.classList.contains('tab-content')) {
+                        if (node.nodeType !== 1) return;
+                        if (node.classList.contains('tab-content')) {
                             const newtabContent = node.querySelector('.new-tab-content');
                             if (newtabContent) {
                                 setTimeout(() => initNewTabHandlers(node), 100);
                             }
+                        } else if (node.classList.contains('new-tab-content')) {
+                            const parent = node.closest('.tab-content');
+                            if (parent) setTimeout(() => initNewTabHandlers(parent), 100);
                         }
                     });
                 });

@@ -699,6 +699,12 @@ body {
     max-width: 652px;
     margin: 0 auto;
     min-height: 100%;
+    transition: max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.new-tab-content.search-focused {
+    max-width: 780px;
 }
 
 .new-tab-content .new-tab-logo-container,
