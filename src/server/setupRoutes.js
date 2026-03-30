@@ -241,10 +241,21 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 sessionStore.addSerializedSession(id, session.serializeSession());
                 sessionAffinity.registerSessionMachineSync(id);
             } else {
-                // Upgrade existing sessions to never-expire
+                // Upgrade existing sessions to never-expire and persist immediately
                 const session = sessionStore.get(id);
-                if (session && !session.data.neverExpire) {
-                    session.data.neverExpire = true;
+                if (session) {
+                    let changed = false;
+                    if (!session.data.neverExpire) {
+                        session.data.neverExpire = true;
+                        changed = true;
+                    }
+                    if (session.data.restrictIP) {
+                        session.data.restrictIP = null;
+                        changed = true;
+                    }
+                    if (changed) {
+                        sessionStore.addSerializedSession(id, session.serializeSession());
+                    }
                 }
             }
             
@@ -290,13 +301,23 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 sessionAffinity.registerSessionMachineSync(id);
             }
 
-            // Get session and shuffle URL
+            // Get session and shuffle URL, persisting any upgrades immediately
             const session = sessionStore.get(id);
+            let changed = false;
             if (!session.data.neverExpire) {
                 session.data.neverExpire = true;
+                changed = true;
+            }
+            if (session.data.restrictIP) {
+                session.data.restrictIP = null;
+                changed = true;
             }
             if (!session.shuffleDict) {
                 session.shuffleDict = StrShuffler.generateDictionary();
+                changed = true;
+            }
+            if (changed) {
+                sessionStore.addSerializedSession(id, session.serializeSession());
             }
             const shuffler = new StrShuffler(session.shuffleDict);
             const shuffledUrl = shuffler.shuffle(normalizedTarget);
