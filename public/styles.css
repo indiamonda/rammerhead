@@ -378,6 +378,11 @@ body {
     max-width: 584px;
     margin: 0 auto 24px;
     position: relative;
+    transition: max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-box.expanded {
+    max-width: 680px;
 }
 
 .search-input-wrapper {

@@ -1073,16 +1073,16 @@
                     try { await fetch(`${basePath}/ensuresession?id=${encodeURIComponent(sessionId)}`); } catch (_) {}
                     proxiedUrl = `${basePath}/${sessionId}!raw/${normalizedUrl}`;
                 } else {
-                    try {
-                        const response = await fetch(`${basePath}/getproxiedurl?id=${encodeURIComponent(sessionId)}&url=${encodeURIComponent(normalizedUrl)}`);
-                        if (!response.ok) {
-                            throw new Error(`Server error: ${response.status}`);
-                        }
-                        const data = await response.json();
-                        proxiedUrl = data.proxiedUrl || `${basePath}/${sessionId}/${normalizedUrl}`;
-                    } catch (_) {
-                        try { await fetch(`${basePath}/ensuresession?id=${encodeURIComponent(sessionId)}`); } catch (_) {}
-                        proxiedUrl = `${basePath}/${sessionId}/${normalizedUrl}`;
+                try {
+                    const response = await fetch(`${basePath}/getproxiedurl?id=${encodeURIComponent(sessionId)}&url=${encodeURIComponent(normalizedUrl)}`);
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    proxiedUrl = data.proxiedUrl || `${basePath}/${sessionId}/${normalizedUrl}`;
+                } catch (_) {
+                    try { await fetch(`${basePath}/ensuresession?id=${encodeURIComponent(sessionId)}`); } catch (_) {}
+                    proxiedUrl = `${basePath}/${sessionId}/${normalizedUrl}`;
                     }
                 }
 
@@ -2241,7 +2241,7 @@
                                 <div class="devtools-toolbar">
                                     <button class="devtools-toolbar-btn" id="console-clear-btn">Clear</button>
                                     <label class="devtools-toolbar-label"><input type="checkbox" id="console-filter-errors"> Errors only</label>
-                                </div>
+                            </div>
                                 <div class="console-log-area" id="console-log-area"></div>
                             </div>
                             <!-- Network Tab -->
@@ -2546,6 +2546,12 @@
                 // Auto-focus the search input when newtab is opened
                 if (searchInput) {
                     setTimeout(() => searchInput.focus(), 50);
+
+                    const searchBox = searchInput.closest('.search-box');
+                    if (searchBox) {
+                        searchInput.addEventListener('focus', () => searchBox.classList.add('expanded'));
+                        searchInput.addEventListener('blur', () => searchBox.classList.remove('expanded'));
+                    }
                 }
 
                 goButton?.addEventListener('click', handleNavigate);
@@ -3206,7 +3212,7 @@
                     const targetTab = tabs[activeIdx] || tabs[0];
                     if (targetTab) switchToTab(targetTab.id);
                 } else {
-                    createTab('jq://home/');
+            createTab('jq://home/');
                 }
             })();
 
