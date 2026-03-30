@@ -216,6 +216,94 @@ function _fixCfChallengeUrls(html, ctx) {
 
 const origProcess = pageProcessor.processResource.bind(pageProcessor);
 
+// Domains whose JS-heavy SPAs break under Hammerhead's full AST rewriting.
+// These get "lite" processing: runtime scripts are injected but inline JS
+// is NOT instrumented, preventing React/Next.js hydration mismatches.
+const LITE_DOMAINS = new Set([
+    'chatgpt.com',
+    'chat.openai.com',
+]);
+function _needsLiteProcessing(ctx) {
+    if (!ctx || !ctx.dest) return false;
+    const host = (ctx.dest.host || '').toLowerCase().replace(/:\d+$/, '');
+    return LITE_DOMAINS.has(host);
+}
+
+// Lite processing: leave inline JS untouched (prevents React hydration
+// breakage), inject a bridge script for runtime fetch/XHR/EventSource
+// interception + MutationObserver for dynamically added elements.
+function _liteProcess(html, ctx, inject) {
+    if (!ctx || !ctx.dest) return html.replace(/<head[^>]*>/i, '$&' + inject);
+
+    const proto = ctx.dest.protocol || 'https:';
+    const dHost = ctx.dest.host || '';
+    const sessionId = ctx.session && ctx.session.id;
+    const origin = dHost ? proto + '//' + dHost : '';
+
+    if (origin) {
+        // Convert relative href/src/action to absolute destination URLs.
+        // The pipeline handler will catch resources loaded via these absolute URLs.
+        html = html.replace(
+            /((?:href|src|action)\s*=\s*["'])(\/(?!\/)[^"']*)(["'])/gi,
+            (_m, pre, path, post) => pre + origin + path + post
+        );
+    }
+
+    // Build the proxy origin for the bridge script
+    const serverInfo = ctx.serverInfo || {};
+    const proxyPort = serverInfo.port || '';
+    const protocol = serverInfo.protocol || 'http:';
+    const hostname = serverInfo.hostname || 'localhost';
+    const proxyOrigin = protocol + '//' + hostname + (proxyPort == 443 || proxyPort == 80 ? '' : ':' + proxyPort);
+    const sid = sessionId || '';
+
+    // Bridge script: intercepts fetch/XHR/EventSource/window.open and rewrites
+    // external URLs to proxied URLs. Also uses MutationObserver to fix
+    // dynamically created elements (script, iframe, link, img, etc.).
+    const bridge = `<script>(function(){
+var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sid)};
+function px(u){return O+'/'+S+'/'+u}
+function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
+return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
+var oF=window.fetch;if(oF)window.fetch=function(u,o){
+if(typeof u==='string'&&isExt(u))u=px(u);
+else if(u&&typeof u==='object'&&u.url&&isExt(u.url)){try{u=new Request(px(u.url),u)}catch(e){}}
+return oF.call(this,u,o)};
+var XP=XMLHttpRequest.prototype,oX=XP.open;
+XP.open=function(m,u){if(typeof u==='string'&&isExt(u))arguments[1]=px(u);return oX.apply(this,arguments)};
+if(typeof EventSource!=='undefined'){var oE=EventSource;
+window.EventSource=function(u,o){if(isExt(u))u=px(u);return new oE(u,o)};
+window.EventSource.prototype=oE.prototype}
+var oW=window.open;if(oW)window.open=function(u){
+if(typeof u==='string'&&isExt(u))arguments[0]=px(u);return oW.apply(this,arguments)};
+var oWS=window.WebSocket;if(oWS){window.WebSocket=function(u,p){
+if(typeof u==='string'&&isExt(u)){var wu=u.replace(/^http/,'ws');u=O.replace(/^http/,'ws')+'/'+S+'/'+wu}
+return p!==undefined?new oWS(u,p):new oWS(u)};
+window.WebSocket.prototype=oWS.prototype;
+Object.keys(oWS).forEach(function(k){try{window.WebSocket[k]=oWS[k]}catch(e){}})}
+function fixEl(el){if(!el||el.nodeType!==1||el.__rhLite)return;el.__rhLite=1;
+var t=el.tagName;
+if((t==='IFRAME'||t==='SCRIPT'||t==='IMG'||t==='SOURCE'||t==='VIDEO'||t==='AUDIO'||t==='EMBED')&&isExt(el.getAttribute('src')))el.setAttribute('src',px(el.getAttribute('src')));
+if((t==='LINK'||t==='A'||t==='AREA')&&isExt(el.getAttribute('href')))el.setAttribute('href',px(el.getAttribute('href')));
+if(t==='FORM'&&isExt(el.getAttribute('action')))el.setAttribute('action',px(el.getAttribute('action')))}
+function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
+for(var i=0;i<els.length;i++)fixEl(els[i])}catch(e){}}
+function startObs(){var r=document.documentElement;if(!r){document.addEventListener('DOMContentLoaded',startObs);return}
+new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){var m=ml[i];
+if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++)fixTree(m.addedNodes[j])}
+else if(m.type==='attributes')fixEl(m.target)}
+}).observe(r,{childList:true,subtree:true,attributes:true,attributeFilter:['src','href','action','data']})}
+startObs();
+document.addEventListener('click',function(e){var a=e.target.closest('a[href]');
+if(a&&isExt(a.getAttribute('href'))){a.setAttribute('href',px(a.getAttribute('href')))}},true);
+document.addEventListener('submit',function(e){var f=e.target;
+if(f&&f.tagName==='FORM'&&isExt(f.getAttribute('action'))){f.setAttribute('action',px(f.getAttribute('action')))}},true);
+})()</script>`;
+
+    html = html.replace(/<head[^>]*>/i, '$&' + inject + bridge);
+    return html;
+}
+
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
     const inject = ANTIDETECT_SCRIPT + DEVTOOLS_SCRIPT;
 
@@ -229,6 +317,11 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
         html = _fixCfChallengeUrls(html, ctx);
     }
 
+    // Use lite processing for complex SPAs that break under full instrumentation
+    if (typeof html === 'string' && _needsLiteProcessing(ctx) && !isSrcdoc) {
+        return _liteProcess(html, ctx, inject);
+    }
+
     let result;
     try {
         result = origProcess(html, ctx, charset, urlReplacer, isSrcdoc);
@@ -236,15 +329,11 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
         const host = ctx && ctx.dest && ctx.dest.host || '?';
         console.error(`[patchPageProcessing] processResource FAILED for ${host}: ${e.message}\n${e.stack}`);
         if (typeof html === 'string') {
-            // Hammerhead couldn't process the page. Do basic URL rewriting
-            // so resources still load through the proxy.
             if (ctx && ctx.dest) {
                 const proto = ctx.dest.protocol || 'https:';
                 const dHost = ctx.dest.host || '';
                 if (dHost) {
                     const origin = proto + '//' + dHost;
-                    // Convert relative paths to absolute so Hammerhead's runtime
-                    // (if loaded) can proxy them, or the pipeline handler catches them.
                     html = html.replace(
                         /((?:href|src|action)\s*=\s*["'])(\/(?!\/)[^"']*)(["'])/gi,
                         (_m, pre, path, post) => pre + origin + path + post

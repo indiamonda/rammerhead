@@ -34,7 +34,7 @@ const LEVEL_STYLE = {
 const CTYPE_SHORT = { 'text/html': 'html', 'text/css': 'css', 'text/javascript': 'js', 'application/javascript': 'js',
     'application/json': 'json', 'application/xml': 'xml', 'text/plain': 'txt', 'image/png': 'png',
     'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/svg+xml': 'svg', 'image/webp': 'webp',
-    'font/woff2': 'woff2', 'font/woff': 'woff', 'application/octet-stream': 'bin' };
+    'font/woff2': 'woff2', 'font/woff': 'woff', 'application/wasm': 'wasm', 'application/octet-stream': 'bin' };
 
 function shortType(ct) {
     if (!ct) return '';
@@ -120,17 +120,22 @@ if(f&&f.tagName==='FORM'&&isExt(f.getAttribute('action'))){f.setAttribute('actio
 }
 
 // Fetch a URL with browser-like headers, following redirects. Returns {status, headers, body} via callback.
-function rawFetch(url, callback, hops) {
+// options.method and options.body allow forwarding POST/PUT/etc from the client.
+function rawFetch(url, callback, hops, options) {
+    if (typeof hops === 'object' && !options) { options = hops; hops = 0; }
     if (!hops) hops = 0;
+    if (!options) options = {};
     if (hops > 5) { devErr('rawFetch', 'too many redirects: ' + url); return callback(new Error('too many redirects')); }
     let parsed;
     try { parsed = new URL(url); } catch (e) { devErr('rawFetch bad url', url); return callback(new Error('bad url')); }
     const lib = parsed.protocol === 'https:' ? https : http;
+    const method = (options.method || 'GET').toUpperCase();
     const opts = {
+        method: method,
         hostname: parsed.hostname,
         port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
         path: parsed.pathname + parsed.search,
-        headers: {
+        headers: Object.assign({
             'Host': parsed.host,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -140,13 +145,13 @@ function rawFetch(url, callback, hops) {
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none',
             'Upgrade-Insecure-Requests': '1',
-        },
+        }, options.extraHeaders || {}),
         timeout: 15000,
         rejectUnauthorized: false,
     };
-    const req = lib.get(opts, fetchRes => {
+    const req = lib.request(opts, fetchRes => {
         if (fetchRes.statusCode >= 300 && fetchRes.statusCode < 400 && fetchRes.headers.location) {
-            try { return rawFetch(new URL(fetchRes.headers.location, url).href, callback, hops + 1); }
+            try { return rawFetch(new URL(fetchRes.headers.location, url).href, callback, hops + 1, { method: 'GET' }); }
             catch (_) { return callback(new Error('redirect failed')); }
         }
         let stream = fetchRes;
@@ -161,6 +166,8 @@ function rawFetch(url, callback, hops) {
     });
     req.on('error', e => callback(e));
     req.on('timeout', () => { req.destroy(); callback(new Error('timeout')); });
+    if (options.body && method !== 'GET' && method !== 'HEAD') req.write(options.body);
+    req.end();
 }
 
 /**
@@ -222,37 +229,63 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         if (!m) return false;
         const sessionId = m[1];
         const targetUrl = m[2];
+
+        if (req.method === 'OPTIONS') {
+            res.writeHead(204, {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] || '*',
+                'Access-Control-Max-Age': '86400',
+            });
+            res.end();
+            return true;
+        }
+
         const serverInfo = proxyServer.getServerInfo(req);
         const proxyOrigin = `${serverInfo.protocol}//${serverInfo.hostname}${serverInfo.port == 443 || serverInfo.port == 80 ? '' : ':' + serverInfo.port}`;
 
-        rawFetch(targetUrl, (err, status, headers, body) => {
-            if (err) { devErr('rawFetch ' + targetUrl, err); res.writeHead(502); res.end('Raw proxy error: ' + err.message); return; }
-            const ct = (headers['content-type'] || '').toLowerCase();
-            const isHtml = ct.includes('text/html') || ct.includes('application/xhtml');
+        function doFetch(body) {
+            const extraHeaders = {};
+            if (req.headers['content-type']) extraHeaders['Content-Type'] = req.headers['content-type'];
+            if (req.headers['accept']) extraHeaders['Accept'] = req.headers['accept'];
 
-            if (isHtml) {
-                let html = body.toString('utf-8');
-                const base = `<base href="${targetUrl.replace(/"/g, '&quot;')}">`;
-                const bridge = buildBridgeScript(proxyOrigin, sessionId + '!raw');
-                const inject = base + bridge;
-                if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, '$&' + inject);
-                else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, '$&<head>' + inject + '</head>');
-                else html = '<head>' + inject + '</head>' + html;
-                res.writeHead(200, {
-                    'Content-Type': 'text/html; charset=utf-8',
-                    'Cache-Control': 'no-store',
-                    'Access-Control-Allow-Origin': '*',
-                });
-                res.end(html);
-            } else {
-                const outHeaders = {};
-                if (headers['content-type']) outHeaders['Content-Type'] = headers['content-type'];
-                if (headers['cache-control']) outHeaders['Cache-Control'] = headers['cache-control'];
-                outHeaders['Access-Control-Allow-Origin'] = '*';
-                res.writeHead(status || 200, outHeaders);
-                res.end(body);
-            }
-        });
+            rawFetch(targetUrl, (err, status, headers, respBody) => {
+                if (err) { devErr('rawFetch ' + targetUrl, err); res.writeHead(502); res.end('Raw proxy error: ' + err.message); return; }
+                const ct = (headers['content-type'] || '').toLowerCase();
+                const isHtml = ct.includes('text/html') || ct.includes('application/xhtml');
+
+                if (isHtml && req.method === 'GET') {
+                    let html = respBody.toString('utf-8');
+                    const base = `<base href="${targetUrl.replace(/"/g, '&quot;')}">`;
+                    const bridge = buildBridgeScript(proxyOrigin, sessionId + '!raw');
+                    const inject = base + bridge;
+                    if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, '$&' + inject);
+                    else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, '$&<head>' + inject + '</head>');
+                    else html = '<head>' + inject + '</head>' + html;
+                    res.writeHead(200, {
+                        'Content-Type': 'text/html; charset=utf-8',
+                        'Cache-Control': 'no-store',
+                        'Access-Control-Allow-Origin': '*',
+                    });
+                    res.end(html);
+                } else {
+                    const outHeaders = {};
+                    if (headers['content-type']) outHeaders['Content-Type'] = headers['content-type'];
+                    if (headers['cache-control']) outHeaders['Cache-Control'] = headers['cache-control'];
+                    outHeaders['Access-Control-Allow-Origin'] = '*';
+                    res.writeHead(status || 200, outHeaders);
+                    res.end(respBody);
+                }
+            }, 0, { method: req.method, body: body || undefined, extraHeaders: extraHeaders });
+        }
+
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+            const chunks = [];
+            req.on('data', c => chunks.push(c));
+            req.on('end', () => doFetch(Buffer.concat(chunks)));
+        } else {
+            doFetch();
+        }
         return true;
     }, true);
 
@@ -496,6 +529,31 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         }
         return false;
     }, true);
+    // Fix WASM MIME type: Hammerhead may serve .wasm with wrong Content-Type,
+    // causing WebAssembly.instantiateStreaming to fail.
+    const WASM_URL_RE = /\.wasm(?:\?|$)/i;
+    proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
+        if (isRoute) return false;
+        if (!WASM_URL_RE.test(req.url || '')) return false;
+        const _writeHead = res.writeHead;
+        res.writeHead = function (code, reason, headers) {
+            const h = typeof reason === 'object' ? reason : headers;
+            if (h) {
+                if (Array.isArray(h)) {
+                    for (let i = 0; i < h.length - 1; i += 2) {
+                        if (h[i].toLowerCase() === 'content-type') h[i + 1] = 'application/wasm';
+                    }
+                } else {
+                    const ctKey = Object.keys(h).find(k => k.toLowerCase() === 'content-type');
+                    if (ctKey) h[ctKey] = 'application/wasm';
+                    else h['Content-Type'] = 'application/wasm';
+                }
+            }
+            return _writeHead.apply(this, arguments);
+        };
+        return false;
+    });
+
     // remove headers defined in config.js
     proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
         if (isRoute) return; // only strip those that are going to the proxy destination website
