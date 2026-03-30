@@ -1105,6 +1105,9 @@
 
                 // Clear any wallpaper background from newtab
                 contentElement.style.backgroundImage = '';
+                contentElement.style.animation = 'none';
+                contentElement.offsetHeight; // force reflow
+                contentElement.style.animation = '';
                 contentElement.innerHTML = `<iframe src="${proxiedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
 
                 // Refresh DevTools so it shows data for the new page
@@ -1378,6 +1381,11 @@
 
             function handleSpecialUrl(tabId, url) {
                 const contentElement = document.getElementById(`content-${tabId}`);
+                
+                // Re-trigger the flowUp animation on content change
+                contentElement.style.animation = 'none';
+                contentElement.offsetHeight;
+                contentElement.style.animation = '';
                 
                 // Clear wallpaper background when navigating away from newtab
                 if (url !== 'jq://newtab/') {
