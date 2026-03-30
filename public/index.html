@@ -2908,8 +2908,7 @@
                         const bodyColor = this._parseRgb(getComputedStyle(doc.body).backgroundColor);
                         if (bodyColor) return bodyColor;
                         const htmlColor = this._parseRgb(getComputedStyle(doc.documentElement).backgroundColor);
-                        if (htmlColor) return htmlColor;
-                        return { r: 255, g: 255, b: 255 };
+                        return htmlColor || null;
                     } catch (_) { return null; }
                 },
 
