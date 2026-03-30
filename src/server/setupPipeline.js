@@ -81,12 +81,27 @@ function printConsoleMessage(entry) {
 
 // Apparatus-style bridge script: lightweight URL interception without JS rewriting.
 // Injected into raw-mode pages so fetch/XHR/dynamic elements route through the proxy.
-function buildBridgeScript(proxyOrigin, sessionId) {
+function buildBridgeScript(proxyOrigin, sessionId, targetUrl) {
     return `<script>(function(){
-var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sessionId)};
+var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sessionId)},D=${JSON.stringify(targetUrl || '')};
 function px(u){return O+'/'+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
+if(D){try{var du=new URL(D);
+var lp={href:{get:function(){return du.href},set:function(v){window.location.replace(px(v))}},
+hostname:{get:function(){return du.hostname}},host:{get:function(){return du.host}},
+origin:{get:function(){return du.origin}},protocol:{get:function(){return du.protocol}},
+pathname:{get:function(){return du.pathname}},search:{get:function(){return du.search}},
+hash:{get:function(){return du.hash},set:function(v){du.hash=v}},
+port:{get:function(){return du.port}},
+assign:{value:function(u){window.location.replace(isExt(u)?px(u):u)}},
+replace:{value:function(u){window.location.replace(isExt(u)?px(u):u)}},
+reload:{value:function(){window.location.reload()}},
+toString:{value:function(){return du.href}}};
+Object.defineProperty(window,'location',{configurable:true,enumerable:true,
+get:function(){var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}
+o[Symbol.toPrimitive]=function(){return du.href};return o}});
+}catch(e){}}
 var oF=window.fetch;if(oF)window.fetch=function(u,o){
 if(typeof u==='string'&&isExt(u))u=px(u);
 else if(u&&typeof u==='object'&&u.url&&isExt(u.url)){try{u=new Request(px(u.url),u)}catch(e){}}
@@ -257,7 +272,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 if (isHtml && req.method === 'GET') {
                     let html = respBody.toString('utf-8');
                     const base = `<base href="${targetUrl.replace(/"/g, '&quot;')}">`;
-                    const bridge = buildBridgeScript(proxyOrigin, sessionId + '!raw');
+                    const bridge = buildBridgeScript(proxyOrigin, sessionId + '!raw', targetUrl);
                     const inject = base + bridge;
                     if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, '$&' + inject);
                     else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, '$&<head>' + inject + '</head>');
@@ -382,7 +397,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 if (err) { devErr('/__rh_raw fetch ' + targetUrl, err); res.writeHead(502); res.end(); return; }
                 let html = buf.toString('utf-8');
                 const base = `<base href="${targetUrl.replace(/"/g, '&quot;')}">`;
-                const bridge = sessionId ? buildBridgeScript(proxyOrigin, sessionId + '!raw') : '';
+                const bridge = sessionId ? buildBridgeScript(proxyOrigin, sessionId + '!raw', targetUrl) : '';
                 const inject = base + bridge;
                 if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, '$&' + inject);
                 else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, '$&<head>' + inject + '</head>');

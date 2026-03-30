@@ -15,15 +15,15 @@ RequestPipelineContext.prototype.dispatch = function (openSessions) {
     if (result && this.dest) {
         const host = (this.dest.host || '').toLowerCase().replace(/:\d+$/, '').replace(/^www\./, '');
 
-        // DuckDuckGo SPA → server-rendered HTML version
+        // DuckDuckGo SPA → lite server-rendered version
         if (host === 'duckduckgo.com') {
             const part = this.dest.partAfterHost || '';
             const isSearchPage = /^\/?(\?.*\bq=|$)/.test(part);
             if (isSearchPage) {
-                this.dest.host = 'html.duckduckgo.com';
-                this.dest.hostname = 'html.duckduckgo.com';
+                this.dest.host = 'lite.duckduckgo.com';
+                this.dest.hostname = 'lite.duckduckgo.com';
                 const qs = part.replace(/^\/?/, '').replace(/^\?/, '');
-                this.dest.partAfterHost = qs ? '/html/?' + qs : '/html/';
+                this.dest.partAfterHost = qs ? '/lite/?' + qs : '/lite/';
                 this.dest.url = urlUtils.formatUrl(this.dest);
                 this.dest.domain = urlUtils.getDomain(this.dest);
             }

@@ -11,6 +11,10 @@ app = "rammerhead"
 # Try IAD (US East) if ams has connection issues
 primary_region = "iad"
 
+[mounts]
+  source = "sessions_data"
+  destination = "/data"
+
 [build]
 
 [env]

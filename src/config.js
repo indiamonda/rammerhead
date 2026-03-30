@@ -107,7 +107,7 @@ module.exports = {
 
     // see src/classes/RammerheadSessionFileCache.js for more details and options
     fileCacheSessionConfig: {
-        saveDirectory: path.join(__dirname, '../sessions'),
+        saveDirectory: process.env.FLY_APP_NAME ? '/data/sessions' : path.join(__dirname, '../sessions'),
         cacheTimeout: 1000 * 60 * 20, // 20 min – evict idle sessions from RAM sooner on 512MB VMs
         cacheCheckInterval: 1000 * 60 * 10, // 10 min
         deleteUnused: true,

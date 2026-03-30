@@ -222,6 +222,8 @@ const origProcess = pageProcessor.processResource.bind(pageProcessor);
 const LITE_DOMAINS = new Set([
     'chatgpt.com',
     'chat.openai.com',
+    'poki.com',
+    'www.poki.com',
 ]);
 function _needsLiteProcessing(ctx) {
     if (!ctx || !ctx.dest) return false;
@@ -257,14 +259,31 @@ function _liteProcess(html, ctx, inject) {
     const proxyOrigin = protocol + '//' + hostname + (proxyPort == 443 || proxyPort == 80 ? '' : ':' + proxyPort);
     const sid = sessionId || '';
 
+    const destUrl = ctx.dest.url || (origin + (ctx.dest.partAfterHost || '/'));
+
     // Bridge script: intercepts fetch/XHR/EventSource/window.open and rewrites
-    // external URLs to proxied URLs. Also uses MutationObserver to fix
-    // dynamically created elements (script, iframe, link, img, etc.).
+    // external URLs to proxied URLs. Also overrides window.location so client-
+    // side routers see the destination URL instead of the proxy URL.
     const bridge = `<script>(function(){
-var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sid)};
+var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sid)},D=${JSON.stringify(destUrl)};
 function px(u){return O+'/'+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
+try{var du=new URL(D);
+var lp={href:{get:function(){return du.href},set:function(v){window.location.replace(px(v))}},
+hostname:{get:function(){return du.hostname}},host:{get:function(){return du.host}},
+origin:{get:function(){return du.origin}},protocol:{get:function(){return du.protocol}},
+pathname:{get:function(){return du.pathname}},search:{get:function(){return du.search}},
+hash:{get:function(){return du.hash},set:function(v){du.hash=v}},
+port:{get:function(){return du.port}},
+assign:{value:function(u){window.location.replace(isExt(u)?px(u):u)}},
+replace:{value:function(u){window.location.replace(isExt(u)?px(u):u)}},
+reload:{value:function(){window.location.reload()}},
+toString:{value:function(){return du.href}}};
+Object.defineProperty(window,'location',{configurable:true,enumerable:true,
+get:function(){var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}
+o[Symbol.toPrimitive]=function(){return du.href};return o}});
+}catch(e){}
 var oF=window.fetch;if(oF)window.fetch=function(u,o){
 if(typeof u==='string'&&isExt(u))u=px(u);
 else if(u&&typeof u==='object'&&u.url&&isExt(u.url)){try{u=new Request(px(u.url),u)}catch(e){}}
