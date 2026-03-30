@@ -231,14 +231,21 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         const info = _extractOriginFromReferer(referer);
         if (!info) return false;
 
-        // Redirect so the browser sees the full proxied URL in its address bar
-        // and uses it as Referer for subsequent requests (critical for ES module
-        // import chains like ChatGPT's /cdn/assets/*.js chunks).
-        // Use 307 to preserve the HTTP method (302 would convert POST→GET).
         const proxiedUrl = `/${info.sessionId}/${info.origin}${url}`;
-        res.writeHead(307, { location: proxiedUrl });
-        res.end();
-        return true;
+
+        // For script/style resources, 307 redirect so the browser sees the full
+        // proxied URL and uses it as Referer for chained imports (ES modules).
+        // For everything else (fetch/XHR/navigation), use in-place rewrite to
+        // avoid breaking code that uses redirect:'manual' or similar.
+        const dest = (req.headers['sec-fetch-dest'] || '').toLowerCase();
+        if (dest === 'script' || dest === 'style' || dest === 'worker') {
+            res.writeHead(307, { location: proxiedUrl });
+            res.end();
+            return true;
+        }
+
+        req.url = proxiedUrl;
+        return false;
     }, true);
 
     // Raw proxy mode (Apparatus-style): bypasses hammerhead's JS rewriting entirely.
