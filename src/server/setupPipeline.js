@@ -242,21 +242,41 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
 
         const referer = req.headers['referer'] || '';
         const info = _extractOriginFromReferer(referer) || _extractFromCookie(req);
-        if (!info) return false;
+        if (!info) {
+            if (process.env.DEVELOPMENT) devErr('rescue-miss ' + url, 'ref=' + referer.substring(0, 80));
+            return false;
+        }
 
-        const proxiedUrl = `/${info.sessionId}/${info.origin}${url}`;
-
-        // For script/style resources, 307 redirect so the browser sees the full
-        // proxied URL and uses it as Referer for chained imports (ES modules).
-        // For everything else (fetch/XHR/navigation), use in-place rewrite to
-        // avoid breaking code that uses redirect:'manual' or similar.
+        const targetUrl = info.origin + url;
         const dest = (req.headers['sec-fetch-dest'] || '').toLowerCase();
-        if (dest === 'script' || dest === 'style' || dest === 'worker') {
-            res.writeHead(307, { location: proxiedUrl });
-            res.end();
+
+        // For script/style/worker resources, fetch directly from origin and serve.
+        // This bypasses Hammerhead entirely — more reliable for sites in "lite" mode
+        // where Hammerhead's AST rewriting is skipped anyway. Also avoids 307 redirect
+        // issues with ES module caching and CORS.
+        if (dest === 'script' || dest === 'style' || dest === 'worker' || dest === 'image' || dest === 'font') {
+            rawFetch(targetUrl, (err, status, headers, body) => {
+                if (err) {
+                    devErr('rescue-fetch ' + targetUrl, err);
+                    res.writeHead(502);
+                    res.end('Proxy error');
+                    return;
+                }
+                const outHeaders = {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                };
+                if (headers['content-type']) outHeaders['Content-Type'] = headers['content-type'];
+                if (headers['cache-control']) outHeaders['Cache-Control'] = headers['cache-control'];
+                if (headers['etag']) outHeaders['ETag'] = headers['etag'];
+                res.writeHead(status || 200, outHeaders);
+                res.end(body);
+            });
             return true;
         }
 
+        // For navigation/fetch/XHR, rewrite URL for Hammerhead
+        const proxiedUrl = `/${info.sessionId}/${info.origin}${url}`;
         req.url = proxiedUrl;
         return false;
     }, true);

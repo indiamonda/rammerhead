@@ -304,14 +304,16 @@ function _liteProcess(html, ctx, inject) {
             /(<script(?:[^>]*)>)([\s\S]*?)(<\/script>)/gi,
             (_m, open, body, close) => {
                 if (/type\s*=\s*["'](?:application\/(?:ld\+)?json)["']/i.test(open)) return _m;
-                body = body.replace(/(["'])(\/cdn\/[^"']+)(["'])/g,
+                // Rewrite /cdn/ and /cdn-cgi/ paths in string literals
+                body = body.replace(/(["'])(\/cdn(?:-cgi)?\/[^"']+)(["'])/g,
                     (_m2, q1, path, q2) => q1 + proxyPrefix + origin + path + q2);
+                // Rewrite import()/from/import statements in ALL scripts (not just modules)
+                body = body.replace(/(import\(\s*["'])(\/[^"']+)(["']\s*\))/g,
+                    (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
                 if (/type\s*=\s*["']module["']/i.test(open)) {
                     body = body.replace(/((?:^|[\s;,{(])import\s*["'])(\/[^"']+)(["'])/gm,
                         (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
                     body = body.replace(/(from\s*["'])(\/[^"']+)(["'])/g,
-                        (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
-                    body = body.replace(/(import\(\s*["'])(\/[^"']+)(["']\s*\))/g,
                         (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
                 }
                 return open + body + close;
@@ -378,9 +380,10 @@ return sSA.call(this,n,v)}}catch(e){}
 }catch(e){}
 function fixEl(el){if(!el||el.nodeType!==1||el.__rhLite)return;el.__rhLite=1;
 var t=el.tagName;
-var s=el.getAttribute('src');if(s&&isExt(s))el.setAttribute('src',px(s));
-var h=el.getAttribute('href');if(h&&isExt(h))el.setAttribute('href',px(h));
-if(t==='FORM'){var a=el.getAttribute('action');if(a&&isExt(a))el.setAttribute('action',px(a))}
+var s=el.getAttribute('src');if(s){if(isExt(s))el.setAttribute('src',px(s));else if(isRel(s))el.setAttribute('src',pxRel(s))}
+var h=el.getAttribute('href');if(h){if(isExt(h))el.setAttribute('href',px(h));else if(isRel(h))el.setAttribute('href',pxRel(h))}
+if(t==='FORM'){var a=el.getAttribute('action');if(a){if(isExt(a))el.setAttribute('action',px(a));else if(isRel(a))el.setAttribute('action',pxRel(a))}}
+if(t==='OBJECT'){var od=el.getAttribute('data');if(od){if(isExt(od))el.setAttribute('data',px(od));else if(isRel(od))el.setAttribute('data',pxRel(od))}}
 var ss=el.getAttribute('srcset');if(ss)el.setAttribute('srcset',ss.replace(/(https?:\\/\\/[^\\s,]+)/gi,function(u){return isExt(u)?px(u):u}));
 var bg=el.style&&el.style.backgroundImage;if(bg&&/url\\(/i.test(bg))el.style.backgroundImage=bg.replace(/url\\(['\"]?(https?:\\/\\/[^'\")]+)['\"]?\\)/gi,function(m,u){return isExt(u)?'url('+px(u)+')':m})}
 function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
@@ -393,9 +396,9 @@ else if(m.type==='attributes'){m.target.__rhLite=0;fixEl(m.target)}}
 }).observe(r,{childList:true,subtree:true,attributes:true,attributeFilter:['src','href','action','data']})}
 startObs();
 document.addEventListener('click',function(e){var a=e.target.closest('a[href]');
-if(a&&isExt(a.getAttribute('href'))){a.setAttribute('href',px(a.getAttribute('href')))}},true);
+if(a){var ah=a.getAttribute('href');if(isExt(ah))a.setAttribute('href',px(ah));else if(isRel(ah))a.setAttribute('href',pxRel(ah))}},true);
 document.addEventListener('submit',function(e){var f=e.target;
-if(f&&f.tagName==='FORM'&&isExt(f.getAttribute('action'))){f.setAttribute('action',px(f.getAttribute('action')))}},true);
+if(f&&f.tagName==='FORM'){var fa=f.getAttribute('action');if(isExt(fa))f.setAttribute('action',px(fa));else if(isRel(fa))f.setAttribute('action',pxRel(fa))}},true);
 })()</script>`;
 
     html = html.replace(/<head[^>]*>/i, '$&' + inject + bridge);
