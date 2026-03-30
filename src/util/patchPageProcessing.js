@@ -222,6 +222,8 @@ const origProcess = pageProcessor.processResource.bind(pageProcessor);
 const LITE_DOMAINS = new Set([
     'chatgpt.com',
     'chat.openai.com',
+    'claude.ai',
+    'www.claude.ai',
     'poki.com',
     'www.poki.com',
 ]);
@@ -335,6 +337,18 @@ if(typeof u==='string'&&isExt(u)){var wu=u.replace(/^http/,'ws');u=O.replace(/^h
 return p!==undefined?new oWS(u,p):new oWS(u)};
 window.WebSocket.prototype=oWS.prototype;
 Object.keys(oWS).forEach(function(k){try{window.WebSocket[k]=oWS[k]}catch(e){}})}
+var oImg=window.Image;if(oImg){window.Image=function(w,h){var i=new oImg(w,h);
+var oSet=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src')||{};
+if(oSet.set){var origSet=oSet.set;Object.defineProperty(i,'src',{get:function(){return oSet.get?oSet.get.call(i):''},
+set:function(v){if(typeof v==='string'&&isExt(v))v=px(v);origSet.call(i,v)},configurable:true})}
+return i};window.Image.prototype=oImg.prototype}
+try{var oPS=history.pushState.bind(history);history.pushState=function(s,t,u){
+if(typeof u==='string'&&isExt(u))u=px(u);return oPS(s,t,u)};
+var oRS=history.replaceState.bind(history);history.replaceState=function(s,t,u){
+if(typeof u==='string'&&isExt(u))u=px(u);return oRS(s,t,u)}}catch(e){}
+try{var sSA=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){
+var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action')&&typeof v==='string'&&isExt(v))v=px(v);
+return sSA.call(this,n,v)}}catch(e){}
 function fixEl(el){if(!el||el.nodeType!==1||el.__rhLite)return;el.__rhLite=1;
 var t=el.tagName;
 var s=el.getAttribute('src');if(s&&isExt(s))el.setAttribute('src',px(s));

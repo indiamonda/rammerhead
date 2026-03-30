@@ -138,7 +138,7 @@ const CF_SKIP_RE = new RegExp([
     'captcha\\.js',
 ].join('|'), 'i');
 // Domains using "lite" page processing — skip AST rewriting for their scripts too.
-const LITE_DOMAIN_RE = /chatgpt\.com|chat\.openai\.com|oaistatic\.com|poki\.com|poki-cdn\.com/i;
+const LITE_DOMAIN_RE = /chatgpt\.com|chat\.openai\.com|oaistatic\.com|claude\.ai|claudeusercontent\.com|poki\.com|poki-cdn\.com/i;
 
 const scriptProcessor = require('testcafe-hammerhead/lib/processing/resources/script');
 const _origShouldProcess = scriptProcessor.shouldProcessResource.bind(scriptProcessor);
