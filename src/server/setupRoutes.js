@@ -273,7 +273,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         if (!raw || typeof raw !== 'string') return raw;
         try {
             const u = new URL(raw.trim());
-            if (u.pathname === '' || u.pathname === '/') return u.origin + '/';
+            if (u.pathname === '' || u.pathname === '/') return u.origin + '/' + (u.search || '') + (u.hash || '');
         } catch (_) {}
         return raw;
     };

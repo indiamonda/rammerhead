@@ -196,7 +196,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Claude), URLs stay as relative paths (/cdn/assets/..., /cdn-cgi/..., etc.).
     // The browser resolves them to http://proxy/path without a session ID.
     // We extract the session from the Referer and rewrite to the correct proxy URL.
-    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getproxiedurl|generatelink|health|debug-proxy|syncLocalStorage|api\/shuffleDict|__rh_|styles\.css|favicon|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|[a-f0-9]{32}[\/?!])/i;
+    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getproxiedurl|generatelink|health|debug-proxy|syncLocalStorage|api\/shuffleDict|__rh_|styles\.css|style\.css|favicon|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|[a-f0-9]{32}[\/?!])/i;
     const StrShuffler = require('../util/StrShuffler');
 
     function _extractOriginFromReferer(referer) {

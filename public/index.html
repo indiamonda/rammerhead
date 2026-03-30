@@ -904,7 +904,7 @@
                     try {
                         const u = new URL(url);
                         if (u.pathname === '' || u.pathname === '/') {
-                            url = u.origin + '/';
+                            url = u.origin + '/' + (u.search || '') + (u.hash || '');
                         }
                     } catch (_) {}
                 } else {

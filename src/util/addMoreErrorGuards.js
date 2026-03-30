@@ -8,6 +8,7 @@ hGuard.isConnectionResetError = function (err) {
     if (
         isConnectionResetError(err) ||
         err.code === 'ERR_INVALID_PROTOCOL' ||
+        err.code === 'ERR_UNESCAPED_CHARACTERS' ||
         err.code === 'ETIMEDOUT' ||
         err.code === 'ECONNRESET' ||
         err.code === 'EPIPE'
@@ -28,7 +29,10 @@ process.on('uncaughtException', (err) => {
         err.message.includes('ECONN') ||
         err.message.includes('EPIPE') ||
         err.message.includes('ETIMEDOUT') ||
-        err.message.includes('ERR_INVALID_')
+        err.message.includes('ERR_INVALID_') ||
+        err.message.includes('ERR_UNESCAPED_CHARACTERS') ||
+        err.code === 'ERR_UNESCAPED_CHARACTERS' ||
+        err.message.includes('ERR_HTTP_HEADERS_SENT')
     ) {
         if (process.env.DEVELOPMENT) {
             console.error('Avoided crash:', err.stack || err.message);
