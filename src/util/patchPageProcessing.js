@@ -296,42 +296,61 @@ function _liteProcess(html, ctx, inject) {
         (_m, url) => url.startsWith(proxyOrigin) ? _m : 'url(' + proxyPrefix + url + ')'
     );
 
+    // Rewrite import paths inside inline <script type="module"> blocks so
+    // ES module imports resolve to the full proxied URL directly (avoids
+    // needing a server-side redirect that can break redirect:'manual' fetch).
+    if (origin) {
+        html = html.replace(
+            /(<script[^>]*type\s*=\s*["']module["'][^>]*>)([\s\S]*?)(<\/script>)/gi,
+            (_m, open, body, close) => {
+                body = body.replace(/((?:^|[\s;,{(])import\s*["'])(\/[^"']+)(["'])/gm,
+                    (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
+                body = body.replace(/(from\s*["'])(\/[^"']+)(["'])/g,
+                    (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
+                body = body.replace(/(import\(\s*["'])(\/[^"']+)(["']\s*\))/g,
+                    (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
+                return open + body + close;
+            }
+        );
+    }
+
     const destUrl = ctx.dest.url || (origin + (ctx.dest.partAfterHost || '/'));
 
-    // Bridge script: intercepts fetch/XHR/EventSource/window.open and rewrites
-    // external URLs to proxied URLs. Also overrides window.location so client-
-    // side routers see the destination URL instead of the proxy URL.
     const bridge = `<script>(function(){
 var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sid)},D=${JSON.stringify(destUrl)};
 function px(u){return O+'/'+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
-try{var du=new URL(D);
-var lp={href:{get:function(){return du.href},set:function(v){window.location.replace(px(v))}},
+try{var du=new URL(D);var DO=du.origin;
+function isRel(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/'&&u.indexOf('/'+S+'/')!==0}
+function pxRel(u){return O+'/'+S+'/'+DO+u}
+var lp={href:{get:function(){return du.href},set:function(v){
+if(isExt(v))v=px(v);else if(isRel(v))v=pxRel(v);else if(!/^[a-z]+:/i.test(v))v=pxRel('/'+v);
+window.location.replace(v)}},
 hostname:{get:function(){return du.hostname}},host:{get:function(){return du.host}},
 origin:{get:function(){return du.origin}},protocol:{get:function(){return du.protocol}},
 pathname:{get:function(){return du.pathname}},search:{get:function(){return du.search}},
 hash:{get:function(){return du.hash},set:function(v){du.hash=v}},
 port:{get:function(){return du.port}},
-assign:{value:function(u){window.location.replace(isExt(u)?px(u):u)}},
-replace:{value:function(u){window.location.replace(isExt(u)?px(u):u)}},
+assign:{value:function(u){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u);window.location.replace(u)}},
+replace:{value:function(u){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u);window.location.replace(u)}},
 reload:{value:function(){window.location.reload()}},
 toString:{value:function(){return du.href}}};
 Object.defineProperty(window,'location',{configurable:true,enumerable:true,
 get:function(){var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}
 o[Symbol.toPrimitive]=function(){return du.href};return o}});
-}catch(e){}
 var oF=window.fetch;if(oF)window.fetch=function(u,o){
-if(typeof u==='string'&&isExt(u))u=px(u);
-else if(u&&typeof u==='object'&&u.url&&isExt(u.url)){try{u=new Request(px(u.url),u)}catch(e){}}
+if(typeof u==='string'){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u)}
+else if(u&&typeof u==='object'&&u.url){if(isExt(u.url))try{u=new Request(px(u.url),u)}catch(e){}
+else if(isRel(u.url))try{u=new Request(pxRel(u.url),u)}catch(e){}}
 return oF.call(this,u,o)};
 var XP=XMLHttpRequest.prototype,oX=XP.open;
-XP.open=function(m,u){if(typeof u==='string'&&isExt(u))arguments[1]=px(u);return oX.apply(this,arguments)};
+XP.open=function(m,u){if(typeof u==='string'){if(isExt(u))arguments[1]=px(u);else if(isRel(u))arguments[1]=pxRel(u)}return oX.apply(this,arguments)};
 if(typeof EventSource!=='undefined'){var oE=EventSource;
-window.EventSource=function(u,o){if(isExt(u))u=px(u);return new oE(u,o)};
+window.EventSource=function(u,o){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u);return new oE(u,o)};
 window.EventSource.prototype=oE.prototype}
 var oW=window.open;if(oW)window.open=function(u){
-if(typeof u==='string'&&isExt(u))arguments[0]=px(u);return oW.apply(this,arguments)};
+if(typeof u==='string'){if(isExt(u))arguments[0]=px(u);else if(isRel(u))arguments[0]=pxRel(u)}return oW.apply(this,arguments)};
 var oWS=window.WebSocket;if(oWS){window.WebSocket=function(u,p){
 if(typeof u==='string'&&isExt(u)){var wu=u.replace(/^http/,'ws');u=O.replace(/^http/,'ws')+'/'+S+'/'+wu}
 return p!==undefined?new oWS(u,p):new oWS(u)};
@@ -340,22 +359,23 @@ Object.keys(oWS).forEach(function(k){try{window.WebSocket[k]=oWS[k]}catch(e){}})
 var oImg=window.Image;if(oImg){window.Image=function(w,h){var i=new oImg(w,h);
 var oSet=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src')||{};
 if(oSet.set){var origSet=oSet.set;Object.defineProperty(i,'src',{get:function(){return oSet.get?oSet.get.call(i):''},
-set:function(v){if(typeof v==='string'&&isExt(v))v=px(v);origSet.call(i,v)},configurable:true})}
+set:function(v){if(typeof v==='string'){if(isExt(v))v=px(v);else if(isRel(v))v=pxRel(v)}origSet.call(i,v)},configurable:true})}
 return i};window.Image.prototype=oImg.prototype}
 try{var oPS=history.pushState.bind(history);history.pushState=function(s,t,u){
-if(typeof u==='string'&&isExt(u))u=px(u);return oPS(s,t,u)};
+if(typeof u==='string'){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u)}return oPS(s,t,u)};
 var oRS=history.replaceState.bind(history);history.replaceState=function(s,t,u){
-if(typeof u==='string'&&isExt(u))u=px(u);return oRS(s,t,u)}}catch(e){}
+if(typeof u==='string'){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u)}return oRS(s,t,u)}}catch(e){}
 try{var sSA=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){
-var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action')&&typeof v==='string'&&isExt(v))v=px(v);
+var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action')&&typeof v==='string'){if(isExt(v))v=px(v);else if(isRel(v))v=pxRel(v)}
 return sSA.call(this,n,v)}}catch(e){}
+}catch(e){}
 function fixEl(el){if(!el||el.nodeType!==1||el.__rhLite)return;el.__rhLite=1;
 var t=el.tagName;
 var s=el.getAttribute('src');if(s&&isExt(s))el.setAttribute('src',px(s));
 var h=el.getAttribute('href');if(h&&isExt(h))el.setAttribute('href',px(h));
 if(t==='FORM'){var a=el.getAttribute('action');if(a&&isExt(a))el.setAttribute('action',px(a))}
-var ss=el.getAttribute('srcset');if(ss)el.setAttribute('srcset',ss.replace(/(https?:\/\/[^\s,]+)/gi,function(u){return isExt(u)?px(u):u}));
-var bg=el.style&&el.style.backgroundImage;if(bg&&/url\(/i.test(bg))el.style.backgroundImage=bg.replace(/url\(['"]?(https?:\/\/[^'")]+)['"]?\)/gi,function(m,u){return isExt(u)?'url('+px(u)+')':m})}
+var ss=el.getAttribute('srcset');if(ss)el.setAttribute('srcset',ss.replace(/(https?:\\/\\/[^\\s,]+)/gi,function(u){return isExt(u)?px(u):u}));
+var bg=el.style&&el.style.backgroundImage;if(bg&&/url\\(/i.test(bg))el.style.backgroundImage=bg.replace(/url\\(['\"]?(https?:\\/\\/[^'\")]+)['\"]?\\)/gi,function(m,u){return isExt(u)?'url('+px(u)+')':m})}
 function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
 for(var i=0;i<els.length;i++)fixEl(els[i])}catch(e){}}
 function startObs(){var r=document.documentElement;if(!r){document.addEventListener('DOMContentLoaded',startObs);return}
