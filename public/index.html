@@ -285,6 +285,9 @@
                         if (!urlPart.startsWith(_shuffledIndicator)) return urlPart.startsWith('http') ? urlPart : null;
                     }
                 } catch (_) {}
+                try {
+                    if (iframeWindow && iframeWindow.__rhDestUrl) return iframeWindow.__rhDestUrl;
+                } catch (_) {}
                 return null;
             }
 
