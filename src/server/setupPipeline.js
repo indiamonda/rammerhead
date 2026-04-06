@@ -256,10 +256,10 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         // issues with ES module caching and CORS.
         if (dest === 'script' || dest === 'style' || dest === 'worker' || dest === 'image' || dest === 'font') {
             rawFetch(targetUrl, (err, status, headers, body) => {
+                if (res.headersSent || res.writableEnded) return;
                 if (err) {
                     devErr('rescue-fetch ' + targetUrl, err);
-                    res.writeHead(502);
-                    res.end('Proxy error');
+                    try { res.writeHead(502); res.end('Proxy error'); } catch (_) {}
                     return;
                 }
                 const outHeaders = {
@@ -269,8 +269,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 if (headers['content-type']) outHeaders['Content-Type'] = headers['content-type'];
                 if (headers['cache-control']) outHeaders['Cache-Control'] = headers['cache-control'];
                 if (headers['etag']) outHeaders['ETag'] = headers['etag'];
-                res.writeHead(status || 200, outHeaders);
-                res.end(body);
+                try { res.writeHead(status || 200, outHeaders); res.end(body); } catch (_) {}
             });
             return true;
         }
@@ -311,7 +310,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             if (req.headers['accept']) extraHeaders['Accept'] = req.headers['accept'];
 
             rawFetch(targetUrl, (err, status, headers, respBody) => {
-                if (err) { devErr('rawFetch ' + targetUrl, err); res.writeHead(502); res.end('Raw proxy error: ' + err.message); return; }
+                if (err) { devErr('rawFetch ' + targetUrl, err); try { if (!res.headersSent) { res.writeHead(502); res.end('Raw proxy error: ' + err.message); } } catch(_){} return; }
                 const ct = (headers['content-type'] || '').toLowerCase();
                 const isHtml = ct.includes('text/html') || ct.includes('application/xhtml');
 
@@ -440,7 +439,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             const proxyOrigin = `${serverInfo.protocol}//${serverInfo.hostname}${serverInfo.port == 443 || serverInfo.port == 80 ? '' : ':' + serverInfo.port}`;
 
             rawFetch(targetUrl, (err, status, headers, buf) => {
-                if (err) { devErr('/__rh_raw fetch ' + targetUrl, err); res.writeHead(502); res.end(); return; }
+                if (err) { devErr('/__rh_raw fetch ' + targetUrl, err); try { if (!res.headersSent) { res.writeHead(502); res.end(); } } catch(_){} return; }
                 let html = buf.toString('utf-8');
                 const base = `<base href="${targetUrl.replace(/"/g, '&quot;')}">`;
                 const bridge = sessionId ? buildBridgeScript(proxyOrigin, sessionId + '!raw', targetUrl) : '';

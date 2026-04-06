@@ -32,7 +32,8 @@ process.on('uncaughtException', (err) => {
         err.message.includes('ERR_INVALID_') ||
         err.message.includes('ERR_UNESCAPED_CHARACTERS') ||
         err.code === 'ERR_UNESCAPED_CHARACTERS' ||
-        err.message.includes('ERR_HTTP_HEADERS_SENT')
+        err.message.includes('ERR_HTTP_HEADERS_SENT') ||
+        err.code === 'ERR_HTTP_HEADERS_SENT'
     ) {
         if (process.env.DEVELOPMENT) {
             console.error('Avoided crash:', err.stack || err.message);
