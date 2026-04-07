@@ -8,6 +8,22 @@ const sessionAffinity = require('../util/sessionAffinity');
 const fs = require('fs');
 const path = require('path');
 
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: 60000 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: 60000, rejectUnauthorized: false });
+
+const COMPRESSIBLE_RE = /text|javascript|json|xml|svg|css|html/i;
+function compressAndSend(req, res, statusCode, headers, body) {
+    const ae = (req.headers['accept-encoding'] || '').toLowerCase();
+    const ct = headers['Content-Type'] || headers['content-type'] || '';
+    if (ae.includes('gzip') && COMPRESSIBLE_RE.test(ct) && body.length > 1024) {
+        body = zlib.gzipSync(body, { level: 6 });
+        headers['Content-Encoding'] = 'gzip';
+        headers['Vary'] = 'Accept-Encoding';
+    }
+    headers['Content-Length'] = body.length;
+    try { res.writeHead(statusCode, headers); res.end(body); } catch (_) {}
+}
+
 // Headers that leak proxy/reverse-proxy; strip before forwarding to destination so sites don't block
 const PROXY_LEAK_HEADERS = [
     'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-protocol',
@@ -152,6 +168,7 @@ function rawFetch(url, callback, hops, options) {
         hostname: parsed.hostname,
         port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
         path: parsed.pathname + parsed.search,
+        agent: parsed.protocol === 'https:' ? httpsAgent : httpAgent,
         headers: Object.assign({
             'Host': parsed.host,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -164,7 +181,6 @@ function rawFetch(url, callback, hops, options) {
             'Upgrade-Insecure-Requests': '1',
         }, options.extraHeaders || {}),
         timeout: 15000,
-        rejectUnauthorized: false,
     };
     const req = lib.request(opts, fetchRes => {
         if (fetchRes.statusCode >= 300 && fetchRes.statusCode < 400 && fetchRes.headers.location) {
@@ -192,6 +208,105 @@ function rawFetch(url, callback, hops, options) {
  * @param {import('../classes/RammerheadSessionAbstractStore')} sessionStore
  */
 module.exports = function setupPipeline(proxyServer, sessionStore) {
+    const stream = require('stream');
+
+    // Global gzip compression for all non-websocket responses with compressible content
+    proxyServer.addToOnRequestPipeline((req, res, _serverInfo, _isRoute, isWebsocket) => {
+        if (isWebsocket) return false;
+        if (res instanceof stream.Duplex) return false;
+        const ae = (req.headers['accept-encoding'] || '').toLowerCase();
+        if (!ae.includes('gzip')) return false;
+
+        const origWriteHead = res.writeHead;
+        const origWrite = res.write;
+        const origEnd = res.end;
+        let gzStream = null;
+        let decided = false;
+        let shouldCompress = false;
+
+        res.writeHead = function (code, reasonOrHeaders, maybeHeaders) {
+            let headers = maybeHeaders || (typeof reasonOrHeaders === 'object' ? reasonOrHeaders : undefined);
+            if (!headers) { headers = {}; }
+
+            const findHeader = (name) => {
+                if (Array.isArray(headers)) {
+                    for (let i = 0; i < headers.length - 1; i += 2) {
+                        if (headers[i].toLowerCase() === name) return headers[i + 1];
+                    }
+                    return undefined;
+                }
+                for (const k in headers) { if (k.toLowerCase() === name) return headers[k]; }
+                return undefined;
+            };
+            const setHeader = (name, val) => {
+                if (Array.isArray(headers)) { headers.push(name, val); return; }
+                headers[name] = val;
+            };
+            const deleteHeader = (name) => {
+                if (Array.isArray(headers)) {
+                    for (let i = 0; i < headers.length - 1; i += 2) {
+                        if (headers[i].toLowerCase() === name) { headers.splice(i, 2); i -= 2; }
+                    }
+                    return;
+                }
+                for (const k in headers) { if (k.toLowerCase() === name) delete headers[k]; }
+            };
+
+            decided = true;
+            const ce = findHeader('content-encoding');
+            const ct = (findHeader('content-type') || '').toLowerCase();
+            shouldCompress = !ce && COMPRESSIBLE_RE.test(ct);
+
+            if (shouldCompress) {
+                setHeader('Content-Encoding', 'gzip');
+                setHeader('Vary', 'Accept-Encoding');
+                deleteHeader('content-length');
+                gzStream = zlib.createGzip({ level: 6 });
+                gzStream.on('data', chunk => origWrite.call(res, chunk));
+                gzStream.on('end', () => origEnd.call(res));
+            }
+
+            if (maybeHeaders) origWriteHead.call(res, code, reasonOrHeaders, headers);
+            else if (typeof reasonOrHeaders === 'object') origWriteHead.call(res, code, headers);
+            else if (reasonOrHeaders) origWriteHead.call(res, code, reasonOrHeaders);
+            else origWriteHead.call(res, code);
+        };
+
+        function _lateDecide() {
+            if (decided) return;
+            decided = true;
+            const ct = (res.getHeader && res.getHeader('content-type') || '').toLowerCase();
+            const ce = res.getHeader && res.getHeader('content-encoding');
+            if (!ce && COMPRESSIBLE_RE.test(ct)) {
+                shouldCompress = true;
+                res.setHeader('content-encoding', 'gzip');
+                res.setHeader('vary', 'Accept-Encoding');
+                res.removeHeader('content-length');
+                gzStream = zlib.createGzip({ level: 6 });
+                gzStream.on('data', chunk => origWrite.call(res, chunk));
+                gzStream.on('end', () => origEnd.call(res));
+            }
+        }
+
+        res.write = function (chunk, encoding, cb) {
+            _lateDecide();
+            if (shouldCompress && gzStream) return gzStream.write(chunk, encoding, cb);
+            return origWrite.call(res, chunk, encoding, cb);
+        };
+
+        res.end = function (chunk, encoding, cb) {
+            _lateDecide();
+            if (shouldCompress && gzStream) {
+                if (chunk) gzStream.write(chunk, encoding);
+                gzStream.end(null, null, cb);
+                return;
+            }
+            return origEnd.call(res, chunk, encoding, cb);
+        };
+
+        return false;
+    }, true);
+
     // Relative-path rescue: when Hammerhead fails to process a page (e.g. ChatGPT,
     // Claude), URLs stay as relative paths (/cdn/assets/..., /cdn-cgi/..., etc.).
     // The browser resolves them to http://proxy/path without a session ID.
@@ -269,7 +384,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 if (headers['content-type']) outHeaders['Content-Type'] = headers['content-type'];
                 if (headers['cache-control']) outHeaders['Cache-Control'] = headers['cache-control'];
                 if (headers['etag']) outHeaders['ETag'] = headers['etag'];
-                try { res.writeHead(status || 200, outHeaders); res.end(body); } catch (_) {}
+                compressAndSend(req, res, status || 200, outHeaders, body);
             });
             return true;
         }
@@ -322,19 +437,17 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                     if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, '$&' + inject);
                     else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, '$&<head>' + inject + '</head>');
                     else html = '<head>' + inject + '</head>' + html;
-                    res.writeHead(200, {
+                    compressAndSend(req, res, 200, {
                         'Content-Type': 'text/html; charset=utf-8',
                         'Cache-Control': 'no-store',
                         'Access-Control-Allow-Origin': '*',
-                    });
-                    res.end(html);
+                    }, Buffer.from(html, 'utf-8'));
                 } else {
                     const outHeaders = {};
                     if (headers['content-type']) outHeaders['Content-Type'] = headers['content-type'];
                     if (headers['cache-control']) outHeaders['Cache-Control'] = headers['cache-control'];
                     outHeaders['Access-Control-Allow-Origin'] = '*';
-                    res.writeHead(status || 200, outHeaders);
-                    res.end(respBody);
+                    compressAndSend(req, res, status || 200, outHeaders, respBody);
                 }
             }, 0, { method: req.method, body: body || undefined, extraHeaders: extraHeaders });
         }
@@ -401,12 +514,11 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             rawFetch(targetUrl, (err, status, headers, body) => {
                 if (err) { devErr('/__rh_sources fetch', err); try { res.writeHead(502); res.end('Fetch failed: ' + err.message); } catch(_){} return; }
                 const ct = headers['content-type'] || 'text/plain';
-                res.writeHead(200, {
+                compressAndSend(req, res, 200, {
                     'Content-Type': ct,
                     'Access-Control-Allow-Origin': '*',
                     'Cache-Control': 'no-store',
-                });
-                res.end(body);
+                }, body);
             });
         } catch (e) {
             devErr('/__rh_sources', e);
@@ -447,8 +559,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 if (/<head[^>]*>/i.test(html)) html = html.replace(/<head[^>]*>/i, '$&' + inject);
                 else if (/<html[^>]*>/i.test(html)) html = html.replace(/<html[^>]*>/i, '$&<head>' + inject + '</head>');
                 else html = '<head>' + inject + '</head>' + html;
-                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
-                res.end(html);
+                compressAndSend(req, res, 200, { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' }, Buffer.from(html, 'utf-8'));
             });
         });
         return true;

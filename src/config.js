@@ -4,8 +4,8 @@ const os = require('os');
 const RammerheadJSMemCache = require('./classes/RammerheadJSMemCache.js');
 const RammerheadJSFileCache = require('./classes/RammerheadJSFileCache.js');
 
-// Disable workers for Node.js v24+ compatibility (sticky-session-custom has issues)
-const enableWorkers = false; // os.cpus().length !== 1;
+// sticky-session-custom has issues with Node.js v24+; use simple cluster mode instead
+const enableWorkers = false;
 
 // Auto-detect cloud/reverse-proxy environments (Render, Fly.io, Heroku, etc.)
 const isCloudDeployment = !!(
@@ -75,8 +75,9 @@ module.exports = {
 
     // caching options for js rewrites. (disk caching not recommended for slow HDD disks)
     // recommended: 50mb for memory, 5gb for disk. Larger = more cache hits, less rewriting
-    jsCache: new RammerheadJSMemCache(25 * 1024 * 1024), // 25MB – keep low on 512MB Fly VMs to avoid OOM
-    // jsCache: new RammerheadJSFileCache(path.join(__dirname, '../cache-js'), 5 * 1024 * 1024 * 1024, 50000, enableWorkers),
+    jsCache: isCloudDeployment
+        ? new RammerheadJSMemCache(25 * 1024 * 1024)  // 25MB on 512MB cloud VMs
+        : new RammerheadJSMemCache(200 * 1024 * 1024), // 200MB locally for fewer cache misses
 
     // whether to disable http2 support or not (from proxy to destination site).
     // disabling may reduce number of errors/memory, but also risk

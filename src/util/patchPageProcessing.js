@@ -254,48 +254,19 @@ function _liteProcess(html, ctx, inject) {
     const sid = sessionId || '';
     const proxyPrefix = proxyOrigin + '/' + sid + '/';
 
-    if (origin) {
-        // Convert relative href/src/action to proxied URLs
-        html = html.replace(
-            /((?:href|src|action)\s*=\s*["'])(\/(?!\/)[^"']*)(["'])/gi,
-            (_m, pre, path, post) => pre + proxyPrefix + origin + path + post
-        );
-    }
-
-    // Convert protocol-relative URLs (//domain.com/...) to proxied URLs
-    html = html.replace(
-        /((?:href|src|action)\s*=\s*["'])(\/\/[^"']+)(["'])/gi,
-        (_m, pre, url, post) => pre + proxyPrefix + 'https:' + url + post
-    );
-
-    // Convert absolute external URLs in src/href/action to proxied URLs
-    html = html.replace(
-        /((?:href|src|action)\s*=\s*["'])(https?:\/\/[^"']+)(["'])/gi,
-        (_m, pre, url, post) => {
-            if (url.startsWith(proxyOrigin)) return _m;
-            return pre + proxyPrefix + url + post;
+    // Single-pass rewrite for href/src/action attributes, srcset, and CSS url()
+    const ATTR_AND_URL_RE = /((?:href|src|action)\s*=\s*["'])(\/\/[^"']+|\/(?!\/)[^"']*|https?:\/\/[^"']+)(["'])|(srcset\s*=\s*")([^"]*)(")|(url\(\s*['"]?)(https?:\/\/[^'")]+)(['"]?\s*\))/gi;
+    html = html.replace(ATTR_AND_URL_RE, (_m, aPre, aUrl, aPost, ssPre, ssVal, ssPost, uPre, uUrl, uPost) => {
+        if (aPre) {
+            if (aUrl.startsWith('//')) return aPre + proxyPrefix + 'https:' + aUrl + aPost;
+            if (/^https?:\/\//i.test(aUrl)) return aUrl.startsWith(proxyOrigin) ? _m : aPre + proxyPrefix + aUrl + aPost;
+            if (origin && aUrl.startsWith('/')) return aPre + proxyPrefix + origin + aUrl + aPost;
+            return _m;
         }
-    );
-
-    // Rewrite srcset attributes (format: "url size, url size, ...")
-    html = html.replace(
-        /srcset\s*=\s*"([^"]*)"/gi,
-        (_m, val) => 'srcset="' + val.replace(/(https?:\/\/[^\s,]+)/gi, u => u.startsWith(proxyOrigin) ? u : proxyPrefix + u) + '"'
-    );
-
-    // Rewrite CSS url() references in style attributes and <style> blocks
-    html = html.replace(
-        /url\(\s*'(https?:\/\/[^')]+)'\s*\)/gi,
-        (_m, url) => url.startsWith(proxyOrigin) ? _m : "url('" + proxyPrefix + url + "')"
-    );
-    html = html.replace(
-        /url\(\s*"(https?:\/\/[^")]+)"\s*\)/gi,
-        (_m, url) => url.startsWith(proxyOrigin) ? _m : 'url("' + proxyPrefix + url + '")'
-    );
-    html = html.replace(
-        /url\(\s*(https?:\/\/[^)]+?)\s*\)/gi,
-        (_m, url) => url.startsWith(proxyOrigin) ? _m : 'url(' + proxyPrefix + url + ')'
-    );
+        if (ssPre) return ssPre + ssVal.replace(/(https?:\/\/[^\s,]+)/gi, u => u.startsWith(proxyOrigin) ? u : proxyPrefix + u) + ssPost;
+        if (uPre) return uUrl.startsWith(proxyOrigin) ? _m : uPre + proxyPrefix + uUrl + uPost;
+        return _m;
+    });
 
     // Rewrite paths in ALL inline scripts — both module imports and JSON data
     // like __reactRouterManifest which contains "/cdn/assets/..." paths that
@@ -409,8 +380,12 @@ if(f&&f.tagName==='FORM'){var fa=f.getAttribute('action');if(isExt(fa))f.setAttr
     return html;
 }
 
+const _DEV = !!process.env.DEVELOPMENT;
+const INJECT_PROD = ANTIDETECT_SCRIPT;
+const INJECT_DEV = ANTIDETECT_SCRIPT + DEVTOOLS_SCRIPT;
+
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
-    const inject = ANTIDETECT_SCRIPT + DEVTOOLS_SCRIPT;
+    const inject = _DEV ? INJECT_DEV : INJECT_PROD;
 
     if (typeof html === 'string' && ctx && ctx.dest) {
         const destHost = (ctx.dest.host || '').toLowerCase();

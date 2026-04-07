@@ -7,6 +7,8 @@ const RammerheadSession = require('../classes/RammerheadSession');
 const sessionAffinity = require('../util/sessionAffinity');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const zlib = require('zlib');
 
 
 /**
@@ -16,74 +18,47 @@ const path = require('path');
  * @param {import('../classes/RammerheadLogging')} logger
  */
 module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
-    // Serve /styles.css (new path) directly to bypass caching - register FIRST
-    const stylePath = path.join(config.publicDir, 'style.css');
-    logger.info(`(setupRoutes) Registering /styles.css handler, path: ${stylePath}, exists: ${fs.existsSync(stylePath)}`);
-    
-    const handleStylesCss = (req, res) => {
-        // Force fresh read every time - no caching
-        try {
-            logger.info(`(handleStylesCss) HANDLER CALLED for ${req.url}`);
-            if (!config.publicDir) {
-                logger.error(`(handleStylesCss) config.publicDir is null`);
-                res.writeHead(404);
-                res.end('Public dir not configured');
-                return;
-            }
-            const currentStylePath = path.join(config.publicDir, 'style.css');
-            if (!fs.existsSync(currentStylePath)) {
-                logger.error(`(handleStylesCss) File not found: ${currentStylePath}`);
-                res.writeHead(404);
-                res.end(`Not Found: ${currentStylePath}`);
-                return;
-            }
-            // Read fresh from disk every time
-            const content = fs.readFileSync(currentStylePath);
-            const firstChars = content.toString().substring(0, 50);
-            logger.info(`(handleStylesCss) Serving file: ${content.length} bytes, starts with: ${firstChars}`);
-            res.writeHead(200, { 
-                'Content-Type': 'text/css',
-                'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-                'Pragma': 'no-cache',
-                'Expires': '0',
-                'X-Custom-Handler': 'true',
-                'X-File-Size': content.length.toString()
-            });
-            res.end(content);
-        } catch (error) {
-            logger.error(`(handleStylesCss) Error: ${error.message}`);
-            logger.error(`(handleStylesCss) Stack: ${error.stack}`);
-            res.writeHead(500);
-            res.end('Internal Server Error');
-        }
-    };
-    
-    // Register the handler for the new path
-    proxyServer.GET('/styles.css', handleStylesCss);
-    logger.info(`(setupRoutes) Successfully registered /styles.css handler`);
-
-    // Serve favicon.png explicitly (ensure it's always available)
-    const serveStatic = (filename, contentType) => (req, res) => {
-        try {
-            const filePath = path.join(config.publicDir, filename);
-            if (!fs.existsSync(filePath)) {
-                res.writeHead(404);
-                res.end('Not Found');
-                return;
-            }
-            const content = fs.readFileSync(filePath);
-            const headers = { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=86400', 'Content-Length': content.length };
-            res.writeHead(200, headers);
-            if (req.method !== 'HEAD') res.end(content);
-            else res.end();
-        } catch (e) {
-            res.writeHead(500);
-            res.end('Internal Server Error');
-        }
-    };
-    proxyServer.GET('/favicon.png', serveStatic('favicon.png', 'image/png'));
-    proxyServer.GET('/embedded-styles.css', serveStatic('embedded-styles.css', 'text/css'));
-    proxyServer.GET('/manifest.json', serveStatic('manifest.json', 'application/json'));
+    const _staticCache = new Map();
+    const DEV = !!process.env.DEVELOPMENT;
+    function _getCached(filePath, contentType) {
+        let e = _staticCache.get(filePath);
+        if (e) return e;
+        if (!fs.existsSync(filePath)) return null;
+        const raw = fs.readFileSync(filePath);
+        const etag = '"' + crypto.createHash('md5').update(raw).digest('hex') + '"';
+        const gz = /text|css|json|javascript|xml|svg/i.test(contentType) && raw.length > 512
+            ? zlib.gzipSync(raw, { level: 6 }) : null;
+        e = { raw, gz, etag, contentType };
+        _staticCache.set(filePath, e);
+        if (DEV) try { fs.watchFile(filePath, { interval: 2000 }, () => _staticCache.delete(filePath)); } catch(_){}
+        return e;
+    }
+    function serveCached(filename, contentType) {
+        const filePath = path.join(config.publicDir, filename);
+        return (req, res) => {
+            try {
+                const entry = _getCached(filePath, contentType);
+                if (!entry) { res.writeHead(404); res.end('Not Found'); return; }
+                if (req.headers['if-none-match'] === entry.etag) { res.writeHead(304); res.end(); return; }
+                const ae = (req.headers['accept-encoding'] || '').toLowerCase();
+                const useGz = ae.includes('gzip') && entry.gz;
+                const body = useGz ? entry.gz : entry.raw;
+                const hdrs = {
+                    'Content-Type': entry.contentType,
+                    'Content-Length': body.length,
+                    'ETag': entry.etag,
+                    'Cache-Control': DEV ? 'no-cache' : 'public, max-age=3600, stale-while-revalidate=86400',
+                };
+                if (useGz) { hdrs['Content-Encoding'] = 'gzip'; hdrs['Vary'] = 'Accept-Encoding'; }
+                res.writeHead(200, hdrs);
+                if (req.method !== 'HEAD') res.end(body); else res.end();
+            } catch (e) { res.writeHead(500); res.end('Internal Server Error'); }
+        };
+    }
+    proxyServer.GET('/styles.css', serveCached('style.css', 'text/css'));
+    proxyServer.GET('/favicon.png', serveCached('favicon.png', 'image/png'));
+    proxyServer.GET('/embedded-styles.css', serveCached('embedded-styles.css', 'text/css'));
+    proxyServer.GET('/manifest.json', serveCached('manifest.json', 'application/json'));
 
     // Lightweight health check for Fly.io/Render (avoids loading full index.html)
     proxyServer.GET('/health', (req, res) => {

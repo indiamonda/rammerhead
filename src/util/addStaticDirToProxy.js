@@ -1,8 +1,9 @@
 const mime = require('mime');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const zlib = require('zlib');
 
-// these routes are reserved by hammerhead and rammerhead
 const forbiddenRoutes = [
     '/rammerhead.js',
     '/hammerhead.js',
@@ -15,12 +16,33 @@ const forbiddenRoutes = [
 
 const isDirectory = (dir) => fs.lstatSync(dir).isDirectory();
 
+const fileCache = new Map();
+const DEV = !!process.env.DEVELOPMENT;
+
+function getCachedFile(filePath, contentType) {
+    let entry = fileCache.get(filePath);
+    if (entry) return entry;
+
+    if (!fs.existsSync(filePath)) return null;
+    const raw = fs.readFileSync(filePath);
+    const etag = '"' + crypto.createHash('md5').update(raw).digest('hex') + '"';
+    const isCompressible = /text|javascript|json|xml|svg|css|html/i.test(contentType);
+    const gzipped = isCompressible && raw.length > 1024
+        ? zlib.gzipSync(raw, { level: 6 })
+        : null;
+    entry = { raw, gzipped, etag, contentType };
+    fileCache.set(filePath, entry);
+
+    if (DEV) {
+        try { fs.watchFile(filePath, { interval: 2000 }, () => fileCache.delete(filePath)); } catch (_) {}
+    }
+    return entry;
+}
+
 /**
- *
  * @param {import('testcafe-hammerhead').Proxy} proxy
- * @param {string} staticDir - all of the files and folders in the specified directory will be served
- * publicly. /index.html will automatically link to /
- * @param {string} rootPath - all the files that will be served under rootPath
+ * @param {string} staticDir
+ * @param {string} rootPath
  */
 function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFile = (_file, _dir) => false) {
     if (!isDirectory(staticDir)) {
@@ -30,7 +52,6 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
     if (!rootPath.endsWith('/')) rootPath = rootPath + '/';
     if (!rootPath.startsWith('/')) rootPath = '/' + rootPath;
 
-    // Re-read directory to pick up new files (like styles.css)
     const files = fs.readdirSync(staticDir);
 
     files.map((file) => {
@@ -39,13 +60,8 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
             return;
         }
 
-        if (shouldIgnoreFile(file, staticDir)) {
-            return;
-        }
-
-        // Skip style.css - it's handled by a custom route to bypass caching
+        if (shouldIgnoreFile(file, staticDir)) return;
         if (file === 'style.css') return;
-        // Skip background.png - not used by proxy; avoids conflict with proxied sites (e.g. jimmyqrg)
         if (file === 'background.png') return;
 
         const pathToFile = path.join(staticDir, file);
@@ -57,23 +73,40 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
             );
         }
 
-        // Use a handler function to read files on-demand instead of caching
+        const contentType = mime.getType(file) || 'application/octet-stream';
+
         const handler = (req, res) => {
             try {
-                if (!fs.existsSync(pathToFile)) {
+                const entry = getCachedFile(pathToFile, contentType);
+                if (!entry) {
                     res.writeHead(404);
                     res.end('Not Found');
                     return;
                 }
-                const content = fs.readFileSync(pathToFile);
-                const contentType = mime.getType(file) || 'application/octet-stream';
-                res.writeHead(200, { 
-                    'Content-Type': contentType,
-                    'Cache-Control': 'no-cache, no-store, must-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0'
-                });
-                res.end(content);
+
+                if (req.headers['if-none-match'] === entry.etag) {
+                    res.writeHead(304);
+                    res.end();
+                    return;
+                }
+
+                const ae = (req.headers['accept-encoding'] || '').toLowerCase();
+                const useGzip = ae.includes('gzip') && entry.gzipped;
+                const body = useGzip ? entry.gzipped : entry.raw;
+
+                const headers = {
+                    'Content-Type': entry.contentType,
+                    'Content-Length': body.length,
+                    'ETag': entry.etag,
+                    'Cache-Control': DEV ? 'no-cache' : 'public, max-age=3600, stale-while-revalidate=86400',
+                };
+                if (useGzip) {
+                    headers['Content-Encoding'] = 'gzip';
+                    headers['Vary'] = 'Accept-Encoding';
+                }
+                res.writeHead(200, headers);
+                if (req.method !== 'HEAD') res.end(body);
+                else res.end();
             } catch (error) {
                 res.writeHead(500);
                 res.end('Internal Server Error');
