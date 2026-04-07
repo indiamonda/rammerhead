@@ -4,8 +4,8 @@ const os = require('os');
 const RammerheadJSMemCache = require('./classes/RammerheadJSMemCache.js');
 const RammerheadJSFileCache = require('./classes/RammerheadJSFileCache.js');
 
-// sticky-session-custom has issues with Node.js v24+; use simple cluster mode instead
-const enableWorkers = false;
+// Use simple cluster mode (not sticky-session-custom which has Node.js v24+ issues)
+const enableWorkers = os.cpus().length > 1 && !process.env.SINGLE_PROCESS;
 
 // Auto-detect cloud/reverse-proxy environments (Render, Fly.io, Heroku, etc.)
 const isCloudDeployment = !!(

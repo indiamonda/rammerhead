@@ -1,15 +1,18 @@
 const cluster = require('cluster');
 const os = require('os');
-try { require('dotenv-flow').config(); } catch (_) {}
 
-const useCluster = !process.env.DEVELOPMENT && os.cpus().length > 1;
+if (cluster.isPrimary || cluster.isMaster) {
+    try { require('dotenv-flow').config(); } catch (e) {}
+}
 
-if (useCluster && cluster.isPrimary) {
-    const numWorkers = Math.min(os.cpus().length, 4);
-    console.log(`[master] Forking ${numWorkers} workers...`);
+const config = require('../config');
+
+if (config.enableWorkers && (cluster.isPrimary || cluster.isMaster)) {
+    const numWorkers = Math.min(config.workers || os.cpus().length, os.cpus().length);
+    console.log(`[master] Forking ${numWorkers} workers on port ${config.port}`);
     for (let i = 0; i < numWorkers; i++) cluster.fork();
     cluster.on('exit', (worker, code) => {
-        console.log(`[master] Worker ${worker.process.pid} exited (code ${code}), restarting...`);
+        console.log(`[master] Worker ${worker.process.pid} exited (code=${code}), restarting`);
         cluster.fork();
     });
 } else {
@@ -19,15 +22,15 @@ if (useCluster && cluster.isPrimary) {
     const RammerheadProxy = require('../classes/RammerheadProxy');
     const addStaticDirToProxy = require('../util/addStaticDirToProxy');
     const RammerheadSessionFileCache = require('../classes/RammerheadSessionFileCache');
-    const config = require('../config');
     const setupRoutes = require('./setupRoutes');
     const setupPipeline = require('./setupPipeline');
     const RammerheadLogging = require('../classes/RammerheadLogging');
 
-    const wid = useCluster ? `(w${cluster.worker.id}) ` : '';
+    const workerId = config.enableWorkers ? `(worker ${cluster.worker.id}) ` : '';
+
     const logger = new RammerheadLogging({
         logLevel: config.logLevel,
-        generatePrefix: (level) => wid + config.generatePrefix(level)
+        generatePrefix: (level) => workerId + config.generatePrefix(level)
     });
 
     const proxyServer = new RammerheadProxy({
@@ -45,7 +48,9 @@ if (useCluster && cluster.isPrimary) {
     });
 
     const fileCacheOptions = { logger, ...config.fileCacheSessionConfig };
-    if (useCluster) fileCacheOptions.staleCleanupOptions = null;
+    if (config.enableWorkers) {
+        fileCacheOptions.staleCleanupOptions = null;
+    }
     const sessionStore = new RammerheadSessionFileCache(fileCacheOptions);
     sessionStore.attachToProxy(proxyServer);
 
@@ -61,7 +66,7 @@ if (useCluster && cluster.isPrimary) {
 
     const formatUrl = (secure, hostname, port) => `${secure ? 'https' : 'http'}://${hostname}:${port}`;
     logger.info(
-        `${wid}Rammerhead proxy is listening on ${formatUrl(config.ssl, config.bindingAddress, config.port)}`
+        `(server) Rammerhead proxy is listening on ${formatUrl(config.ssl, config.bindingAddress, config.port)}`
     );
 
     module.exports = proxyServer;

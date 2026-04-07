@@ -676,30 +676,6 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return false;
     }, true);
 
-    // Intercept /styles.css requests to bypass hammerhead's static content cache
-    proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
-        if (!req.url || !config.publicDir) return false;
-        const urlPath = req.url.split('?')[0];
-        if (urlPath === '/styles.css' || urlPath.endsWith('/styles.css')) {
-            try {
-                const stylePath = path.join(config.publicDir, 'style.css');
-                if (fs.existsSync(stylePath)) {
-                    const content = fs.readFileSync(stylePath);
-                    res.writeHead(200, { 
-                        'Content-Type': 'text/css',
-                        'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-                        'Pragma': 'no-cache',
-                        'Expires': '0'
-                    });
-                    res.end(content);
-                    return true;
-                }
-            } catch (error) {
-                devErr('styles.css serve', error);
-            }
-        }
-        return false;
-    }, true);
     // Fix WASM MIME type: Hammerhead may serve .wasm with wrong Content-Type,
     // causing WebAssembly.instantiateStreaming to fail.
     const WASM_URL_RE = /\.wasm(?:\?|$)/i;
