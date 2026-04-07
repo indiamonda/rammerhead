@@ -304,7 +304,7 @@ function _liteProcess(html, ctx, inject) {
         html = html.replace(
             /(<script(?:[^>]*)>)([\s\S]*?)(<\/script>)/gi,
             (_m, open, body, close) => {
-                if (/type\s*=\s*["'](?:application\/(?:ld\+)?json)["']/i.test(open)) return _m;
+                if (/type\s*=\s*["']application\/ld\+json["']/i.test(open)) return _m;
                 // Rewrite /cdn/ and /cdn-cgi/ paths in string literals
                 body = body.replace(/(["'])(\/cdn(?:-cgi)?\/[^"']+)(["'])/g,
                     (_m2, q1, path, q2) => q1 + proxyPrefix + origin + path + q2);
