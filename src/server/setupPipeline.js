@@ -365,11 +365,11 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         const targetUrl = info.origin + url;
         const dest = (req.headers['sec-fetch-dest'] || '').toLowerCase();
 
-        // For script/style/worker resources, fetch directly from origin and serve.
-        // This bypasses Hammerhead entirely — more reliable for sites in "lite" mode
-        // where Hammerhead's AST rewriting is skipped anyway. Also avoids 307 redirect
-        // issues with ES module caching and CORS.
-        if (dest === 'script' || dest === 'style' || dest === 'worker' || dest === 'image' || dest === 'font') {
+        // For sub-resources, fetch directly from origin and serve.
+        // This bypasses Hammerhead entirely — more reliable for sites in "lite" mode.
+        if (dest === 'script' || dest === 'style' || dest === 'worker' || dest === 'image' ||
+            dest === 'font' || dest === 'video' || dest === 'audio' || dest === 'track' ||
+            dest === 'manifest' || dest === 'sharedworker') {
             rawFetch(targetUrl, (err, status, headers, body) => {
                 if (res.headersSent || res.writableEnded) return;
                 if (err) {

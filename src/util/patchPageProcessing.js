@@ -220,18 +220,35 @@ const origProcess = pageProcessor.processResource.bind(pageProcessor);
 // Domains whose JS-heavy SPAs break under Hammerhead's full AST rewriting.
 // These get "lite" processing: runtime scripts are injected but inline JS
 // is NOT instrumented, preventing React/Next.js hydration mismatches.
-const LITE_DOMAINS = new Set([
+const LITE_DOMAINS_EXACT = new Set([
     'chatgpt.com',
     'chat.openai.com',
     'claude.ai',
-    'www.claude.ai',
     'poki.com',
-    'www.poki.com',
+    'bilibili.com',
+    'doubao.com',
+    'discord.com',
+    'github.com',
 ]);
+const LITE_DOMAINS_SUFFIX = [
+    '.chatgpt.com',
+    '.openai.com',
+    '.claude.ai',
+    '.poki.com',
+    '.bilibili.com',
+    '.doubao.com',
+    '.discord.com',
+    '.github.com',
+    '.aliyun.com',
+];
 function _needsLiteProcessing(ctx) {
     if (!ctx || !ctx.dest) return false;
     const host = (ctx.dest.host || '').toLowerCase().replace(/:\d+$/, '');
-    return LITE_DOMAINS.has(host);
+    if (LITE_DOMAINS_EXACT.has(host)) return true;
+    for (let i = 0; i < LITE_DOMAINS_SUFFIX.length; i++) {
+        if (host.endsWith(LITE_DOMAINS_SUFFIX[i])) return true;
+    }
+    return false;
 }
 
 // Lite processing: leave inline JS untouched (prevents React hydration
@@ -254,8 +271,8 @@ function _liteProcess(html, ctx, inject) {
     const sid = sessionId || '';
     const proxyPrefix = proxyOrigin + '/' + sid + '/';
 
-    // Single-pass rewrite for href/src/action attributes, srcset, and CSS url()
-    const ATTR_AND_URL_RE = /((?:href|src|action)\s*=\s*["'])(\/\/[^"']+|\/(?!\/)[^"']*|https?:\/\/[^"']+)(["'])|(srcset\s*=\s*")([^"]*)(")|(url\(\s*['"]?)(https?:\/\/[^'")]+)(['"]?\s*\))/gi;
+    // Single-pass rewrite for href/src/action/poster/data attributes, srcset, and CSS url()
+    const ATTR_AND_URL_RE = /((?:href|src|action|poster|data)\s*=\s*["'])(\/\/[^"']+|\/(?!\/)[^"']*|https?:\/\/[^"']+)(["'])|(srcset\s*=\s*")([^"]*)(")|(url\(\s*['"]?)((?:https?:)?\/\/[^'")]+)(['"]?\s*\))/gi;
     html = html.replace(ATTR_AND_URL_RE, (_m, aPre, aUrl, aPost, ssPre, ssVal, ssPost, uPre, uUrl, uPost) => {
         if (aPre) {
             if (aUrl.startsWith('//')) return aPre + proxyPrefix + 'https:' + aUrl + aPost;
@@ -263,8 +280,16 @@ function _liteProcess(html, ctx, inject) {
             if (origin && aUrl.startsWith('/')) return aPre + proxyPrefix + origin + aUrl + aPost;
             return _m;
         }
-        if (ssPre) return ssPre + ssVal.replace(/(https?:\/\/[^\s,]+)/gi, u => u.startsWith(proxyOrigin) ? u : proxyPrefix + u) + ssPost;
-        if (uPre) return uUrl.startsWith(proxyOrigin) ? _m : uPre + proxyPrefix + uUrl + uPost;
+        if (ssPre) return ssPre + ssVal.replace(/((?:https?:)?\/\/[^\s,]+)/gi, u => {
+            if (u.startsWith(proxyOrigin)) return u;
+            if (u.startsWith('//')) return proxyPrefix + 'https:' + u;
+            return proxyPrefix + u;
+        }) + ssPost;
+        if (uPre) {
+            if (uUrl.startsWith(proxyOrigin)) return _m;
+            if (uUrl.startsWith('//')) return uPre + proxyPrefix + 'https:' + uUrl + uPost;
+            return uPre + proxyPrefix + uUrl + uPost;
+        }
         return _m;
     });
 
@@ -276,10 +301,16 @@ function _liteProcess(html, ctx, inject) {
             /(<script(?:[^>]*)>)([\s\S]*?)(<\/script>)/gi,
             (_m, open, body, close) => {
                 if (/type\s*=\s*["']application\/ld\+json["']/i.test(open)) return _m;
-                // Rewrite /cdn/ and /cdn-cgi/ paths in string literals
+                // Rewrite protocol-relative URLs in string literals ("//cdn.example.com/...")
+                body = body.replace(/(["'])(\/\/[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-z]{2,}\/[^"']*)(["'])/g,
+                    (_m2, q1, u, q2) => q1 + proxyPrefix + 'https:' + u + q2);
+                // Rewrite absolute URLs in string literals to go through proxy
+                body = body.replace(/(["'])(https?:\/\/[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-z]{2,}\/[^"']*)(["'])/g,
+                    (_m2, q1, u, q2) => u.startsWith(proxyOrigin) ? _m2 : q1 + proxyPrefix + u + q2);
+                // Rewrite relative /cdn/ and /cdn-cgi/ paths in string literals
                 body = body.replace(/(["'])(\/cdn(?:-cgi)?\/[^"']+)(["'])/g,
                     (_m2, q1, path, q2) => q1 + proxyPrefix + origin + path + q2);
-                // Rewrite import()/from/import statements in ALL scripts (not just modules)
+                // Rewrite import()/from/import statements in ALL scripts
                 body = body.replace(/(import\(\s*["'])(\/[^"']+)(["']\s*\))/g,
                     (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
                 if (/type\s*=\s*["']module["']/i.test(open)) {
@@ -301,79 +332,119 @@ try{document.cookie='__rh_sess='+S+'|'+D+';path=/'}catch(e){}
 function px(u){return O+'/'+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
+function isProto(u){return typeof u==='string'&&u.length>2&&u.charCodeAt(0)===47&&u.charCodeAt(1)===47&&u.charCodeAt(2)!==47}
+function rw(u){if(!u||typeof u!=='string')return u;u=u.trim();
+if(isProto(u))return px('https:'+u);if(isExt(u))return px(u);if(isRel(u))return pxRel(u);return u}
 try{var du=new URL(D);var DO=du.origin;
 try{history.replaceState(history.state,'',du.pathname+(du.search||'')+(du.hash||''))}catch(e){}
 window.__rhDestUrl=du.href;
 function isRel(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/'&&u.indexOf('/'+S+'/')!==0}
 function pxRel(u){return O+'/'+S+'/'+DO+u}
 var _rl=window.location,_rr=_rl.replace.bind(_rl),_ra=_rl.assign.bind(_rl),_rrl=_rl.reload.bind(_rl);
-var lp={href:{get:function(){return du.href},set:function(v){
-if(isExt(v))v=px(v);else if(isRel(v))v=pxRel(v);else if(!/^[a-z]+:/i.test(v))v=pxRel('/'+v);
-_rr(v)}},
+var lp={href:{get:function(){return du.href},set:function(v){_rr(rw(v)||v)}},
 hostname:{get:function(){return du.hostname}},host:{get:function(){return du.host}},
 origin:{get:function(){return du.origin}},protocol:{get:function(){return du.protocol}},
-pathname:{get:function(){return du.pathname}},search:{get:function(){return du.search}},
+pathname:{get:function(){return du.pathname},set:function(v){_rr(pxRel(v))}},
+search:{get:function(){return du.search},set:function(v){du.search=v;_rr(pxRel(du.pathname+v))}},
 hash:{get:function(){return du.hash},set:function(v){du.hash=v}},
 port:{get:function(){return du.port}},
-assign:{value:function(u){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u);_ra(u)}},
-replace:{value:function(u){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u);_rr(u)}},
+assign:{value:function(u){_ra(rw(u)||u)}},
+replace:{value:function(u){_rr(rw(u)||u)}},
 reload:{value:function(){_rrl()}},
 toString:{value:function(){return du.href}}};
 Object.defineProperty(window,'location',{configurable:true,enumerable:true,
 get:function(){var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}
 o[Symbol.toPrimitive]=function(){return du.href};return o}});
+try{Object.defineProperty(document,'domain',{get:function(){return du.hostname},set:function(){},configurable:true})}catch(e){}
 var oF=window.fetch;if(oF)window.fetch=function(u,o){
-if(typeof u==='string'){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u)}
-else if(u&&typeof u==='object'&&u.url){if(isExt(u.url))try{u=new Request(px(u.url),u)}catch(e){}
-else if(isRel(u.url))try{u=new Request(pxRel(u.url),u)}catch(e){}}
+if(typeof u==='string'){u=rw(u)}
+else if(u&&typeof u==='object'&&u.url){var nu=rw(u.url);if(nu!==u.url)try{u=new Request(nu,u)}catch(e){}}
 return oF.call(this,u,o)};
 var XP=XMLHttpRequest.prototype,oX=XP.open;
-XP.open=function(m,u){if(typeof u==='string'){if(isExt(u))arguments[1]=px(u);else if(isRel(u))arguments[1]=pxRel(u)}return oX.apply(this,arguments)};
+XP.open=function(m,u){if(typeof u==='string'){arguments[1]=rw(u)}return oX.apply(this,arguments)};
 if(typeof EventSource!=='undefined'){var oE=EventSource;
-window.EventSource=function(u,o){if(isExt(u))u=px(u);else if(isRel(u))u=pxRel(u);return new oE(u,o)};
-window.EventSource.prototype=oE.prototype}
+window.EventSource=function(u,o){return new oE(rw(u)||u,o)};
+window.EventSource.prototype=oE.prototype;
+try{Object.defineProperty(window.EventSource,'CONNECTING',{value:0});
+Object.defineProperty(window.EventSource,'OPEN',{value:1});
+Object.defineProperty(window.EventSource,'CLOSED',{value:2})}catch(e){}}
 var oW=window.open;if(oW)window.open=function(u){
-if(typeof u==='string'){if(isExt(u))arguments[0]=px(u);else if(isRel(u))arguments[0]=pxRel(u)}return oW.apply(this,arguments)};
+if(typeof u==='string'){arguments[0]=rw(u)}return oW.apply(this,arguments)};
 var oWS=window.WebSocket;if(oWS){window.WebSocket=function(u,p){
-if(typeof u==='string'&&isExt(u)){var wu=u.replace(/^http/,'ws');u=O.replace(/^http/,'ws')+'/'+S+'/'+wu}
+if(typeof u==='string'){var hu=u;
+if(/^wss?:\\/\\//i.test(u)){hu=u.replace(/^ws/i,'http')}
+if(isProto(hu)){hu='https:'+hu}
+if(isExt(hu)){u=O.replace(/^http/i,'ws')+'/'+S+'/'+hu}}
 return p!==undefined?new oWS(u,p):new oWS(u)};
 window.WebSocket.prototype=oWS.prototype;
-Object.keys(oWS).forEach(function(k){try{window.WebSocket[k]=oWS[k]}catch(e){}})}
+Object.keys(oWS).forEach(function(k){try{window.WebSocket[k]=oWS[k]}catch(e){}});
+['CONNECTING','OPEN','CLOSING','CLOSED'].forEach(function(k){try{Object.defineProperty(window.WebSocket,k,{value:oWS[k]})}catch(e){}})}
+try{if(navigator.serviceWorker){Object.defineProperty(navigator,'serviceWorker',{configurable:true,
+get:function(){return{register:function(){return Promise.reject(new DOMException('blocked','SecurityError'))},
+getRegistration:function(){return Promise.resolve(undefined)},
+getRegistrations:function(){return Promise.resolve([])},
+ready:new Promise(function(){}),controller:null,
+addEventListener:function(){},removeEventListener:function(){}}}})}}catch(e){}
+var oSB=navigator.sendBeacon;if(oSB){try{navigator.sendBeacon=function(u,d){return oSB.call(navigator,rw(u)||u,d)}}catch(e){}}
 var oImg=window.Image;if(oImg){window.Image=function(w,h){var i=new oImg(w,h);
 var oSet=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src')||{};
 if(oSet.set){var origSet=oSet.set;Object.defineProperty(i,'src',{get:function(){return oSet.get?oSet.get.call(i):''},
-set:function(v){if(typeof v==='string'){if(isExt(v))v=px(v);else if(isRel(v))v=pxRel(v)}origSet.call(i,v)},configurable:true})}
+set:function(v){if(typeof v==='string')v=rw(v);origSet.call(i,v)},configurable:true})}
 return i};window.Image.prototype=oImg.prototype}
+var oWorker=window.Worker;if(oWorker){window.Worker=function(u,o){
+if(typeof u==='string')u=rw(u);return new oWorker(u,o)};
+window.Worker.prototype=oWorker.prototype}
+var oSW=window.SharedWorker;if(oSW){window.SharedWorker=function(u,o){
+if(typeof u==='string')u=rw(u);return new oSW(u,o)};
+window.SharedWorker.prototype=oSW.prototype}
 try{var oPS=history.pushState.bind(history);history.pushState=function(s,t,u){
-if(typeof u==='string'){if(isExt(u))u=px(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href}}return oPS(s,t,u)};
+if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href}}return oPS(s,t,u)};
 var oRS=history.replaceState.bind(history);history.replaceState=function(s,t,u){
-if(typeof u==='string'){if(isExt(u))u=px(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href}}return oRS(s,t,u)}}catch(e){}
+if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href}}return oRS(s,t,u)}}catch(e){}
 window.addEventListener('popstate',function(){try{var l=window.location;du=new URL(l.pathname+(l.search||'')+(l.hash||''),DO+'/');window.__rhDestUrl=du.href}catch(e){}});
 try{var sSA=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){
-var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action')&&typeof v==='string'){if(isExt(v))v=px(v);else if(isRel(v))v=pxRel(v)}
+var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')&&typeof v==='string'){v=rw(v)}
 return sSA.call(this,n,v)}}catch(e){}
+try{['src','href','action','poster'].forEach(function(attr){
+var els=[HTMLImageElement,HTMLScriptElement,HTMLLinkElement,HTMLAnchorElement,HTMLSourceElement,
+HTMLVideoElement,HTMLAudioElement,HTMLIFrameElement,HTMLEmbedElement,HTMLAreaElement];
+els.forEach(function(E){if(!E||!E.prototype)return;
+var d=Object.getOwnPropertyDescriptor(E.prototype,attr);
+if(d&&d.set){var oSet=d.set,oGet=d.get;Object.defineProperty(E.prototype,attr,{configurable:true,enumerable:true,
+get:function(){return oGet?oGet.call(this):undefined},
+set:function(v){if(typeof v==='string')v=rw(v);oSet.call(this,v)}})}})
+})}catch(e){}
+try{var dCookie=Object.getOwnPropertyDescriptor(Document.prototype,'cookie');
+if(dCookie){var ogSet=dCookie.set,ogGet=dCookie.get;
+Object.defineProperty(document,'cookie',{configurable:true,
+get:function(){var c=ogGet.call(this);return c.replace(/__rh_[^;]*(;\\s*)?/g,'').replace(/;\\s*$/,'')},
+set:function(v){ogSet.call(this,v)}})}}catch(e){}
 }catch(e){}
 function fixEl(el){if(!el||el.nodeType!==1||el.__rhLite)return;el.__rhLite=1;
 var t=el.tagName;
-var s=el.getAttribute('src');if(s){if(isExt(s))el.setAttribute('src',px(s));else if(isRel(s))el.setAttribute('src',pxRel(s))}
-var h=el.getAttribute('href');if(h){if(isExt(h))el.setAttribute('href',px(h));else if(isRel(h))el.setAttribute('href',pxRel(h))}
-if(t==='FORM'){var a=el.getAttribute('action');if(a){if(isExt(a))el.setAttribute('action',px(a));else if(isRel(a))el.setAttribute('action',pxRel(a))}}
-if(t==='OBJECT'){var od=el.getAttribute('data');if(od){if(isExt(od))el.setAttribute('data',px(od));else if(isRel(od))el.setAttribute('data',pxRel(od))}}
-var ss=el.getAttribute('srcset');if(ss)el.setAttribute('srcset',ss.replace(/(https?:\\/\\/[^\\s,]+)/gi,function(u){return isExt(u)?px(u):u}));
-var bg=el.style&&el.style.backgroundImage;if(bg&&/url\\(/i.test(bg))el.style.backgroundImage=bg.replace(/url\\(['\"]?(https?:\\/\\/[^'\")]+)['\"]?\\)/gi,function(m,u){return isExt(u)?'url('+px(u)+')':m})}
-function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
+['src','href','action','data','poster'].forEach(function(a){var v=el.getAttribute(a);if(v){var n=rw(v);if(n!==v)el.setAttribute(a,n)}});
+var ss=el.getAttribute('srcset');if(ss){var nss=ss.replace(/((?:https?:)?\\/\\/[^\\s,]+)/gi,function(u){return rw(u)});
+if(nss!==ss)el.setAttribute('srcset',nss)}
+var bg=el.style&&el.style.backgroundImage;
+if(bg&&/url\\(/i.test(bg)){var nbg=bg.replace(/url\\(['\"]?((?:https?:)?\\/\\/[^'\")]+)['\"]?\\)/gi,function(m,u){var n=rw(u);return n!==u?'url('+n+')':m});
+if(nbg!==bg)el.style.backgroundImage=nbg}
+if(t==='STYLE'&&el.sheet){try{var rules=el.sheet.cssRules;for(var i=0;i<rules.length;i++){
+var txt=rules[i].cssText;if(/url\\(/i.test(txt)){var nt=txt.replace(/url\\(['\"]?((?:https?:)?\\/\\/[^'\")]+)['\"]?\\)/gi,function(m,u){var n=rw(u);return n!==u?'url('+n+')':m});
+if(nt!==txt){try{el.sheet.deleteRule(i);el.sheet.insertRule(nt,i)}catch(e){}}}}}catch(e){}}
+}
+function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area,style');
 for(var i=0;i<els.length;i++)fixEl(els[i])}catch(e){}}
 function startObs(){var r=document.documentElement;if(!r){document.addEventListener('DOMContentLoaded',startObs);return}
 fixTree(r);
 new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){var m=ml[i];
 if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++)fixTree(m.addedNodes[j])}
 else if(m.type==='attributes'){m.target.__rhLite=0;fixEl(m.target)}}
-}).observe(r,{childList:true,subtree:true,attributes:true,attributeFilter:['src','href','action','data']})}
+}).observe(r,{childList:true,subtree:true,attributes:true,attributeFilter:['src','href','action','data','poster','srcset']})}
 startObs();
-document.addEventListener('click',function(e){var a=e.target.closest('a[href]');
-if(a){var ah=a.getAttribute('href');if(isExt(ah))a.setAttribute('href',px(ah));else if(isRel(ah))a.setAttribute('href',pxRel(ah))}},true);
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');
+if(a){var ah=a.getAttribute('href');var n=rw(ah);if(n!==ah)a.setAttribute('href',n)}},true);
 document.addEventListener('submit',function(e){var f=e.target;
-if(f&&f.tagName==='FORM'){var fa=f.getAttribute('action');if(isExt(fa))f.setAttribute('action',px(fa));else if(isRel(fa))f.setAttribute('action',pxRel(fa))}},true);
+if(f&&f.tagName==='FORM'){var fa=f.getAttribute('action');if(fa){var n=rw(fa);if(n!==fa)f.setAttribute('action',n)}}},true);
 })()</script>`;
 
     html = html.replace(/<head[^>]*>/i, '$&' + inject + bridge);
