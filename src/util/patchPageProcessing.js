@@ -352,10 +352,10 @@ assign:{value:function(u){_ra(rw(u)||u)}},
 replace:{value:function(u){_rr(rw(u)||u)}},
 reload:{value:function(){_rrl()}},
 toString:{value:function(){return du.href}}};
-Object.defineProperty(window,'location',{configurable:true,enumerable:true,
+try{Object.defineProperty(window,'location',{configurable:true,enumerable:true,
 get:function(){var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}
 o[Symbol.toPrimitive]=function(){return du.href};return o},
-set:function(v){_rr(rw(''+v)||(''+v))}});
+set:function(v){_rr(rw(''+v)||(''+v))}})}catch(e){}
 try{Object.defineProperty(document,'location',{configurable:true,enumerable:true,
 get:function(){return window.location},set:function(v){window.location=v}})}catch(e){}
 try{Object.defineProperty(document,'domain',{get:function(){return du.hostname},set:function(){},configurable:true})}catch(e){}
