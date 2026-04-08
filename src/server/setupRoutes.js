@@ -59,6 +59,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/favicon.png', serveCached('favicon.png', 'image/png'));
     proxyServer.GET('/embedded-styles.css', serveCached('embedded-styles.css', 'text/css'));
     proxyServer.GET('/manifest.json', serveCached('manifest.json', 'application/json'));
+    proxyServer.GET('/__rh_devtools.js', serveCached('devtools.js', 'application/javascript'));
 
     // Lightweight health check for Fly.io/Render (avoids loading full index.html)
     proxyServer.GET('/health', (req, res) => {
