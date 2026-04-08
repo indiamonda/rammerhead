@@ -216,6 +216,8 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         if (res instanceof stream.Duplex) return false;
         const ae = (req.headers['accept-encoding'] || '').toLowerCase();
         if (!ae.includes('gzip')) return false;
+        const accept = (req.headers['accept'] || '').toLowerCase();
+        if (accept.includes('text/event-stream')) return false;
 
         const origWriteHead = res.writeHead;
         const origWrite = res.write;
@@ -255,7 +257,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             decided = true;
             const ce = findHeader('content-encoding');
             const ct = (findHeader('content-type') || '').toLowerCase();
-            shouldCompress = !ce && COMPRESSIBLE_RE.test(ct);
+            shouldCompress = !ce && COMPRESSIBLE_RE.test(ct) && !ct.includes('event-stream');
 
             if (shouldCompress) {
                 setHeader('Content-Encoding', 'gzip');
@@ -277,7 +279,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             decided = true;
             const ct = (res.getHeader && res.getHeader('content-type') || '').toLowerCase();
             const ce = res.getHeader && res.getHeader('content-encoding');
-            if (!ce && COMPRESSIBLE_RE.test(ct)) {
+            if (!ce && COMPRESSIBLE_RE.test(ct) && !ct.includes('event-stream')) {
                 shouldCompress = true;
                 res.setHeader('content-encoding', 'gzip');
                 res.setHeader('vary', 'Accept-Encoding');

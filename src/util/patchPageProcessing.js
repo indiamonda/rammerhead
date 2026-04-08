@@ -229,6 +229,8 @@ const LITE_DOMAINS_EXACT = new Set([
     'doubao.com',
     'discord.com',
     'github.com',
+    'duckduckgo.com',
+    'qianwen.com',
 ]);
 const LITE_DOMAINS_SUFFIX = [
     '.chatgpt.com',
@@ -240,6 +242,8 @@ const LITE_DOMAINS_SUFFIX = [
     '.discord.com',
     '.github.com',
     '.aliyun.com',
+    '.duckduckgo.com',
+    '.qianwen.com',
 ];
 function _needsLiteProcessing(ctx) {
     if (!ctx || !ctx.dest) return false;
@@ -301,13 +305,8 @@ function _liteProcess(html, ctx, inject) {
             /(<script(?:[^>]*)>)([\s\S]*?)(<\/script>)/gi,
             (_m, open, body, close) => {
                 if (/type\s*=\s*["']application\/ld\+json["']/i.test(open)) return _m;
-                // Rewrite protocol-relative URLs in string literals ("//cdn.example.com/...")
-                body = body.replace(/(["'])(\/\/[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-z]{2,}\/[^"']*)(["'])/g,
-                    (_m2, q1, u, q2) => q1 + proxyPrefix + 'https:' + u + q2);
-                // Rewrite absolute URLs in string literals to go through proxy
-                body = body.replace(/(["'])(https?:\/\/[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-z]{2,}\/[^"']*)(["'])/g,
-                    (_m2, q1, u, q2) => u.startsWith(proxyOrigin) ? _m2 : q1 + proxyPrefix + u + q2);
                 // Rewrite relative /cdn/ and /cdn-cgi/ paths in string literals
+                // (dynamic import() can't be intercepted by the bridge script)
                 body = body.replace(/(["'])(\/cdn(?:-cgi)?\/[^"']+)(["'])/g,
                     (_m2, q1, path, q2) => q1 + proxyPrefix + origin + path + q2);
                 // Rewrite import()/from/import statements in ALL scripts
@@ -334,6 +333,7 @@ function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
 function isProto(u){return typeof u==='string'&&u.length>2&&u.charCodeAt(0)===47&&u.charCodeAt(1)===47&&u.charCodeAt(2)!==47}
 function rw(u){if(!u||typeof u!=='string')return u;u=u.trim();
+if(u.indexOf(O+'/')===0)return u;
 if(isProto(u))return px('https:'+u);if(isExt(u))return px(u);if(isRel(u))return pxRel(u);return u}
 try{var du=new URL(D);var DO=du.origin;
 try{history.replaceState(history.state,'',du.pathname+(du.search||'')+(du.hash||''))}catch(e){}
@@ -354,7 +354,10 @@ reload:{value:function(){_rrl()}},
 toString:{value:function(){return du.href}}};
 Object.defineProperty(window,'location',{configurable:true,enumerable:true,
 get:function(){var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}
-o[Symbol.toPrimitive]=function(){return du.href};return o}});
+o[Symbol.toPrimitive]=function(){return du.href};return o},
+set:function(v){_rr(rw(''+v)||(''+v))}});
+try{Object.defineProperty(document,'location',{configurable:true,enumerable:true,
+get:function(){return window.location},set:function(v){window.location=v}})}catch(e){}
 try{Object.defineProperty(document,'domain',{get:function(){return du.hostname},set:function(){},configurable:true})}catch(e){}
 var oF=window.fetch;if(oF)window.fetch=function(u,o){
 if(typeof u==='string'){u=rw(u)}
