@@ -12,10 +12,11 @@ const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 64, maxFreeSocke
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: 60000, rejectUnauthorized: false });
 
 const COMPRESSIBLE_RE = /text|javascript|json|xml|svg|css|html/i;
+const BINARY_RE = /font|woff|image|audio|video|octet-stream|wasm|zip|gzip|pdf|protobuf/i;
 function compressAndSend(req, res, statusCode, headers, body) {
     const ae = (req.headers['accept-encoding'] || '').toLowerCase();
     const ct = headers['Content-Type'] || headers['content-type'] || '';
-    if (ae.includes('gzip') && COMPRESSIBLE_RE.test(ct) && body.length > 1024) {
+    if (ae.includes('gzip') && COMPRESSIBLE_RE.test(ct) && !BINARY_RE.test(ct) && body.length > 1024) {
         body = zlib.gzipSync(body, { level: 6 });
         headers['Content-Encoding'] = 'gzip';
         headers['Vary'] = 'Accept-Encoding';
@@ -257,7 +258,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             decided = true;
             const ce = findHeader('content-encoding');
             const ct = (findHeader('content-type') || '').toLowerCase();
-            shouldCompress = !ce && COMPRESSIBLE_RE.test(ct) && !ct.includes('event-stream');
+            shouldCompress = !ce && COMPRESSIBLE_RE.test(ct) && !ct.includes('event-stream') && !BINARY_RE.test(ct);
 
             if (shouldCompress) {
                 setHeader('Content-Encoding', 'gzip');
@@ -279,7 +280,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             decided = true;
             const ct = (res.getHeader && res.getHeader('content-type') || '').toLowerCase();
             const ce = res.getHeader && res.getHeader('content-encoding');
-            if (!ce && COMPRESSIBLE_RE.test(ct) && !ct.includes('event-stream')) {
+            if (!ce && COMPRESSIBLE_RE.test(ct) && !ct.includes('event-stream') && !BINARY_RE.test(ct)) {
                 shouldCompress = true;
                 res.setHeader('content-encoding', 'gzip');
                 res.setHeader('vary', 'Accept-Encoding');

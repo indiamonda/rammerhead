@@ -43,140 +43,175 @@ const ANTIDETECT_SCRIPT = [
     '})();</script>',
 ].join('\n');
 
-const DEVTOOLS_SCRIPT = [
-    '<script>',
-    '(function(){',
-    'if(typeof window==="undefined"||window.__rhC)return;window.__rhC=1;',
+const DEVTOOLS_SCRIPT = `<script>(function(){
+if(typeof window==="undefined"||window.__rhC)return;window.__rhC=1;
+window.__rhQ=[];window.__rhNet=[];window.__rhSrc=[];
+var _oC=window.console||{},_srcSeen={};
+var _proxyRe=/\\/[a-z0-9]{32}(?:![a-z]*)?\\/((https?):\\/\\/.+)/i;
+function _cleanUrl(u){if(!u)return u;var m=u.match(_proxyRe);return m?m[1]:u}
+function _ser(a){
+if(a===void 0)return"undefined";if(a===null)return"null";
+if(a instanceof Error)return(a.stack||a.message||""+a).slice(0,1500);
+if(typeof a==="function")return"f "+(a.name||"anon");
+if(typeof a==="symbol")return a.toString();
+if(typeof a==="object"){try{var s=JSON.stringify(a);return s.length>2000?s.slice(0,2000)+"\\u2026":s}catch(e){return""+a}}
+var s=""+a;return s.length>2000?s.slice(0,2000)+"\\u2026":s
+}
+function _esc(s){var d=document.createElement("span");d.textContent=s;return d.innerHTML}
+var _lvlColor={log:"#fff",info:"#8cf",warn:"#fd6",error:"#f66",debug:"#aaa"};
+function _addSrc(url,type){url=_cleanUrl(url);if(!url||typeof url!=="string"||_srcSeen[url])return;_srcSeen[url]=1;window.__rhSrc.push({u:url,tp:type})}
 
-    // ── Console capture ──────────────────────────────────────────────
-    'window.__rhQ=[];',
-    'var _oC=window.console||{};',
-    'function _ser(a){',
-        'if(a===void 0)return"undefined";if(a===null)return"null";',
-        'if(a instanceof Error)return(a.stack||a.message||""+a).slice(0,1500);',
-        'if(typeof a==="function")return"f "+(a.name||"anon");',
-        'if(typeof a==="symbol")return a.toString();',
-        'if(typeof a==="object"){try{var s=JSON.stringify(a);return s.length>2000?s.slice(0,2000)+"\\u2026":s}catch(e){return""+a}}',
-        'var s=""+a;return s.length>2000?s.slice(0,2000)+"\\u2026":s',
-    '}',
-    '["log","warn","error","info","debug"].forEach(function(m){',
-        'var o=_oC[m]||function(){};',
-        '_oC[m]=function(){',
-            'try{o.apply(_oC,arguments)}catch(e){}',
-            'var a=[];for(var i=0;i<arguments.length;i++)a.push(_ser(arguments[i]));',
-            'var u="";try{u=(""+location.href).slice(0,200)}catch(e){}',
-            'window.__rhQ.push({l:m,a:a,u:u,t:Date.now()})',
-        '}',
-    '});',
-    'window.console=_oC;',
-    'window.addEventListener("error",function(e){',
-        'var msg=e.error?(e.error.stack||e.error.message):e.message;',
-        'var u="";try{u=(""+location.href).slice(0,200)}catch(e2){}',
-        'window.__rhQ.push({l:"error",a:["[Uncaught] "+_ser(msg)],u:u,t:Date.now()})',
-    '});',
-    'window.addEventListener("unhandledrejection",function(e){',
-        'var r=e.reason;var u="";try{u=(""+location.href).slice(0,200)}catch(e2){}',
-        'window.__rhQ.push({l:"error",a:["[Promise] "+_ser(r&&r.stack?r.stack:r)],u:u,t:Date.now()})',
-    '});',
+["log","warn","error","info","debug"].forEach(function(m){
+var o=_oC[m]||function(){};
+_oC[m]=function(){
+try{o.apply(_oC,arguments)}catch(e){}
+var a=[];for(var i=0;i<arguments.length;i++)a.push(_ser(arguments[i]));
+window.__rhQ.push({l:m,a:a,t:Date.now()});
+try{_panelLog(m,a.join(" "))}catch(e){}
+}});
+window.console=_oC;
+window.addEventListener("error",function(e){
+var msg=e.error?(e.error.stack||e.error.message):e.message;
+window.__rhQ.push({l:"error",a:["[Uncaught] "+_ser(msg)],t:Date.now()});
+try{_panelLog("error","[Uncaught] "+_ser(msg))}catch(e2){}
+});
+window.addEventListener("unhandledrejection",function(e){
+var r=e.reason;
+window.__rhQ.push({l:"error",a:["[Promise] "+_ser(r&&r.stack?r.stack:r)],t:Date.now()});
+try{_panelLog("error","[Promise] "+_ser(r&&r.stack?r.stack:r))}catch(e2){}
+});
 
-    // ── Network capture (fetch + XHR) ────────────────────────────────
-    'window.__rhNet=[];',
-    // Wrap fetch
-    'if(typeof fetch==="function"){',
-        'var _oF=fetch;',
-        'window.fetch=function(){',
-            'var a=arguments,u="",m="GET",st=Date.now();',
-            'try{if(typeof a[0]==="string")u=a[0];',
-            'else if(a[0]&&a[0].url)u=a[0].url;',
-            'if(a[1]&&a[1].method)m=a[1].method}catch(e){}',
-            'var entry={m:m,u:_cleanUrl(u).slice(0,300),s:0,tp:"fetch",sz:0,t0:st,t1:0};',
-            'window.__rhNet.push(entry);',
-            'return _oF.apply(this,a).then(function(r){',
-                'entry.s=r.status;entry.t1=Date.now();',
-                'try{var ct=r.headers.get("content-type");if(ct)entry.ct=ct.split(";")[0]}catch(e){}',
-                'return r',
-            '},function(e){entry.s=-1;entry.t1=Date.now();throw e})',
-        '}',
-    '}',
-    // Wrap XMLHttpRequest
-    'if(typeof XMLHttpRequest!=="undefined"){',
-        'var _oXO=XMLHttpRequest.prototype.open;',
-        'var _oXS=XMLHttpRequest.prototype.send;',
-        'XMLHttpRequest.prototype.open=function(m,u){',
-            'this.__rhM=m;this.__rhU=(""+u).slice(0,300);this.__rhT0=Date.now();',
-            'return _oXO.apply(this,arguments)',
-        '};',
-        'XMLHttpRequest.prototype.send=function(){',
-            'var x=this,entry={m:x.__rhM||"GET",u:_cleanUrl(x.__rhU||""),s:0,tp:"xhr",sz:0,t0:x.__rhT0||Date.now(),t1:0};',
-            'window.__rhNet.push(entry);',
-            'x.addEventListener("loadend",function(){',
-                'entry.s=x.status;entry.t1=Date.now();',
-                'try{entry.sz=+(x.getResponseHeader("content-length"))||0}catch(e){}',
-                'try{var ct=x.getResponseHeader("content-type");if(ct)entry.ct=ct.split(";")[0]}catch(e){}',
-            '});',
-            'return _oXS.apply(this,arguments)',
-        '}',
-    '}',
+if(typeof fetch==="function"){var _oF=fetch;
+window.fetch=function(){var a=arguments,u="",m="GET",st=Date.now();
+try{if(typeof a[0]==="string")u=a[0];else if(a[0]&&a[0].url)u=a[0].url;if(a[1]&&a[1].method)m=a[1].method}catch(e){}
+var entry={m:m,u:_cleanUrl(u).slice(0,300),s:0,tp:"fetch",t0:st,t1:0};window.__rhNet.push(entry);
+try{_panelNet(entry)}catch(e){}
+return _oF.apply(this,a).then(function(r){entry.s=r.status;entry.t1=Date.now();try{var ct=r.headers.get("content-type");if(ct)entry.ct=ct.split(";")[0]}catch(e){}try{_panelNetUpdate(entry)}catch(e){}return r},function(e){entry.s=-1;entry.t1=Date.now();try{_panelNetUpdate(entry)}catch(e2){}throw e})}}
+if(typeof XMLHttpRequest!=="undefined"){var _oXO=XMLHttpRequest.prototype.open,_oXS=XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.open=function(m,u){this.__rhM=m;this.__rhU=(""+u).slice(0,300);this.__rhT0=Date.now();return _oXO.apply(this,arguments)};
+XMLHttpRequest.prototype.send=function(){var x=this,entry={m:x.__rhM||"GET",u:_cleanUrl(x.__rhU||""),s:0,tp:"xhr",t0:x.__rhT0||Date.now(),t1:0};
+window.__rhNet.push(entry);try{_panelNet(entry)}catch(e){}
+x.addEventListener("loadend",function(){entry.s=x.status;entry.t1=Date.now();try{entry.ct=(x.getResponseHeader("content-type")||"").split(";")[0]}catch(e){}try{_panelNetUpdate(entry)}catch(e){}});return _oXS.apply(this,arguments)}}
 
-    // ── Source/resource URL collection ────────────────────────────────
-    'window.__rhSrc=[];',
-    'var _srcSeen={};',
-    'var _proxyRe=/\\/[a-z0-9]{32}(?:![a-z]*)?\\/((https?):\\/\\/.+)/i;',
-    'function _cleanUrl(u){if(!u)return u;var m=u.match(_proxyRe);return m?m[1]:u}',
-    'function _addSrc(url,type){',
-        'url=_cleanUrl(url);',
-        'if(!url||typeof url!=="string"||_srcSeen[url])return;',
-        '_srcSeen[url]=1;',
-        'window.__rhSrc.push({u:url,tp:type})',
-    '}',
-    // Scan existing DOM on DOMContentLoaded
-    'function _scanDOM(){',
-        'try{document.querySelectorAll("script[src]").forEach(function(e){_addSrc(e.src,"js")})}catch(e){}',
-        'try{document.querySelectorAll("link[rel=stylesheet]").forEach(function(e){_addSrc(e.href,"css")})}catch(e){}',
-        'try{document.querySelectorAll("link[href]").forEach(function(e){_addSrc(e.href,"link")})}catch(e){}',
-        'try{document.querySelectorAll("img[src]").forEach(function(e){_addSrc(e.src,"img")})}catch(e){}',
-        'try{document.querySelectorAll("iframe[src]").forEach(function(e){_addSrc(e.src,"iframe")})}catch(e){}',
-    '}',
-    'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_scanDOM);',
-    'else _scanDOM();',
-    // MutationObserver for dynamically added resources
-    'try{new MutationObserver(function(ml){',
-        'for(var i=0;i<ml.length;i++){var m=ml[i];',
-            'for(var j=0;j<m.addedNodes.length;j++){var n=m.addedNodes[j];',
-                'if(n.nodeType!==1)continue;',
-                'if(n.tagName==="SCRIPT"&&n.src)_addSrc(n.src,"js");',
-                'else if(n.tagName==="LINK"&&n.href)_addSrc(n.href,n.rel==="stylesheet"?"css":"link");',
-                'else if(n.tagName==="IMG"&&n.src)_addSrc(n.src,"img");',
-                'else if(n.tagName==="IFRAME"&&n.src)_addSrc(n.src,"iframe");',
-                'try{n.querySelectorAll&&n.querySelectorAll("script[src],link[href],img[src],iframe[src]").forEach(function(c){',
-                    'if(c.tagName==="SCRIPT")_addSrc(c.src,"js");',
-                    'else if(c.tagName==="LINK")_addSrc(c.href,c.rel==="stylesheet"?"css":"link");',
-                    'else if(c.tagName==="IMG")_addSrc(c.src,"img");',
-                    'else if(c.tagName==="IFRAME")_addSrc(c.src,"iframe");',
-                '})}catch(e){}',
-            '}',
-        '}',
-    '}).observe(document.documentElement||document.body,{childList:true,subtree:true})}catch(e){}',
-    // PerformanceObserver for all fetched resources
-    'try{new PerformanceObserver(function(list){',
-        'list.getEntries().forEach(function(e){',
-            'var n=e.name||"";',
-            'var tp="other";',
-            'if(e.initiatorType==="script")tp="js";',
-            'else if(e.initiatorType==="css"||e.initiatorType==="link")tp="css";',
-            'else if(e.initiatorType==="img")tp="img";',
-            'else if(e.initiatorType==="xmlhttprequest"||e.initiatorType==="fetch")tp="xhr";',
-            'else if(e.initiatorType==="iframe")tp="iframe";',
-            'else if(n.match(/\\.js(\\?|$)/i))tp="js";',
-            'else if(n.match(/\\.css(\\?|$)/i))tp="css";',
-            'else if(n.match(/\\.(png|jpe?g|gif|svg|webp|ico)(\\?|$)/i))tp="img";',
-            'else if(n.match(/\\.(woff2?|ttf|otf|eot)(\\?|$)/i))tp="font";',
-            '_addSrc(n,tp)',
-        '})',
-    '}).observe({type:"resource",buffered:true})}catch(e){}',
+function _scanDOM(){try{document.querySelectorAll("script[src]").forEach(function(e){_addSrc(e.src,"js")})}catch(e){}
+try{document.querySelectorAll("link[rel=stylesheet]").forEach(function(e){_addSrc(e.href,"css")})}catch(e){}
+try{document.querySelectorAll("img[src]").forEach(function(e){_addSrc(e.src,"img")})}catch(e){}}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_scanDOM);else _scanDOM();
 
-    '})();</script>',
-].join('\n');
+var _panelEl,_conBody,_netBody,_srcBody;
+var _panelLog=function(){},_panelNet=function(){},_panelNetUpdate=function(){};
+function _buildPanel(){
+if(_panelEl)return;
+var host=document.createElement("div");host.id="__rh_devpanel_host";
+document.documentElement.appendChild(host);
+var shadow=host.attachShadow?host.attachShadow({mode:"open"}):host;
+var wrap=document.createElement("div");wrap.innerHTML='\\
+<style>\\
+*{margin:0;padding:0;box-sizing:border-box}\\
+:host{all:initial}\\
+.rh-panel{position:fixed;bottom:0;left:0;right:0;height:260px;background:#1e1e1e;color:#d4d4d4;\\
+font:12px/1.4 Consolas,Monaco,"Courier New",monospace;z-index:2147483647;display:flex;flex-direction:column;\\
+border-top:2px solid #007acc;transition:transform .2s;transform:translateY(0)}\\
+.rh-panel.rh-hidden{transform:translateY(100%)}\\
+.rh-tabs{display:flex;background:#252526;border-bottom:1px solid #3c3c3c;user-select:none;flex-shrink:0}\\
+.rh-tab{padding:4px 14px;cursor:pointer;color:#969696;border-bottom:2px solid transparent;font-size:11px;letter-spacing:.3px}\\
+.rh-tab:hover{color:#d4d4d4;background:#2a2d2e}\\
+.rh-tab.active{color:#fff;border-bottom-color:#007acc}\\
+.rh-actions{margin-left:auto;display:flex;align-items:center;gap:4px;padding:0 6px}\\
+.rh-btn{background:none;border:none;color:#969696;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:3px}\\
+.rh-btn:hover{color:#fff;background:#3c3c3c}\\
+.rh-body{flex:1;overflow:hidden;position:relative}\\
+.rh-pane{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;padding:2px 0}\\
+.rh-pane.active{display:block}\\
+.rh-row{padding:1px 8px;border-bottom:1px solid #2a2a2a;white-space:pre-wrap;word-break:break-all;font-size:11px;line-height:1.5}\\
+.rh-row.log{color:#d4d4d4}.rh-row.info{color:#88ccff}.rh-row.warn{color:#ffdd66;background:#332b00}\\
+.rh-row.error{color:#ff6666;background:#2b0000}.rh-row.debug{color:#aaa}\\
+.rh-row .ts{color:#666;margin-right:6px;font-size:10px}\\
+.rh-net-row{display:flex;padding:2px 8px;border-bottom:1px solid #2a2a2a;font-size:11px;gap:8px;align-items:baseline}\\
+.rh-net-row .method{color:#c586c0;width:36px;flex-shrink:0;font-weight:bold}\\
+.rh-net-row .status{width:28px;flex-shrink:0;text-align:right}\\
+.rh-net-row .status.s2{color:#4ec9b0}.rh-net-row .status.s3{color:#dcdcaa}.rh-net-row .status.s4{color:#ce9178}.rh-net-row .status.s5{color:#f44}.rh-net-row .status.sfail{color:#f44}\\
+.rh-net-row .url{color:#9cdcfe;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}\\
+.rh-net-row .time{color:#666;width:50px;flex-shrink:0;text-align:right}\\
+.rh-src-row{padding:2px 8px;border-bottom:1px solid #2a2a2a;font-size:11px;display:flex;gap:8px}\\
+.rh-src-row .tp{color:#c586c0;width:36px;flex-shrink:0}.rh-src-row .su{color:#9cdcfe;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\\
+.rh-input-row{display:flex;border-top:1px solid #3c3c3c;flex-shrink:0;background:#1e1e1e}\\
+.rh-input-row span{color:#007acc;padding:2px 6px;font-size:12px;line-height:24px}\\
+.rh-input-row input{flex:1;background:transparent;border:none;color:#d4d4d4;font:12px Consolas,Monaco,monospace;outline:none;padding:2px 4px}\\
+.rh-toggle{position:fixed;bottom:8px;right:8px;z-index:2147483646;width:32px;height:32px;border-radius:50%;\\
+background:#007acc;border:none;color:#fff;font-size:16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center}\\
+.rh-toggle:hover{background:#0098ff}\\
+</style>\\
+<button class="rh-toggle" title="Toggle DevTools (Ctrl+Shift+D)">&#9881;</button>\\
+<div class="rh-panel rh-hidden">\\
+<div class="rh-tabs">\\
+<div class="rh-tab active" data-pane="console">Console</div>\\
+<div class="rh-tab" data-pane="network">Network</div>\\
+<div class="rh-tab" data-pane="sources">Sources</div>\\
+<div class="rh-actions"><button class="rh-btn" id="rh-clear" title="Clear">&#x1D5EB;</button><button class="rh-btn" id="rh-close" title="Close">&times;</button></div>\\
+</div>\\
+<div class="rh-body">\\
+<div class="rh-pane active" id="rh-con"></div>\\
+<div class="rh-pane" id="rh-net"></div>\\
+<div class="rh-pane" id="rh-src"></div>\\
+</div>\\
+<div class="rh-input-row"><span>&gt;</span><input id="rh-eval" placeholder="Evaluate JavaScript..." autocomplete="off" spellcheck="false"></div>\\
+</div>';
+shadow.appendChild(wrap);
+_panelEl=shadow.querySelector(".rh-panel");
+_conBody=shadow.querySelector("#rh-con");
+_netBody=shadow.querySelector("#rh-net");
+_srcBody=shadow.querySelector("#rh-src");
+var toggle=shadow.querySelector(".rh-toggle");
+toggle.addEventListener("click",function(){_panelEl.classList.toggle("rh-hidden")});
+shadow.querySelector("#rh-close").addEventListener("click",function(){_panelEl.classList.add("rh-hidden")});
+shadow.querySelector("#rh-clear").addEventListener("click",function(){
+var active=shadow.querySelector(".rh-pane.active");if(active)active.innerHTML=""});
+shadow.querySelectorAll(".rh-tab").forEach(function(tab){
+tab.addEventListener("click",function(){
+shadow.querySelectorAll(".rh-tab").forEach(function(t){t.classList.remove("active")});
+shadow.querySelectorAll(".rh-pane").forEach(function(p){p.classList.remove("active")});
+tab.classList.add("active");
+shadow.querySelector("#rh-"+tab.dataset.pane).classList.add("active");
+if(tab.dataset.pane==="sources")_refreshSrc();
+})});
+var evalInput=shadow.querySelector("#rh-eval");
+evalInput.addEventListener("keydown",function(e){
+if(e.key==="Enter"&&this.value.trim()){
+var code=this.value;this.value="";
+_panelLog("log","> "+code);
+try{var r=eval.call(window,code);_panelLog("log",_ser(r))}catch(err){_panelLog("error",err.message||""+err)}
+}});
+document.addEventListener("keydown",function(e){
+if(e.ctrlKey&&e.shiftKey&&(e.key==="D"||e.key==="d")){e.preventDefault();_panelEl.classList.toggle("rh-hidden")}});
+_panelLog=function(lvl,msg){if(!_conBody)return;
+var d=document.createElement("div");d.className="rh-row "+lvl;
+var t=new Date();var ts=("0"+t.getHours()).slice(-2)+":"+("0"+t.getMinutes()).slice(-2)+":"+("0"+t.getSeconds()).slice(-2);
+d.innerHTML='<span class="ts">'+ts+"</span>"+_esc(msg);
+_conBody.appendChild(d);if(_conBody.children.length>500)_conBody.removeChild(_conBody.firstChild);
+d.scrollIntoView({block:"end",behavior:"auto"})};
+var _netIdx=0;
+_panelNet=function(entry){if(!_netBody)return;
+entry.__idx=_netIdx++;
+var d=document.createElement("div");d.className="rh-net-row";d.id="rh-nr-"+entry.__idx;
+d.innerHTML='<span class="method">'+_esc(entry.m)+'</span><span class="status">...</span><span class="url" title="'+_esc(entry.u)+'">'+_esc(entry.u)+'</span><span class="time"></span>';
+_netBody.appendChild(d);d.scrollIntoView({block:"end",behavior:"auto"})};
+_panelNetUpdate=function(entry){if(!_netBody||entry.__idx===undefined)return;
+var row=_netBody.querySelector("#rh-nr-"+entry.__idx);if(!row)return;
+var sc=entry.s>=500?"s5":entry.s>=400?"s4":entry.s>=300?"s3":entry.s>=200?"s2":entry.s<0?"sfail":"";
+var ms=entry.t1&&entry.t0?(entry.t1-entry.t0)+"ms":"";
+row.querySelector(".status").className="status "+sc;row.querySelector(".status").textContent=entry.s<0?"ERR":entry.s||"";
+row.querySelector(".time").textContent=ms};
+function _refreshSrc(){if(!_srcBody)return;_srcBody.innerHTML="";
+window.__rhSrc.forEach(function(s){var d=document.createElement("div");d.className="rh-src-row";
+d.innerHTML='<span class="tp">'+_esc(s.tp)+'</span><span class="su" title="'+_esc(s.u)+'">'+_esc(s.u)+'</span>';
+_srcBody.appendChild(d)})}
+window.__rhQ.forEach(function(q){_panelLog(q.l,q.a.join(" "))});
+window.__rhNet.forEach(function(n){_panelNet(n);if(n.s)_panelNetUpdate(n)});
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_buildPanel);
+else setTimeout(_buildPanel,0);
+})()</script>`;
 
 // DDG HTML search: rewrite //duckduckgo.com/l/?uddg=<encoded-url>&rut=... → direct URL.
 // Must happen BEFORE Hammerhead processes the page (URL shuffling corrupts uddg values).
@@ -274,6 +309,11 @@ function _liteProcess(html, ctx, inject) {
     const proxyOrigin = protocol + '//' + hostname + (proxyPort == 443 || proxyPort == 80 ? '' : ':' + proxyPort);
     const sid = sessionId || '';
     const proxyPrefix = proxyOrigin + '/' + sid + '/';
+
+    // Strip integrity attributes — Hammerhead modifies CSS/JS content, invalidating SRI hashes
+    html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
+    // Strip nonce attributes — CSP nonces won't match through the proxy
+    html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
 
     // Single-pass rewrite for href/src/action/poster/data attributes, srcset, and CSS url()
     const ATTR_AND_URL_RE = /((?:href|src|action|poster|data)\s*=\s*["'])(\/\/[^"']+|\/(?!\/)[^"']*|https?:\/\/[^"']+)(["'])|(srcset\s*=\s*")([^"]*)(")|(url\(\s*['"]?)((?:https?:)?\/\/[^'")]+)(['"]?\s*\))/gi;
