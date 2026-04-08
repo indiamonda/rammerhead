@@ -5,6 +5,7 @@ FROM node:18-slim
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY scripts/ scripts/
 RUN npm ci
 
 # Pass --build-arg CACHEBUST=$(date +%s) to force rebuild of app code (avoids stale EADDRINUSE fix)
