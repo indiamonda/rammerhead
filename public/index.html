@@ -519,6 +519,11 @@
                 else if (_dtActiveTab === 'network') renderNetworkTab();
                 else if (_dtActiveTab === 'storage') renderStorageTab();
                 else if (_dtActiveTab === 'source') renderSourceTab();
+                else if (_dtActiveTab === 'elements') renderElementsTab();
+                else if (_dtActiveTab === 'performance') renderPerformanceTab();
+                else if (_dtActiveTab === 'memory') renderMemoryTab();
+                else if (_dtActiveTab === 'security') renderSecurityTab();
+                else if (_dtActiveTab === 'lighthouse') renderLighthouseTab();
             }
 
             // Periodic auto-refresh: keeps active DevTools tab up-to-date
@@ -529,6 +534,8 @@
                 _dtAutoRefreshTimer = setInterval(() => {
                     if (!_dtIsVisible()) return;
                     if (_dtActiveTab === 'storage') renderStorageTab();
+                    if (_dtActiveTab === 'performance' && _fpsRunning) renderPerformanceTab();
+                    if (_dtActiveTab === 'memory') renderMemoryTab();
                 }, 1500);
             }
             function renderConsoleTab() {
@@ -764,6 +771,443 @@
                 }
             }
 
+            // ── Elements Tab ──
+            let _elemSelected = null;
+            function renderElementsTab() {
+                const tree = document.getElementById('elements-tree');
+                if (!tree) return;
+                const iframe = _getActiveIframe();
+                if (!iframe) { tree.innerHTML = '<div class="dt-empty">No active page</div>'; return; }
+                try {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    tree.innerHTML = _buildDomTree(doc.documentElement, 0);
+                    _bindElementsTree(tree, iframe);
+                } catch (e) {
+                    tree.innerHTML = '<div class="dt-empty">Cannot access DOM: ' + _esc(e.message) + '</div>';
+                }
+            }
+            function _buildDomTree(node, depth) {
+                if (!node) return '';
+                if (node.nodeType === 3) {
+                    const txt = node.textContent.trim();
+                    if (!txt) return '';
+                    const short = txt.length > 80 ? txt.slice(0, 77) + '...' : txt;
+                    return '<div class="el-node el-text" style="padding-left:' + (depth * 16 + 8) + 'px">"' + _esc(short) + '"</div>';
+                }
+                if (node.nodeType !== 1) return '';
+                const tag = node.tagName.toLowerCase();
+                const skip = ['script','noscript','link','meta','style'];
+                let attrs = '';
+                if (node.id) attrs += ' <span class="el-attr">id</span>=<span class="el-val">"' + _esc(node.id) + '"</span>';
+                if (node.className && typeof node.className === 'string') {
+                    const cls = node.className.trim();
+                    if (cls) attrs += ' <span class="el-attr">class</span>=<span class="el-val">"' + _esc(cls.length > 60 ? cls.slice(0,57)+'...' : cls) + '"</span>';
+                }
+                const childCount = node.children.length;
+                const hasChildren = childCount > 0 && !skip.includes(tag);
+                let html = '<div class="el-node" data-depth="' + depth + '" style="padding-left:' + (depth * 16 + 8) + 'px">';
+                if (hasChildren) html += '<span class="el-toggle">&#9654;</span>';
+                else html += '<span class="el-toggle-sp"></span>';
+                html += '<span class="el-tag">&lt;' + _esc(tag) + attrs + '&gt;</span>';
+                if (!hasChildren && node.childNodes.length === 1 && node.childNodes[0].nodeType === 3) {
+                    const t = node.childNodes[0].textContent.trim();
+                    if (t.length <= 40) html += _esc(t) + '<span class="el-tag">&lt;/' + _esc(tag) + '&gt;</span>';
+                }
+                html += '</div>';
+                if (hasChildren && depth < 8) {
+                    html += '<div class="el-children" style="display:none">';
+                    for (let i = 0; i < Math.min(node.childNodes.length, 200); i++) {
+                        html += _buildDomTree(node.childNodes[i], depth + 1);
+                    }
+                    html += '<div class="el-node" style="padding-left:' + (depth * 16 + 8) + 'px"><span class="el-toggle-sp"></span><span class="el-tag">&lt;/' + _esc(tag) + '&gt;</span></div>';
+                    html += '</div>';
+                }
+                return html;
+            }
+            function _bindElementsTree(tree, iframe) {
+                tree.querySelectorAll('.el-toggle').forEach(toggle => {
+                    toggle.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const parent = toggle.closest('.el-node');
+                        const children = parent.nextElementSibling;
+                        if (children && children.classList.contains('el-children')) {
+                            const open = children.style.display !== 'none';
+                            children.style.display = open ? 'none' : '';
+                            toggle.textContent = open ? '\u25B6' : '\u25BC';
+                        }
+                    });
+                });
+                tree.querySelectorAll('.el-tag').forEach(el => {
+                    el.addEventListener('click', () => {
+                        tree.querySelectorAll('.el-tag.selected').forEach(s => s.classList.remove('selected'));
+                        el.classList.add('selected');
+                        _showElementStyles(el, iframe);
+                    });
+                });
+            }
+            function _showElementStyles(tagEl, iframe) {
+                const panel = document.getElementById('elements-styles');
+                if (!panel) return;
+                try {
+                    const tagText = tagEl.textContent;
+                    const match = tagText.match(/^<(\w+)/);
+                    if (!match) { panel.innerHTML = '<div class="dt-empty">Cannot resolve element</div>'; return; }
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    const win = iframe.contentWindow;
+                    const parentNode = tagEl.closest('.el-node');
+                    let selector = match[1];
+                    const idMatch = tagText.match(/id="([^"]+)"/);
+                    if (idMatch) selector = '#' + idMatch[1];
+                    const el = doc.querySelector(selector);
+                    if (!el) { panel.innerHTML = '<div class="dt-empty">Element not found in DOM</div>'; return; }
+                    _elemSelected = el;
+                    const cs = win.getComputedStyle(el);
+                    const props = ['display','position','width','height','margin','padding','border','color',
+                        'background','font-family','font-size','font-weight','line-height','overflow','opacity','z-index','box-sizing'];
+                    let html = '<div class="el-styles-head">Computed Styles</div><table class="data-table"><tbody>';
+                    props.forEach(p => {
+                        html += '<tr><td class="dt-key">' + _esc(p) + '</td><td class="dt-val">' + _esc(cs.getPropertyValue(p)) + '</td></tr>';
+                    });
+                    html += '</tbody></table>';
+                    const mt = parseFloat(cs.marginTop)||0, mr = parseFloat(cs.marginRight)||0,
+                          mb = parseFloat(cs.marginBottom)||0, ml = parseFloat(cs.marginLeft)||0;
+                    const pt = parseFloat(cs.paddingTop)||0, pr = parseFloat(cs.paddingRight)||0,
+                          pb = parseFloat(cs.paddingBottom)||0, pl = parseFloat(cs.paddingLeft)||0;
+                    const w = parseFloat(cs.width)||0, h = parseFloat(cs.height)||0;
+                    html += '<div class="el-styles-head" style="margin-top:8px">Box Model</div>';
+                    html += '<div class="box-model"><div class="bm-margin">margin<div class="bm-vals">' + mt + ' ' + mr + ' ' + mb + ' ' + ml + '</div>';
+                    html += '<div class="bm-padding">padding<div class="bm-vals">' + pt + ' ' + pr + ' ' + pb + ' ' + pl + '</div>';
+                    html += '<div class="bm-content">' + Math.round(w) + ' x ' + Math.round(h) + '</div></div></div></div>';
+                    panel.innerHTML = html;
+                } catch (e) {
+                    panel.innerHTML = '<div class="dt-empty">Error: ' + _esc(e.message) + '</div>';
+                }
+            }
+
+            // ── Performance Tab ──
+            let _fpsRunning = false, _fpsFrames = [], _fpsRaf = null;
+            function renderPerformanceTab() {
+                const content = document.getElementById('perf-content');
+                if (!content) return;
+                const iframe = _getActiveIframe();
+                if (!iframe) { content.innerHTML = '<div class="dt-empty">No active page</div>'; return; }
+                try {
+                    const win = iframe.contentWindow;
+                    const perf = win.performance;
+                    let html = '';
+                    // Web Vitals from injected script
+                    const vitals = win.__rhPerf;
+                    if (vitals) {
+                        html += '<div class="dt-section-title">Core Web Vitals</div><div class="dt-metric-grid">';
+                        const vd = [
+                            ['LCP', vitals.lcp, 'ms', 2500, 4000],
+                            ['FCP', vitals.fcp, 'ms', 1800, 3000],
+                            ['CLS', vitals.cls, '', 0.1, 0.25],
+                            ['FID', vitals.fid, 'ms', 100, 300],
+                        ];
+                        vd.forEach(([name, val, unit, good, poor]) => {
+                            const v = typeof val === 'number' ? (unit === 'ms' ? Math.round(val) : val.toFixed(3)) : '-';
+                            const cls = val <= good ? 'dt-metric-good' : val <= poor ? 'dt-metric-warn' : 'dt-metric-bad';
+                            html += '<div class="dt-metric-card ' + cls + '"><div class="dt-metric-value">' + v + (unit ? '<small>' + unit + '</small>' : '') + '</div><div class="dt-metric-label">' + name + '</div></div>';
+                        });
+                        html += '</div>';
+                    }
+                    // Navigation timing
+                    const nav = perf.getEntriesByType('navigation')[0];
+                    if (nav) {
+                        html += '<div class="dt-section-title">Navigation Timing</div><div class="dt-metric-grid">';
+                        const nd = [
+                            ['DNS', Math.round(nav.domainLookupEnd - nav.domainLookupStart)],
+                            ['TCP', Math.round(nav.connectEnd - nav.connectStart)],
+                            ['TTFB', Math.round(nav.responseStart - nav.requestStart)],
+                            ['Download', Math.round(nav.responseEnd - nav.responseStart)],
+                            ['DOM Parse', Math.round(nav.domInteractive - nav.responseEnd)],
+                            ['DOM Ready', Math.round(nav.domContentLoadedEventEnd - nav.fetchStart)],
+                            ['Load', Math.round(nav.loadEventEnd - nav.fetchStart)],
+                        ];
+                        nd.forEach(([name, val]) => {
+                            html += '<div class="dt-metric-card"><div class="dt-metric-value">' + val + '<small>ms</small></div><div class="dt-metric-label">' + name + '</div></div>';
+                        });
+                        html += '</div>';
+                    }
+                    // Resource timing summary
+                    const res = perf.getEntriesByType('resource');
+                    if (res.length) {
+                        const byType = {};
+                        res.forEach(r => {
+                            const t = r.initiatorType || 'other';
+                            if (!byType[t]) byType[t] = { count: 0, size: 0, dur: 0 };
+                            byType[t].count++;
+                            byType[t].dur += r.duration;
+                            byType[t].size += r.transferSize || 0;
+                        });
+                        html += '<div class="dt-section-title">Resources (' + res.length + ' total)</div>';
+                        html += '<table class="data-table"><thead><tr><th>Type</th><th>Count</th><th>Avg Time</th><th>Total Size</th></tr></thead><tbody>';
+                        Object.keys(byType).sort().forEach(t => {
+                            const d = byType[t];
+                            html += '<tr><td>' + _esc(t) + '</td><td>' + d.count + '</td><td>' + Math.round(d.dur / d.count) + 'ms</td><td>' + _fmtBytes(d.size) + '</td></tr>';
+                        });
+                        html += '</tbody></table>';
+                    }
+                    // FPS display
+                    if (_fpsRunning && _fpsFrames.length > 1) {
+                        const recent = _fpsFrames.slice(-60);
+                        let fps = 0;
+                        if (recent.length > 1) fps = Math.round(1000 * (recent.length - 1) / (recent[recent.length - 1] - recent[0]));
+                        html += '<div class="dt-section-title">FPS: <span class="dt-metric-value" style="font-size:20px">' + fps + '</span></div>';
+                    }
+                    content.innerHTML = html || '<div class="dt-empty">No performance data available</div>';
+                } catch (e) {
+                    content.innerHTML = '<div class="dt-empty">Error: ' + _esc(e.message) + '</div>';
+                }
+            }
+            function _fmtBytes(b) {
+                if (b < 1024) return b + ' B';
+                if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+                return (b / (1024 * 1024)).toFixed(1) + ' MB';
+            }
+            function _startFps() {
+                const iframe = _getActiveIframe();
+                if (!iframe) return;
+                _fpsRunning = true;
+                _fpsFrames = [];
+                const btn = document.getElementById('perf-fps-btn');
+                if (btn) btn.textContent = 'Stop FPS';
+                function tick(ts) {
+                    if (!_fpsRunning) return;
+                    _fpsFrames.push(ts);
+                    if (_fpsFrames.length > 120) _fpsFrames.shift();
+                    _fpsRaf = requestAnimationFrame(tick);
+                }
+                _fpsRaf = requestAnimationFrame(tick);
+            }
+            function _stopFps() {
+                _fpsRunning = false;
+                if (_fpsRaf) cancelAnimationFrame(_fpsRaf);
+                const btn = document.getElementById('perf-fps-btn');
+                if (btn) btn.textContent = 'Start FPS';
+            }
+
+            // ── Memory Tab ──
+            let _memSnapshots = [];
+            function renderMemoryTab() {
+                const content = document.getElementById('mem-content');
+                if (!content) return;
+                const iframe = _getActiveIframe();
+                if (!iframe) { content.innerHTML = '<div class="dt-empty">No active page</div>'; return; }
+                try {
+                    const win = iframe.contentWindow;
+                    const doc = iframe.contentDocument || win.document;
+                    let html = '<div class="dt-metric-grid">';
+                    // DOM stats
+                    const nodeCount = doc.querySelectorAll('*').length;
+                    html += '<div class="dt-metric-card"><div class="dt-metric-value">' + nodeCount + '</div><div class="dt-metric-label">DOM Nodes</div></div>';
+                    // Listeners & timers from injected script
+                    if (typeof win.__rhListeners === 'number') {
+                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + win.__rhListeners + '</div><div class="dt-metric-label">Event Listeners</div></div>';
+                    }
+                    if (win.__rhTimerCount) {
+                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + (win.__rhTimerCount.timeout || 0) + '</div><div class="dt-metric-label">setTimeout calls</div></div>';
+                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + (win.__rhTimerCount.interval || 0) + '</div><div class="dt-metric-label">setInterval calls</div></div>';
+                    }
+                    // Chrome heap (if available)
+                    if (win.performance && win.performance.memory) {
+                        const m = win.performance.memory;
+                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + _fmtBytes(m.usedJSHeapSize) + '</div><div class="dt-metric-label">JS Heap Used</div></div>';
+                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + _fmtBytes(m.totalJSHeapSize) + '</div><div class="dt-metric-label">JS Heap Total</div></div>';
+                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + _fmtBytes(m.jsHeapSizeLimit) + '</div><div class="dt-metric-label">Heap Limit</div></div>';
+                    }
+                    html += '</div>';
+                    // Snapshots
+                    if (_memSnapshots.length) {
+                        html += '<div class="dt-section-title">Snapshots</div><table class="data-table"><thead><tr><th>#</th><th>Time</th><th>DOM Nodes</th><th>Heap</th></tr></thead><tbody>';
+                        _memSnapshots.forEach((s, i) => {
+                            html += '<tr><td>' + (i + 1) + '</td><td>' + new Date(s.t).toLocaleTimeString() + '</td><td>' + s.nodes + '</td><td>' + (s.heap ? _fmtBytes(s.heap) : '-') + '</td></tr>';
+                        });
+                        html += '</tbody></table>';
+                    }
+                    content.innerHTML = html;
+                } catch (e) {
+                    content.innerHTML = '<div class="dt-empty">Error: ' + _esc(e.message) + '</div>';
+                }
+            }
+            function _takeMemSnapshot() {
+                const iframe = _getActiveIframe();
+                if (!iframe) return;
+                try {
+                    const win = iframe.contentWindow;
+                    const doc = iframe.contentDocument || win.document;
+                    const snap = { t: Date.now(), nodes: doc.querySelectorAll('*').length };
+                    if (win.performance && win.performance.memory) snap.heap = win.performance.memory.usedJSHeapSize;
+                    _memSnapshots.push(snap);
+                    renderMemoryTab();
+                } catch(_) {}
+            }
+
+            // ── Security Tab ──
+            function renderSecurityTab() {
+                const content = document.getElementById('sec-content');
+                if (!content) return;
+                const iframe = _getActiveIframe();
+                if (!iframe) { content.innerHTML = '<div class="dt-empty">No active page</div>'; return; }
+                const tabData = tabs.find(t => t.id === activeTabId);
+                const pageUrl = tabData ? tabData.url : '';
+                let html = '';
+                try {
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    // Protocol
+                    const isSecure = pageUrl.startsWith('https://');
+                    html += '<div class="dt-section-title">Connection</div>';
+                    html += '<div class="dt-metric-grid">';
+                    html += '<div class="dt-metric-card ' + (isSecure ? 'dt-metric-good' : 'dt-metric-warn') + '"><div class="dt-metric-value">' + (isSecure ? 'HTTPS' : 'HTTP') + '</div><div class="dt-metric-label">Protocol</div></div>';
+                    html += '</div>';
+                    // Mixed content scan
+                    const mixed = [];
+                    doc.querySelectorAll('img[src],script[src],link[href],iframe[src],video[src],audio[src]').forEach(el => {
+                        const src = el.src || el.href || '';
+                        if (src.startsWith('http://')) mixed.push({ tag: el.tagName, url: src });
+                    });
+                    html += '<div class="dt-section-title">Mixed Content (' + mixed.length + ')</div>';
+                    if (mixed.length === 0) {
+                        html += '<div class="dt-empty" style="color:var(--color-success)">No mixed content detected</div>';
+                    } else {
+                        html += '<table class="data-table"><thead><tr><th>Tag</th><th>URL</th></tr></thead><tbody>';
+                        mixed.slice(0, 50).forEach(m => {
+                            const short = m.url.length > 80 ? m.url.slice(0, 77) + '...' : m.url;
+                            html += '<tr><td>' + _esc(m.tag) + '</td><td class="dt-val" title="' + _esc(m.url) + '">' + _esc(short) + '</td></tr>';
+                        });
+                        html += '</tbody></table>';
+                    }
+                    // Cookie audit
+                    const cookies = (doc.cookie || '').split(';').filter(c => c.trim());
+                    html += '<div class="dt-section-title">Cookies (' + cookies.length + ')</div>';
+                    if (cookies.length) {
+                        html += '<table class="data-table"><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody>';
+                        cookies.forEach(c => {
+                            const eq = c.indexOf('=');
+                            const name = eq > 0 ? c.slice(0, eq).trim() : c.trim();
+                            const val = eq > 0 ? c.slice(eq + 1).trim() : '';
+                            const shortVal = val.length > 60 ? val.slice(0, 57) + '...' : val;
+                            html += '<tr><td class="dt-key">' + _esc(name) + '</td><td class="dt-val">' + _esc(shortVal) + '</td></tr>';
+                        });
+                        html += '</tbody></table>';
+                    }
+                    // Resource origins
+                    const origins = new Set();
+                    doc.querySelectorAll('[src],[href]').forEach(el => {
+                        try { const u = new URL(el.src || el.href); origins.add(u.origin); } catch(_) {}
+                    });
+                    html += '<div class="dt-section-title">Resource Origins (' + origins.size + ')</div>';
+                    html += '<div style="padding:4px 12px">';
+                    origins.forEach(o => { html += '<div style="padding:2px 0;font-size:12px">' + _esc(o) + '</div>'; });
+                    html += '</div>';
+                    content.innerHTML = html;
+                } catch (e) {
+                    content.innerHTML = '<div class="dt-empty">Error: ' + _esc(e.message) + '</div>';
+                }
+            }
+
+            // ── Lighthouse Tab ──
+            function renderLighthouseTab() {
+                const content = document.getElementById('lh-content');
+                if (!content) return;
+                if (content.querySelector('.lh-results')) return;
+            }
+            function _runLighthouseAudit() {
+                const content = document.getElementById('lh-content');
+                if (!content) return;
+                const iframe = _getActiveIframe();
+                if (!iframe) { content.innerHTML = '<div class="dt-empty">No active page</div>'; return; }
+                content.innerHTML = '<div class="dt-empty"><span class="spinner"></span> Running audit...</div>';
+                setTimeout(() => {
+                    try {
+                        const win = iframe.contentWindow;
+                        const doc = iframe.contentDocument || win.document;
+                        const perf = win.performance;
+                        const scores = { performance: 0, accessibility: 0, bestPractices: 0, seo: 0 };
+                        const checks = [];
+                        // ── Performance checks ──
+                        let perfPts = 0, perfMax = 0;
+                        const nav = perf.getEntriesByType('navigation')[0];
+                        if (nav) {
+                            perfMax += 3;
+                            if (nav.loadEventEnd - nav.fetchStart < 3000) perfPts += 3;
+                            else if (nav.loadEventEnd - nav.fetchStart < 5000) perfPts += 2;
+                            else perfPts += 1;
+                        }
+                        const vitals = win.__rhPerf;
+                        if (vitals) {
+                            perfMax += 3;
+                            if (vitals.lcp && vitals.lcp < 2500) perfPts += 1.5; else if (vitals.lcp && vitals.lcp < 4000) perfPts += 0.75;
+                            if (vitals.cls !== undefined && vitals.cls < 0.1) perfPts += 1.5; else if (vitals.cls < 0.25) perfPts += 0.75;
+                        }
+                        const images = doc.querySelectorAll('img');
+                        const largeImgs = [];
+                        images.forEach(img => { if (img.naturalWidth > 1000 && !img.loading) largeImgs.push(img); });
+                        perfMax += 1;
+                        if (largeImgs.length === 0) perfPts += 1; else checks.push({ cat: 'Performance', sev: 'warn', msg: largeImgs.length + ' large image(s) without lazy loading' });
+                        scores.performance = perfMax ? Math.round((perfPts / perfMax) * 100) : 50;
+                        // ── Accessibility checks ──
+                        let a11yPts = 0, a11yMax = 0;
+                        const imgsNoAlt = doc.querySelectorAll('img:not([alt])');
+                        a11yMax += 2; if (imgsNoAlt.length === 0) a11yPts += 2; else { a11yPts += 1; checks.push({ cat: 'Accessibility', sev: 'warn', msg: imgsNoAlt.length + ' image(s) missing alt text' }); }
+                        const lang = doc.documentElement.getAttribute('lang');
+                        a11yMax += 1; if (lang) a11yPts += 1; else checks.push({ cat: 'Accessibility', sev: 'error', msg: 'Missing lang attribute on <html>' });
+                        const btnsNoLabel = doc.querySelectorAll('button:not([aria-label]):empty');
+                        a11yMax += 1; if (btnsNoLabel.length === 0) a11yPts += 1; else checks.push({ cat: 'Accessibility', sev: 'warn', msg: btnsNoLabel.length + ' button(s) without accessible label' });
+                        const links = doc.querySelectorAll('a');
+                        let emptyLinks = 0; links.forEach(l => { if (!l.textContent.trim() && !l.getAttribute('aria-label')) emptyLinks++; });
+                        a11yMax += 1; if (emptyLinks === 0) a11yPts += 1; else checks.push({ cat: 'Accessibility', sev: 'warn', msg: emptyLinks + ' link(s) without text' });
+                        scores.accessibility = a11yMax ? Math.round((a11yPts / a11yMax) * 100) : 50;
+                        // ── Best Practices checks ──
+                        let bpPts = 0, bpMax = 0;
+                        const hasViewport = !!doc.querySelector('meta[name="viewport"]');
+                        bpMax += 1; if (hasViewport) bpPts += 1; else checks.push({ cat: 'Best Practices', sev: 'error', msg: 'Missing viewport meta tag' });
+                        const hasDoctype = doc.doctype !== null;
+                        bpMax += 1; if (hasDoctype) bpPts += 1; else checks.push({ cat: 'Best Practices', sev: 'warn', msg: 'Missing DOCTYPE declaration' });
+                        const hasCharset = !!doc.querySelector('meta[charset]') || !!doc.querySelector('meta[http-equiv="content-type"]');
+                        bpMax += 1; if (hasCharset) bpPts += 1; else checks.push({ cat: 'Best Practices', sev: 'warn', msg: 'Missing charset declaration' });
+                        const mixed = []; doc.querySelectorAll('img[src],script[src]').forEach(el => { if ((el.src || '').startsWith('http://')) mixed.push(el); });
+                        bpMax += 1; if (mixed.length === 0) bpPts += 1; else checks.push({ cat: 'Best Practices', sev: 'error', msg: mixed.length + ' resource(s) loaded over HTTP' });
+                        scores.bestPractices = bpMax ? Math.round((bpPts / bpMax) * 100) : 50;
+                        // ── SEO checks ──
+                        let seoPts = 0, seoMax = 0;
+                        const title = doc.querySelector('title');
+                        seoMax += 1; if (title && title.textContent.trim()) seoPts += 1; else checks.push({ cat: 'SEO', sev: 'error', msg: 'Missing or empty <title>' });
+                        const metaDesc = doc.querySelector('meta[name="description"]');
+                        seoMax += 1; if (metaDesc && metaDesc.content) seoPts += 1; else checks.push({ cat: 'SEO', sev: 'warn', msg: 'Missing meta description' });
+                        const h1 = doc.querySelectorAll('h1');
+                        seoMax += 1; if (h1.length === 1) seoPts += 1; else if (h1.length === 0) checks.push({ cat: 'SEO', sev: 'warn', msg: 'No <h1> element found' }); else checks.push({ cat: 'SEO', sev: 'warn', msg: h1.length + ' <h1> elements (should be 1)' });
+                        seoMax += 1; if (doc.querySelector('link[rel="canonical"]')) seoPts += 1; else checks.push({ cat: 'SEO', sev: 'info', msg: 'No canonical link' });
+                        scores.seo = seoMax ? Math.round((seoPts / seoMax) * 100) : 50;
+                        // Render
+                        let html = '<div class="lh-results"><div class="dt-metric-grid" style="justify-content:center">';
+                        const cats = [['Performance', scores.performance], ['Accessibility', scores.accessibility], ['Best Practices', scores.bestPractices], ['SEO', scores.seo]];
+                        cats.forEach(([name, score]) => {
+                            const cls = score >= 90 ? 'dt-metric-good' : score >= 50 ? 'dt-metric-warn' : 'dt-metric-bad';
+                            html += '<div class="dt-metric-card ' + cls + '" style="text-align:center"><div class="lh-gauge">' + score + '</div><div class="dt-metric-label">' + name + '</div></div>';
+                        });
+                        html += '</div>';
+                        if (checks.length) {
+                            html += '<div class="dt-section-title" style="margin-top:12px">Recommendations</div>';
+                            html += '<div class="lh-checks">';
+                            checks.forEach(c => {
+                                const icon = c.sev === 'error' ? '&#9888;' : c.sev === 'warn' ? '&#9888;' : 'i';
+                                const cls = c.sev === 'error' ? 'lh-sev-error' : c.sev === 'warn' ? 'lh-sev-warn' : 'lh-sev-info';
+                                html += '<div class="lh-check ' + cls + '"><span class="lh-check-icon">' + icon + '</span><span class="lh-check-cat">' + c.cat + '</span> ' + _esc(c.msg) + '</div>';
+                            });
+                            html += '</div>';
+                        }
+                        html += '<div style="text-align:center;padding:12px"><button class="devtools-toolbar-btn" id="lh-rerun-btn" style="padding:6px 18px">Re-run Audit</button></div>';
+                        html += '</div>';
+                        content.innerHTML = html;
+                        document.getElementById('lh-rerun-btn')?.addEventListener('click', _runLighthouseAudit);
+                    } catch (e) {
+                        content.innerHTML = '<div class="dt-empty">Audit failed: ' + _esc(e.message) + '</div>';
+                    }
+                }, 300);
+            }
+
             function toggleDevTools() {
                 let panel = document.getElementById('devtools-panel');
                 if (!panel) {
@@ -837,6 +1281,19 @@
                     });
                 }
                 document.getElementById('console-filter-errors')?.addEventListener('change', renderConsoleTab);
+                document.getElementById('elements-refresh-btn')?.addEventListener('click', renderElementsTab);
+                document.getElementById('elements-search')?.addEventListener('input', (e) => {
+                    const q = e.target.value.trim().toLowerCase();
+                    document.querySelectorAll('#elements-tree .el-node').forEach(n => {
+                        n.style.display = !q || n.textContent.toLowerCase().includes(q) ? '' : 'none';
+                    });
+                });
+                document.getElementById('perf-refresh-btn')?.addEventListener('click', renderPerformanceTab);
+                document.getElementById('perf-fps-btn')?.addEventListener('click', () => { _fpsRunning ? _stopFps() : _startFps(); });
+                document.getElementById('mem-refresh-btn')?.addEventListener('click', renderMemoryTab);
+                document.getElementById('mem-snap-btn')?.addEventListener('click', _takeMemSnapshot);
+                document.getElementById('sec-scan-btn')?.addEventListener('click', renderSecurityTab);
+                document.getElementById('lh-run-btn')?.addEventListener('click', _runLighthouseAudit);
                 _startDtAutoRefresh();
                 document.querySelectorAll('.dt-scope-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
@@ -2253,10 +2710,15 @@
                         <div class="devtools-resize-handle" id="devtools-resize-handle"></div>
                         <div class="devtools-header">
                             <div class="devtools-tabs">
+                                <button class="devtools-tab" data-tab="elements">Elements</button>
                                 <button class="devtools-tab active" data-tab="console">Console<span class="devtools-badge" id="console-error-badge" style="display:none;">0</span></button>
-                                <button class="devtools-tab" data-tab="network">Network</button>
-                                <button class="devtools-tab" data-tab="storage">Storage</button>
                                 <button class="devtools-tab" data-tab="source">Sources</button>
+                                <button class="devtools-tab" data-tab="network">Network</button>
+                                <button class="devtools-tab" data-tab="performance">Performance</button>
+                                <button class="devtools-tab" data-tab="memory">Memory</button>
+                                <button class="devtools-tab" data-tab="storage">Application</button>
+                                <button class="devtools-tab" data-tab="security">Security</button>
+                                <button class="devtools-tab" data-tab="lighthouse">Lighthouse</button>
                             </div>
                             <div class="dt-scope-toggle" id="dt-scope-toggle">
                                 <button class="dt-scope-btn active" data-scope="inner">Inner Site</button>
@@ -2265,6 +2727,19 @@
                             <button class="devtools-close" id="devtools-close"><i class="fas fa-times"></i></button>
                         </div>
                         <div class="devtools-content">
+                            <!-- Elements Tab -->
+                            <div id="devtools-elements" class="devtools-tab-content" style="display:none;">
+                                <div class="devtools-toolbar">
+                                    <input class="dt-search-input" id="elements-search" placeholder="Search by selector…" style="flex:1;max-width:240px;">
+                                    <button class="devtools-toolbar-btn" id="elements-inspect-btn" title="Select element on page">&#8982; Inspect</button>
+                                    <button class="devtools-toolbar-btn" id="elements-refresh-btn">Refresh</button>
+                                </div>
+                                <div class="dt-breadcrumb" id="elements-breadcrumb"></div>
+                                <div class="elements-wrap">
+                                    <div class="elements-tree" id="elements-tree"></div>
+                                    <div class="elements-styles" id="elements-styles"><div class="dt-empty">Select an element</div></div>
+                                </div>
+                            </div>
                             <!-- Console Tab -->
                             <div id="devtools-console" class="devtools-tab-content active">
                                 <div class="devtools-toolbar">
@@ -2313,6 +2788,38 @@
                                     <div class="sources-tree" id="sources-tree"></div>
                                     <div class="sources-viewer" id="sources-viewer">
                                         <div class="dt-empty">Select a file to view its source</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Performance Tab -->
+                            <div id="devtools-performance" class="devtools-tab-content" style="display:none;">
+                                <div class="devtools-toolbar">
+                                    <button class="devtools-toolbar-btn" id="perf-refresh-btn">Refresh Metrics</button>
+                                    <button class="devtools-toolbar-btn" id="perf-fps-btn">Start FPS</button>
+                                </div>
+                                <div class="dt-scroll" id="perf-content"></div>
+                            </div>
+                            <!-- Memory Tab -->
+                            <div id="devtools-memory" class="devtools-tab-content" style="display:none;">
+                                <div class="devtools-toolbar">
+                                    <button class="devtools-toolbar-btn" id="mem-refresh-btn">Refresh</button>
+                                    <button class="devtools-toolbar-btn" id="mem-snap-btn">Take Snapshot</button>
+                                </div>
+                                <div class="dt-scroll" id="mem-content"></div>
+                            </div>
+                            <!-- Security Tab -->
+                            <div id="devtools-security" class="devtools-tab-content" style="display:none;">
+                                <div class="devtools-toolbar">
+                                    <button class="devtools-toolbar-btn" id="sec-scan-btn">Run Security Scan</button>
+                                </div>
+                                <div class="dt-scroll" id="sec-content"></div>
+                            </div>
+                            <!-- Lighthouse Tab -->
+                            <div id="devtools-lighthouse" class="devtools-tab-content" style="display:none;">
+                                <div class="dt-scroll" id="lh-content">
+                                    <div style="text-align:center;padding:24px;">
+                                        <p style="color:var(--color-text-secondary);margin-bottom:12px;">Run a simplified audit for Performance, Accessibility, Best Practices, and SEO.</p>
+                                        <button class="devtools-toolbar-btn" id="lh-run-btn" style="padding:8px 24px;font-size:13px;">Run Audit</button>
                                     </div>
                                 </div>
                             </div>
