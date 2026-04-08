@@ -194,6 +194,7 @@ const LITE_DOMAINS_SUFFIX = [
     '.doubao.com',
     '.discord.com',
     '.github.com',
+    '.github.io',
     '.aliyun.com',
     '.duckduckgo.com',
     '.qianwen.com',
@@ -227,11 +228,6 @@ function _liteProcess(html, ctx, inject) {
     const proxyOrigin = protocol + '//' + hostname + (proxyPort == 443 || proxyPort == 80 ? '' : ':' + proxyPort);
     const sid = sessionId || '';
     const proxyPrefix = proxyOrigin + '/' + sid + '/';
-
-    // Strip integrity attributes — Hammerhead modifies CSS/JS content, invalidating SRI hashes
-    html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
-    // Strip nonce attributes — CSP nonces won't match through the proxy
-    html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
 
     // Single-pass rewrite for href/src/action/poster/data attributes, srcset, and CSS url()
     const ATTR_AND_URL_RE = /((?:href|src|action|poster|data)\s*=\s*["'])(\/\/[^"']+|\/(?!\/)[^"']*|https?:\/\/[^"']+)(["'])|(srcset\s*=\s*")([^"]*)(")|(url\(\s*['"]?)((?:https?:)?\/\/[^'")]+)(['"]?\s*\))/gi;
@@ -285,13 +281,14 @@ function _liteProcess(html, ctx, inject) {
 
     const bridge = `<script>(function(){
 var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sid)},D=${JSON.stringify(destUrl)};
+var _OP=O+'/';var _oGA=Element.prototype.getAttribute;
 try{document.cookie='__rh_sess='+S+'|'+D+';path=/'}catch(e){}
-function px(u){return O+'/'+S+'/'+u}
+function px(u){return _OP+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
 function isProto(u){return typeof u==='string'&&u.length>2&&u.charCodeAt(0)===47&&u.charCodeAt(1)===47&&u.charCodeAt(2)!==47}
 function rw(u){if(!u||typeof u!=='string')return u;u=u.trim();
-if(u.indexOf(O+'/')===0)return u;
+if(u.indexOf(_OP)===0)return u;
 if(isProto(u))return px('https:'+u);if(isExt(u))return px(u);if(isRel(u))return pxRel(u);return u}
 try{var du=new URL(D);var DO=du.origin;
 try{history.replaceState(history.state,'',du.pathname+(du.search||'')+(du.hash||''))}catch(e){}
@@ -310,16 +307,20 @@ assign:{value:function(u){_ra(rw(u)||u)}},
 replace:{value:function(u){_rr(rw(u)||u)}},
 reload:{value:function(){_rrl()}},
 toString:{value:function(){return du.href}}};
+var _locCache=null,_locHref='';
 try{Object.defineProperty(window,'location',{configurable:true,enumerable:true,
-get:function(){var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}
-o[Symbol.toPrimitive]=function(){return du.href};return o},
+get:function(){var h=du.href;if(_locCache&&_locHref===h)return _locCache;
+var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}
+o[Symbol.toPrimitive]=function(){return du.href};_locCache=o;_locHref=h;return o},
 set:function(v){_rr(rw(''+v)||(''+v))}})}catch(e){}
 try{Object.defineProperty(document,'location',{configurable:true,enumerable:true,
 get:function(){return window.location},set:function(v){window.location=v}})}catch(e){}
 try{Object.defineProperty(document,'domain',{get:function(){return du.hostname},set:function(){},configurable:true})}catch(e){}
 var oF=window.fetch;if(oF)window.fetch=function(u,o){
 if(typeof u==='string'){u=rw(u)}
-else if(u&&typeof u==='object'&&u.url){var nu=rw(u.url);if(nu!==u.url)try{u=new Request(nu,u)}catch(e){}}
+else if(u&&typeof u==='object'&&u.url){var uu=u.url;
+if(uu.indexOf(O)===0&&uu.indexOf(_OP+S+'/')!==0){uu=pxRel(uu.substring(O.length))}else{uu=rw(uu)}
+if(uu!==u.url)try{u=new Request(uu,u)}catch(e){}}
 return oF.call(this,u,o)};
 var XP=XMLHttpRequest.prototype,oX=XP.open;
 XP.open=function(m,u){if(typeof u==='string'){arguments[1]=rw(u)}return oX.apply(this,arguments)};
@@ -362,17 +363,22 @@ try{var oPS=history.pushState.bind(history);history.pushState=function(s,t,u){
 if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href}}return oPS(s,t,u)};
 var oRS=history.replaceState.bind(history);history.replaceState=function(s,t,u){
 if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href}}return oRS(s,t,u)}}catch(e){}
-window.addEventListener('popstate',function(){try{var l=window.location;du=new URL(l.pathname+(l.search||'')+(l.hash||''),DO+'/');window.__rhDestUrl=du.href}catch(e){}});
+window.addEventListener('popstate',function(){try{du=new URL(_rl.pathname+(_rl.search||'')+(_rl.hash||''),DO+'/');window.__rhDestUrl=du.href}catch(e){}});
 try{var sSA=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){
 var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')&&typeof v==='string'){v=rw(v)}
-return sSA.call(this,n,v)}}catch(e){}
+return sSA.call(this,n,v)};
+var oGA=Element.prototype.getAttribute;Element.prototype.getAttribute=function(n){
+var v=oGA.call(this,n);if(v&&typeof v==='string'){var nl=n.toLowerCase();
+if(nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')return _stripProxy(v)}return v}}catch(e){}
+var _SP=_OP+S+'/';
+function _stripProxy(v){if(typeof v==='string'&&v.indexOf(_SP)===0)return v.substring(_SP.length);return v}
 try{['src','href','action','poster'].forEach(function(attr){
 var els=[HTMLImageElement,HTMLScriptElement,HTMLLinkElement,HTMLAnchorElement,HTMLSourceElement,
 HTMLVideoElement,HTMLAudioElement,HTMLIFrameElement,HTMLEmbedElement,HTMLAreaElement];
 els.forEach(function(E){if(!E||!E.prototype)return;
 var d=Object.getOwnPropertyDescriptor(E.prototype,attr);
 if(d&&d.set){var oSet=d.set,oGet=d.get;Object.defineProperty(E.prototype,attr,{configurable:true,enumerable:true,
-get:function(){return oGet?oGet.call(this):undefined},
+get:function(){return _stripProxy(oGet?oGet.call(this):undefined)},
 set:function(v){if(typeof v==='string')v=rw(v);oSet.call(this,v)}})}})
 })}catch(e){}
 try{var dCookie=Object.getOwnPropertyDescriptor(Document.prototype,'cookie');
@@ -382,30 +388,34 @@ get:function(){var c=ogGet.call(this);return c.replace(/__rh_[^;]*(;\\s*)?/g,'')
 set:function(v){ogSet.call(this,v)}})}}catch(e){}
 }catch(e){}
 function fixEl(el){if(!el||el.nodeType!==1||el.__rhLite)return;el.__rhLite=1;
-var t=el.tagName;
-['src','href','action','data','poster'].forEach(function(a){var v=el.getAttribute(a);if(v){var n=rw(v);if(n!==v)el.setAttribute(a,n)}});
-var ss=el.getAttribute('srcset');if(ss){var nss=ss.replace(/((?:https?:)?\\/\\/[^\\s,]+)/gi,function(u){return rw(u)});
-if(nss!==ss)el.setAttribute('srcset',nss)}
-var bg=el.style&&el.style.backgroundImage;
-if(bg&&/url\\(/i.test(bg)){var nbg=bg.replace(/url\\(['\"]?((?:https?:)?\\/\\/[^'\")]+)['\"]?\\)/gi,function(m,u){var n=rw(u);return n!==u?'url('+n+')':m});
-if(nbg!==bg)el.style.backgroundImage=nbg}
-if(t==='STYLE'&&el.sheet){try{var rules=el.sheet.cssRules;for(var i=0;i<rules.length;i++){
-var txt=rules[i].cssText;if(/url\\(/i.test(txt)){var nt=txt.replace(/url\\(['\"]?((?:https?:)?\\/\\/[^'\")]+)['\"]?\\)/gi,function(m,u){var n=rw(u);return n!==u?'url('+n+')':m});
-if(nt!==txt){try{el.sheet.deleteRule(i);el.sheet.insertRule(nt,i)}catch(e){}}}}}catch(e){}}
+var a,n;
+a=_oGA.call(el,'src');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)el.setAttribute('src',n)}
+a=_oGA.call(el,'href');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)el.setAttribute('href',n)}
+a=_oGA.call(el,'action');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)el.setAttribute('action',n)}
+a=_oGA.call(el,'data');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)el.setAttribute('data',n)}
+a=_oGA.call(el,'poster');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)el.setAttribute('poster',n)}
+a=_oGA.call(el,'srcset');if(a&&a.indexOf(_OP)!==0){n=a.replace(/((?:https?:)?\\/\\/[^\\s,]+)/gi,function(u){return rw(u)});
+if(n!==a)el.setAttribute('srcset',n)}
 }
-function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area,style');
+function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
 for(var i=0;i<els.length;i++)fixEl(els[i])}catch(e){}}
+var _pendQ=[],_pendRaf=0;
+function _flushPend(){_pendRaf=0;var t0=performance.now();
+while(_pendQ.length){fixTree(_pendQ.shift());if(performance.now()-t0>8)break}
+if(_pendQ.length)_pendRaf=requestAnimationFrame(_flushPend)}
 function startObs(){var r=document.documentElement;if(!r){document.addEventListener('DOMContentLoaded',startObs);return}
 fixTree(r);
 new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){var m=ml[i];
-if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++)fixTree(m.addedNodes[j])}
-else if(m.type==='attributes'){m.target.__rhLite=0;fixEl(m.target)}}
+if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++)_pendQ.push(m.addedNodes[j])}
+else if(m.type==='attributes'){var v=_oGA.call(m.target,m.attributeName);
+if(v&&typeof v==='string'&&v.indexOf(_OP)!==0){m.target.__rhLite=0;fixEl(m.target)}}}
+if(_pendQ.length&&!_pendRaf)_pendRaf=requestAnimationFrame(_flushPend);
 }).observe(r,{childList:true,subtree:true,attributes:true,attributeFilter:['src','href','action','data','poster','srcset']})}
 startObs();
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');
-if(a){var ah=a.getAttribute('href');var n=rw(ah);if(n!==ah)a.setAttribute('href',n)}},true);
+if(a){var ah=_oGA.call(a,'href');var n=rw(ah);if(n!==ah)a.setAttribute('href',n)}},true);
 document.addEventListener('submit',function(e){var f=e.target;
-if(f&&f.tagName==='FORM'){var fa=f.getAttribute('action');if(fa){var n=rw(fa);if(n!==fa)f.setAttribute('action',n)}}},true);
+if(f&&f.tagName==='FORM'){var fa=_oGA.call(f,'action');if(fa){var n=rw(fa);if(n!==fa)f.setAttribute('action',n)}}},true);
 })()</script>`;
 
     html = html.replace(/<head[^>]*>/i, '$&' + inject + bridge);
@@ -427,6 +437,12 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
         }
         // Pre-process CF challenge URLs to absolute paths
         html = _fixCfChallengeUrls(html, ctx);
+        // Strip meta CSP tags — they block injected inline scripts and cross-origin resources
+        html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']content-security-policy["'][^>]*>/gi, '');
+        html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']x-content-security-policy["'][^>]*>/gi, '');
+        // Strip integrity/nonce for full processing too
+        html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
+        html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
     }
 
     // Use lite processing for complex SPAs that break under full instrumentation

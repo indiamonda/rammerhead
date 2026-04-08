@@ -434,6 +434,9 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
 
                 if (isHtml && req.method === 'GET') {
                     let html = respBody.toString('utf-8');
+                    html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']content-security-policy["'][^>]*>/gi, '');
+                    html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
+                    html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
                     const base = `<base href="${targetUrl.replace(/"/g, '&quot;')}">`;
                     const bridge = buildBridgeScript(proxyOrigin, sessionId + '!raw', targetUrl);
                     const inject = base + bridge;
@@ -556,6 +559,9 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             rawFetch(targetUrl, (err, status, headers, buf) => {
                 if (err) { devErr('/__rh_raw fetch ' + targetUrl, err); try { if (!res.headersSent) { res.writeHead(502); res.end(); } } catch(_){} return; }
                 let html = buf.toString('utf-8');
+                html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']content-security-policy["'][^>]*>/gi, '');
+                html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
+                html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
                 const base = `<base href="${targetUrl.replace(/"/g, '&quot;')}">`;
                 const bridge = sessionId ? buildBridgeScript(proxyOrigin, sessionId + '!raw', targetUrl) : '';
                 const inject = base + bridge;
