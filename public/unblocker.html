@@ -270,6 +270,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     }
 
     // ========== Entry point ==========
+    var rawParam = params.get('raw') === 'true';
+
     if (!url) {
         errorEl.textContent = 'Missing ?url= parameter.';
         errorEl.style.display = 'block';
@@ -278,6 +280,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
     var normalized = normalizeUrl(url);
     currentRealUrl = normalized;
+
+    if (rawParam) {
+        loader.style.display = 'none';
+        frame.style.display = 'block';
+        document.body.style.background = '#fff';
+        document.title = normalized;
+
+        fetch(basePath + '/ensuresession?id=' + encodeURIComponent(sessionId))
+            .then(function() {
+                fetchShuffler();
+                return fetch(basePath + '/getproxiedurl?id=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(normalized));
+            })
+            .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+            .then(function(data) {
+                frame.src = data.proxiedUrl || (basePath + '/' + sessionId + '/' + normalized);
+            })
+            .catch(function() {
+                frame.src = basePath + '/' + sessionId + '/' + normalized;
+            });
+        return;
+    }
+
     targetEl.textContent = normalized;
     document.title = 'Loading ' + normalized;
 
