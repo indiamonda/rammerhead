@@ -37,6 +37,7 @@ const ANTIDETECT_SCRIPT = [
         'csi:function(){return{}},loadTimes:function(){return{}}}}}catch(e){}',
     'try{if(navigator.languages&&navigator.languages.length===0){',
         'Object.defineProperty(navigator,"languages",{get:function(){return["en-US","en"]},configurable:true})}}catch(e){}',
+    'try{Object.defineProperty(document,"referrer",{get:function(){return ""},configurable:true})}catch(e){}',
     'try{Object.defineProperty(window,"%hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
     'try{Object.defineProperty(window,"%is-hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
     'try{if(typeof crypto!=="undefined"&&!crypto.randomUUID){crypto.randomUUID=function(){var b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=(b[6]&0x0f)|0x40;b[8]=(b[8]&0x3f)|0x80;var h="";for(var i=0;i<16;i++){h+=(b[i]<16?"0":"")+b[i].toString(16);if(i===3||i===5||i===7||i===9)h+="-"}return h}}}catch(e){}',
@@ -198,6 +199,8 @@ const LITE_DOMAINS_SUFFIX = [
     '.aliyun.com',
     '.duckduckgo.com',
     '.qianwen.com',
+    '.itch.io',
+    '.itch.zone',
 ];
 function _needsLiteProcessing(ctx) {
     if (!ctx || !ctx.dest) return false;
@@ -316,6 +319,7 @@ set:function(v){_rr(rw(''+v)||(''+v))}})}catch(e){}
 try{Object.defineProperty(document,'location',{configurable:true,enumerable:true,
 get:function(){return window.location},set:function(v){window.location=v}})}catch(e){}
 try{Object.defineProperty(document,'domain',{get:function(){return du.hostname},set:function(){},configurable:true})}catch(e){}
+try{Object.defineProperty(document,'referrer',{get:function(){return ''},configurable:true})}catch(e){}
 var oF=window.fetch;if(oF)window.fetch=function(u,o){
 if(typeof u==='string'){u=rw(u)}
 else if(u&&typeof u==='object'&&u.url){var uu=u.url;
