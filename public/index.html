@@ -3419,14 +3419,23 @@
                     });
                 },
 
+                _isDefaultBg(c) {
+                    if (!c) return true;
+                    const { r, g, b } = c;
+                    if (r > 240 && g > 240 && b > 240) return true;
+                    if (r < 15 && g < 15 && b < 15) return true;
+                    return false;
+                },
+
                 extractIframeBodyColor(iframe) {
                     try {
                         const doc = iframe.contentDocument || iframe.contentWindow?.document;
                         if (!doc || !doc.body) return null;
                         const bodyColor = this._parseRgb(getComputedStyle(doc.body).backgroundColor);
-                        if (bodyColor) return bodyColor;
+                        if (bodyColor && !this._isDefaultBg(bodyColor)) return bodyColor;
                         const htmlColor = this._parseRgb(getComputedStyle(doc.documentElement).backgroundColor);
-                        return htmlColor || null;
+                        if (htmlColor && !this._isDefaultBg(htmlColor)) return htmlColor;
+                        return null;
                     } catch (_) { return null; }
                 },
 
