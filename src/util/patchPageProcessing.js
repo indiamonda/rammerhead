@@ -284,7 +284,7 @@ function _liteProcess(html, ctx, inject) {
 
     const bridge = `<script>(function(){
 var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sid)},D=${JSON.stringify(destUrl)};
-var _OP=O+'/';var _oGA=Element.prototype.getAttribute;
+var _OP=O+'/';var _oGA=Element.prototype.getAttribute;var _sSA=Element.prototype.setAttribute;
 try{document.cookie='__rh_sess='+S+'|'+D+';path=/'}catch(e){}
 function px(u){return _OP+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
@@ -392,34 +392,32 @@ get:function(){var c=ogGet.call(this);return c.replace(/__rh_[^;]*(;\\s*)?/g,'')
 set:function(v){ogSet.call(this,v)}})}}catch(e){}
 }catch(e){}
 function fixEl(el){if(!el||el.nodeType!==1||el.__rhLite)return;el.__rhLite=1;
-var a,n;
-a=_oGA.call(el,'src');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)el.setAttribute('src',n)}
-a=_oGA.call(el,'href');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)el.setAttribute('href',n)}
-a=_oGA.call(el,'action');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)el.setAttribute('action',n)}
-a=_oGA.call(el,'data');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)el.setAttribute('data',n)}
-a=_oGA.call(el,'poster');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)el.setAttribute('poster',n)}
+try{var a,n;
+a=_oGA.call(el,'src');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)_sSA.call(el,'src',n)}
+a=_oGA.call(el,'href');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)_sSA.call(el,'href',n)}
+a=_oGA.call(el,'action');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)_sSA.call(el,'action',n)}
+a=_oGA.call(el,'data');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)_sSA.call(el,'data',n)}
+a=_oGA.call(el,'poster');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)_sSA.call(el,'poster',n)}
 a=_oGA.call(el,'srcset');if(a&&a.indexOf(_OP)!==0){n=a.replace(/((?:https?:)?\\/\\/[^\\s,]+)/gi,function(u){return rw(u)});
-if(n!==a)el.setAttribute('srcset',n)}
-}
+if(n!==a)_sSA.call(el,'srcset',n)}
+}catch(e){}}
 function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
 for(var i=0;i<els.length;i++)fixEl(els[i])}catch(e){}}
 var _pendQ=[],_pendRaf=0;
 function _flushPend(){_pendRaf=0;var t0=performance.now();
-while(_pendQ.length){fixTree(_pendQ.shift());if(performance.now()-t0>8)break}
+while(_pendQ.length){var nd=_pendQ.shift();try{fixTree(nd)}catch(e){}if(performance.now()-t0>4)break}
 if(_pendQ.length)_pendRaf=requestAnimationFrame(_flushPend)}
 function startObs(){var r=document.documentElement;if(!r){document.addEventListener('DOMContentLoaded',startObs);return}
 fixTree(r);
 new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){var m=ml[i];
-if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++)_pendQ.push(m.addedNodes[j])}
-else if(m.type==='attributes'){var v=_oGA.call(m.target,m.attributeName);
-if(v&&typeof v==='string'&&v.indexOf(_OP)!==0){m.target.__rhLite=0;fixEl(m.target)}}}
+if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++){var nd=m.addedNodes[j];if(nd.nodeType===1)_pendQ.push(nd)}}}
 if(_pendQ.length&&!_pendRaf)_pendRaf=requestAnimationFrame(_flushPend);
-}).observe(r,{childList:true,subtree:true,attributes:true,attributeFilter:['src','href','action','data','poster','srcset']})}
+}).observe(r,{childList:true,subtree:true})}
 startObs();
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');
-if(a){var ah=_oGA.call(a,'href');var n=rw(ah);if(n!==ah)a.setAttribute('href',n)}},true);
-document.addEventListener('submit',function(e){var f=e.target;
-if(f&&f.tagName==='FORM'){var fa=_oGA.call(f,'action');if(fa){var n=rw(fa);if(n!==fa)f.setAttribute('action',n)}}},true);
+document.addEventListener('click',function(e){try{var a=e.target.closest&&e.target.closest('a[href]');
+if(a){var ah=_oGA.call(a,'href');var n=rw(ah);if(n!==ah)_sSA.call(a,'href',n)}}catch(e2){}},true);
+document.addEventListener('submit',function(e){try{var f=e.target;
+if(f&&f.tagName==='FORM'){var fa=_oGA.call(f,'action');if(fa){var n=rw(fa);if(n!==fa)_sSA.call(f,'action',n)}}}catch(e2){}},true);
 })()</script>`;
 
     html = html.replace(/<head[^>]*>/i, '$&' + inject + bridge);
