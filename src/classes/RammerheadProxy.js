@@ -499,7 +499,7 @@ class RammerheadProxy extends Proxy {
                     }
                 }
                 const shuffleDict = session.shuffleDict || (session.shuffleDict = require('../util/StrShuffler').generateDictionary());
-                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
                 res.end(JSON.stringify(shuffleDict));
             } catch (e) {
                 this.logger.error(`(shuffleDict) ${e.message}`);

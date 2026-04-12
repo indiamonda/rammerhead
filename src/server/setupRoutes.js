@@ -18,6 +18,15 @@ const zlib = require('zlib');
  * @param {import('../classes/RammerheadLogging')} logger
  */
 module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
+    const CORS_HEADERS = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+    };
+    function jsonResponse(res, status, obj) {
+        res.writeHead(status, Object.assign({ 'Content-Type': 'application/json' }, CORS_HEADERS));
+        res.end(JSON.stringify(obj));
+    }
     const _staticCache = new Map();
     const DEV = !!process.env.DEVELOPMENT;
     function _getCached(filePath, contentType) {
@@ -105,8 +114,8 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         const session = new RammerheadSession();
         session.data.restrictIP = config.getIP(req);
 
-        // workaround for saving the modified session to disk
         sessionStore.addSerializedSession(id, session.serializeSession());
+        res.writeHead(200, Object.assign({ 'Content-Type': 'text/plain' }, CORS_HEADERS));
         res.end(id);
     });
     proxyServer.GET('/editsession', (req, res) => {
@@ -201,12 +210,9 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     const handleEnsureSession = (req, res) => {
         try {
             const { id } = new URLPath(req.url).getParams();
-            const basePath = getBasePath(req);
             
             if (!id) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Session ID required' }));
-                return;
+                return jsonResponse(res, 400, { error: 'Session ID required' });
             }
             
             // Check if session exists, create if it doesn't
@@ -219,30 +225,19 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 sessionStore.addSerializedSession(id, session.serializeSession());
                 sessionAffinity.registerSessionMachineSync(id);
             } else {
-                // Upgrade existing sessions to never-expire and persist immediately
                 const session = sessionStore.get(id);
                 if (session) {
                     let changed = false;
-                    if (!session.data.neverExpire) {
-                        session.data.neverExpire = true;
-                        changed = true;
-                    }
-                    if (session.data.restrictIP) {
-                        session.data.restrictIP = null;
-                        changed = true;
-                    }
-                    if (changed) {
-                        sessionStore.addSerializedSession(id, session.serializeSession());
-                    }
+                    if (!session.data.neverExpire) { session.data.neverExpire = true; changed = true; }
+                    if (session.data.restrictIP) { session.data.restrictIP = null; changed = true; }
+                    if (changed) sessionStore.addSerializedSession(id, session.serializeSession());
                 }
             }
             
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, sessionId: id }));
+            jsonResponse(res, 200, { success: true, sessionId: id });
         } catch (error) {
             logger.error(`(ensureSession) Error: ${error.message}`);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
+            jsonResponse(res, 500, { error: error.message });
         }
     };
     
@@ -264,9 +259,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             const normalizedTarget = normalizeTargetUrl(targetUrl);
             
             if (!id || !normalizedTarget) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Session ID and URL required' }));
-                return;
+                return jsonResponse(res, 400, { error: 'Session ID and URL required' });
             }
             
             // Ensure session exists
@@ -279,35 +272,21 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 sessionAffinity.registerSessionMachineSync(id);
             }
 
-            // Get session and shuffle URL, persisting any upgrades immediately
             const session = sessionStore.get(id);
             let changed = false;
-            if (!session.data.neverExpire) {
-                session.data.neverExpire = true;
-                changed = true;
-            }
-            if (session.data.restrictIP) {
-                session.data.restrictIP = null;
-                changed = true;
-            }
-            if (!session.shuffleDict) {
-                session.shuffleDict = StrShuffler.generateDictionary();
-                changed = true;
-            }
-            if (changed) {
-                sessionStore.addSerializedSession(id, session.serializeSession());
-            }
+            if (!session.data.neverExpire) { session.data.neverExpire = true; changed = true; }
+            if (session.data.restrictIP) { session.data.restrictIP = null; changed = true; }
+            if (!session.shuffleDict) { session.shuffleDict = StrShuffler.generateDictionary(); changed = true; }
+            if (changed) sessionStore.addSerializedSession(id, session.serializeSession());
+
             const shuffler = new StrShuffler(session.shuffleDict);
             const shuffledUrl = shuffler.shuffle(normalizedTarget);
-            // Use relative URL so browser inherits current page's protocol (fixes mixed content behind Cloudflare Tunnel etc.)
             const proxiedUrl = (basePath ? basePath + '/' : '/') + id + '/' + shuffledUrl;
             
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ proxiedUrl, sessionId: id }));
+            jsonResponse(res, 200, { proxiedUrl, sessionId: id });
         } catch (error) {
             logger.error(`(getProxiedUrl) Error: ${error.message}`);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message }));
+            jsonResponse(res, 500, { error: error.message });
         }
     };
     
@@ -332,9 +311,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             
             if (!normalizedTarget) {
                 logger.error(`(generatelink) ${config.getIP(req)} ${req.url} Must provide url parameter`);
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Must provide url parameter' }));
-                return;
+                return jsonResponse(res, 400, { error: 'Must provide url parameter' });
             }
             
             const id = generateId();
@@ -355,12 +332,10 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             const basePath = getBasePath(req);
             const proxiedUrl = (basePath ? basePath + '/' : '/') + id + '/' + shuffledUrl;
             
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ url: proxiedUrl, sessionId: id }));
+            jsonResponse(res, 200, { url: proxiedUrl, sessionId: id });
         } catch (error) {
             logger.error(`(generatelink) ${config.getIP(req)} ${req.url} Error: ${error.message}`);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: error.message || 'Internal server error' }));
+            jsonResponse(res, 500, { error: error.message || 'Internal server error' });
         }
     };
     

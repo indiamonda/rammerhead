@@ -142,8 +142,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         return Array.from(crypto.getRandomValues(new Uint8Array(16)))
             .map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
     }
-    var sessionId = localStorage.getItem('deviceSessionId');
-    if (!sessionId) { sessionId = genSession(); localStorage.setItem('deviceSessionId', sessionId); }
+    var sessionId = null;
+    try { sessionId = localStorage.getItem('deviceSessionId'); } catch(_){}
+    if (!sessionId) { sessionId = genSession(); try { localStorage.setItem('deviceSessionId', sessionId); } catch(_){} }
 
     // ========== URL normalization (same as main proxy) ==========
     function normalizeUrl(raw) {

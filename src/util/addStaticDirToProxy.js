@@ -99,6 +99,7 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
                     'Content-Length': body.length,
                     'ETag': entry.etag,
                     'Cache-Control': DEV ? 'no-cache' : 'public, max-age=3600, stale-while-revalidate=86400',
+                    'Access-Control-Allow-Origin': '*',
                 };
                 if (useGzip) {
                     headers['Content-Encoding'] = 'gzip';
