@@ -88,7 +88,7 @@ const SUBRESOURCE_HEADERS = {
 };
 
 // Region-specific Accept-Language (host pattern -> value)
-const ZH_FIRST_HOST_RE = /\.?bilibili\.(com|cn)$|\.?douyin\.com$|\.?biliapi\.|\.?hdslb\.com$|\.?bilivideo\.|\.?taobao\.com$|\.?tmall\.|\.?weibo\.com$|\.?zhihu\.com$|\.?qq\.com$|\.?baidu\.com$|\.?jd\.com$|\.?163\.com$|\.?deepseek\.(com|ai)$/i;
+const ZH_FIRST_HOST_RE = /\.?bilibili\.(com|cn)$|\.?douyin\.com$|\.?biliapi\.|\.?hdslb\.com$|\.?bilivideo\.|\.?taobao\.com$|\.?tmall\.|\.?weibo\.com$|\.?zhihu\.com$|\.?qq\.com$|\.?baidu\.com$|\.?jd\.com$|\.?163\.com$|\.?deepseek\.(com|ai)$|\.?doubao\.com$|\.?volccdn\.com$|\.?volces\.com$|\.?volcengine\.com$|\.?qianwen\.com$|\.?tongyi\.aliyun\.com$|\.?alicdn\.com$/i;
 const JA_FIRST_HOST_RE = /\.?nicovideo\.jp$|\.?yahoo\.co\.jp$|\.?rakuten\.co\.jp$|\.?dmm\.co\.jp$|\.?pixiv\.net$|\.?line\.me$|\.?fc2\.com$/i;
 const KO_FIRST_HOST_RE = /\.?naver\.(com|co\.kr)$|\.?daum\.net$|\.?kakao\.(com|co\.kr)$|\.?nate\.com$|\.?tistory\.com$/i;
 
@@ -277,6 +277,24 @@ const CDN_REFERER_MAP = [
     [/\.?anthropic\.com$/i, 'https://claude.ai'],
     // Gemini
     [/\.?gemini\.google\.com$/i, 'https://gemini.google.com'],
+    // Doubao (ByteDance AI)
+    [/\.?doubao\.com$/i, 'https://www.doubao.com'],
+    [/\.?volccdn\.com$/i, 'https://www.doubao.com'],
+    [/\.?volces\.com$/i, 'https://www.doubao.com'],
+    [/\.?volcengine\.com$/i, 'https://www.doubao.com'],
+    [/\.?byteimg\.com$/i, 'https://www.doubao.com'],
+    [/\.?ibytedtos\.com$/i, 'https://www.doubao.com'],
+    [/\.?bytedance\.com$/i, 'https://www.doubao.com'],
+    // Qianwen (Alibaba AI)
+    [/\.?qianwen\.com$/i, 'https://qianwen.com'],
+    [/\.?tongyi\.aliyun\.com$/i, 'https://qianwen.com'],
+    [/\.?aliyuncs\.com$/i, 'https://qianwen.com'],
+    [/\.?alicdn\.com$/i, 'https://qianwen.com'],
+    [/\.?aliyun\.com$/i, 'https://qianwen.com'],
+    // itch.io
+    [/\.?itch\.io$/i, 'https://itch.io'],
+    [/\.?itch\.zone$/i, 'https://itch.io'],
+    [/\.?hwcdn\.net$/i, 'https://itch.io'],
 ];
 
 // Match both unshuffled (https://...) and shuffled (_rhs...) proxy URLs (indicator is _rhs, no tilde).
@@ -416,6 +434,9 @@ function getRefererOriginFallback(url, referer) {
     if (/deepseek\.com|deepseek\.ai/.test(combined)) return 'https://chat.deepseek.com';
     if (/claude\.ai|anthropic\.com/.test(combined)) return 'https://claude.ai';
     if (/gemini\.google\.com/.test(combined)) return 'https://gemini.google.com';
+    if (/doubao\.com|volccdn|volces\.com|volcengine/.test(combined)) return 'https://www.doubao.com';
+    if (/qianwen\.com|tongyi\.aliyun/.test(combined)) return 'https://qianwen.com';
+    if (/itch\.io|itch\.zone|hwcdn\.net/.test(combined)) return 'https://itch.io';
     return null;
 }
 
@@ -474,7 +495,7 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     } catch (_) {}
 
     // Sites that expect same-origin sec-fetch-site for document requests
-    const SAME_ORIGIN_DOC_RE = /\.?bilibili\.(com|cn)$|\.?twitter\.com$|\.?x\.com$|\.?instagram\.com$|\.?facebook\.com$|\.?tiktok\.com$|\.?reddit\.com$|\.?netflix\.com$|\.?discord\.com$|\.?amazon\.(com|co\.\w+)$|\.?linkedin\.com$|\.?canva\.com$|\.?slack\.com$|\.?gitlab\.com$|\.?figma\.com$|\.?youtube\.com$|\.?docs\.google\.com$|\.?vercel\.com$|\.?netlify\.com$|\.?chatgpt\.com$|\.?openai\.com$|\.?deepseek\.com$|\.?claude\.ai$|\.?anthropic\.com$|\.?gemini\.google\.com$/i;
+    const SAME_ORIGIN_DOC_RE = /\.?bilibili\.(com|cn)$|\.?twitter\.com$|\.?x\.com$|\.?instagram\.com$|\.?facebook\.com$|\.?tiktok\.com$|\.?reddit\.com$|\.?netflix\.com$|\.?discord\.com$|\.?amazon\.(com|co\.\w+)$|\.?linkedin\.com$|\.?canva\.com$|\.?slack\.com$|\.?gitlab\.com$|\.?figma\.com$|\.?youtube\.com$|\.?docs\.google\.com$|\.?vercel\.com$|\.?netlify\.com$|\.?chatgpt\.com$|\.?openai\.com$|\.?deepseek\.com$|\.?claude\.ai$|\.?anthropic\.com$|\.?gemini\.google\.com$|\.?doubao\.com$|\.?qianwen\.com$|\.?poki\.com$/i;
     const docOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
     if (isDoc && docOrigin) {
         try {
@@ -485,14 +506,27 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
         } catch (_) {}
     }
 
-    // For subresources: same-site when dest is CDN under referer (e.g. hdslb.com under bilibili.com)
-    if (!isDoc && refererOrigin && destOrigin && getRefererOriginForHost(destOrigin) === refererOrigin) {
-        headersToInject['sec-fetch-site'] = 'same-site';
+    // For subresources: same-origin when dest matches referer exactly, same-site for CDN subdomains
+    if (!isDoc && refererOrigin && destOrigin) {
+        if (destOrigin === refererOrigin) {
+            headersToInject['sec-fetch-site'] = 'same-origin';
+        } else if (getRefererOriginForHost(destOrigin) === refererOrigin) {
+            headersToInject['sec-fetch-site'] = 'same-site';
+        }
     }
 
+    const origAccept = req.headers['accept'];
+    const origContentType = req.headers['content-type'];
     for (const [name, value] of Object.entries(headersToInject)) {
         const lower = name.toLowerCase();
         req.headers[lower] = value;
+    }
+    // Preserve client-set Accept/Content-Type (e.g. text/event-stream for SSE, multipart for uploads)
+    if (origAccept && origAccept !== '*/*' && origAccept !== 'text/html, */*; q=0.01') {
+        req.headers['accept'] = origAccept;
+    }
+    if (origContentType) {
+        req.headers['content-type'] = origContentType;
     }
 
     // Anti-proxy bypass: spoof Referer/Origin so Poki CDN and similar accept requests
@@ -517,9 +551,13 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
         const looksLikeFont = /\.(woff2?|ttf|otf|eot)(\?|$)/.test(pathAndQuery);
 
         if (looksLikeApi) {
-            req.headers['x-requested-with'] = 'XMLHttpRequest';
+            const curAccept = (req.headers['accept'] || '').toLowerCase();
+            const isSSE = curAccept.includes('text/event-stream');
+            if (!isSSE) {
+                req.headers['x-requested-with'] = 'XMLHttpRequest';
+            }
             req.headers['sec-fetch-dest'] = 'empty';
-            if (accept.includes('*/*') && !accept.includes('application/json')) {
+            if (!isSSE && curAccept.includes('*/*') && !curAccept.includes('application/json')) {
                 req.headers['accept'] = 'application/json, text/plain, */*';
             }
         } else if (looksLikeImage) {

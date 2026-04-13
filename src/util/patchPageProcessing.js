@@ -199,6 +199,10 @@ const LITE_DOMAINS_SUFFIX = [
     '.aliyun.com',
     '.duckduckgo.com',
     '.qianwen.com',
+    '.tongyi.aliyun.com',
+    '.volccdn.com',
+    '.volces.com',
+    '.volcengine.com',
     '.itch.io',
     '.itch.zone',
 ];
@@ -325,7 +329,9 @@ if(typeof u==='string'){u=rw(u)}
 else if(u&&typeof u==='object'&&u.url){var uu=u.url;
 if(uu.indexOf(O)===0&&uu.indexOf(_OP+S+'/')!==0){uu=pxRel(uu.substring(O.length))}else{uu=rw(uu)}
 if(uu!==u.url)try{u=new Request(uu,u)}catch(e){}}
-return oF.call(this,u,o)};
+return oF.call(this,u,o).then(function(r){
+try{if(r.url&&r.url.indexOf(_SP)===0){Object.defineProperty(r,'url',{value:r.url.substring(_SP.length),configurable:true})}}catch(e){}
+return r})};
 var XP=XMLHttpRequest.prototype,oX=XP.open;
 XP.open=function(m,u){if(typeof u==='string'){arguments[1]=rw(u)}return oX.apply(this,arguments)};
 if(typeof EventSource!=='undefined'){var oE=EventSource;
