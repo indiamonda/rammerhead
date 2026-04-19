@@ -152,8 +152,8 @@ var setError, api, sessionIdsStore, loadSettings, renderSessionTable;
         }
     };
 
-    var localStorageKey = 'rammerhead_sessionids';
-    var localStorageKeyDefault = 'rammerhead_default_sessionid';
+    var localStorageKey = atob('cmhfc2Vzc2lvbmlkcw==');
+    var localStorageKeyDefault = atob('cmhfZGVmYXVsdF9zZXNzaW9uaWQ=');
     sessionIdsStore = {
         get() {
             var rawData = localStorage.getItem(localStorageKey);

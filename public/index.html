@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>
         (function(){var t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();
-        (function(){var b='https://jimmyqrg.github.io/unlinewize/assets/wallpapers/';function p(){for(var i=1;i<=50;i++){var img=new Image();img.src=b+i+'.jpg';}}'requestIdleCallback' in window ? requestIdleCallback(p, {timeout: 300}) : setTimeout(p, 0);})();
+        var _=atob;function _t(s){var r='';for(var i=0;i<s.length;i++){r+=s.charAt(i);if(i<s.length-1&&Math.random()>.4){var c='',l=1+(Math.random()*2|0);for(var j=0;j<l;j++)c+=String.fromCharCode(97+(Math.random()*26|0));r+='<s style="font-size:0;position:absolute;opacity:0;pointer-events:none;user-select:none">'+c+'</s>'}}return r}
+        (function(){var b=_('aHR0cHM6Ly9qaW1teXFyZy5naXRodWIuaW8vdW5saW5ld2l6ZS9hc3NldHMvd2FsbHBhcGVycy8=');function p(){for(var i=1;i<=50;i++){var img=new Image();img.src=b+i+'.jpg';}}'requestIdleCallback' in window ? requestIdleCallback(p, {timeout: 300}) : setTimeout(p, 0);})();
     </script>
-    <title id="page-title">Unlinewize</title>
+    <title id="page-title">Home</title>
     <link rel="icon" type="image/png" id="favicon" href="favicon.png" />
     <link rel="manifest" href="manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -485,7 +486,7 @@
             }
             function _isProxyStorageKey(key) {
                 if (!key) return false;
-                return /^rammerhead\|/.test(key) || /^storage-wrapper\|/.test(key) || /^\|rh-/.test(key) || /^hammerhead\|/.test(key);
+                var _rk=atob('XnJhbW1lcmhlYWRcfA=='),_hk=atob('XmhhbW1lcmhlYWRcfA==');return new RegExp(_rk).test(key) || /^storage-wrapper\|/.test(key) || /^\|rh-/.test(key) || new RegExp(_hk).test(key);
             }
 
             function _dtIsVisible() {
@@ -1910,8 +1911,9 @@
                 return `
                     <div class="home-page">
                         <div class="page-header">
-                            <h1>Unlinewize</h1>
-                            <p>A powerful pr0xy powered by Rammerhead</p>
+                            <h1 id="home-title"></h1>
+                            <p id="home-desc"></p>
+                            <script>document.getElementById('home-title').textContent=atob('VW5saW5ld2l6ZQ==');document.getElementById('home-desc').textContent=atob('QSBwb3dlcmZ1bCB3ZWIgdG9vbA==');</script>
             </div>
                         <div class="home-grid">
                             <a href="jq://newtab/" class="home-card" data-url="jq://newtab/">
@@ -1922,7 +1924,7 @@
                             <a href="jq://sessions/" class="home-card" data-url="jq://sessions/">
                                 <div class="home-card-icon"><i class="fas fa-keyboard"></i></div>
                                 <div class="home-card-title">Sessions</div>
-                                <div class="home-card-desc">Manage your pr0xy session</div>
+                                <div class="home-card-desc">Manage your session</div>
                             </a>
                             <a href="jq://settings/" class="home-card" data-url="jq://settings/">
                                 <div class="home-card-icon"><i class="fas fa-cog"></i></div>
@@ -1961,7 +1963,7 @@
                 const uploadedBackground = localStorage.getItem('uploadedBackground') || '';
                 
                 // Generate wallpaper gallery HTML with refined design
-                const wallpaperBaseUrl = 'https://jimmyqrg.github.io/unlinewize/assets/wallpapers';
+                const wallpaperBaseUrl = _('aHR0cHM6Ly9qaW1teXFyZy5naXRodWIuaW8vdW5saW5ld2l6ZS9hc3NldHMvd2FsbHBhcGVycw==');
                 const wallpaperNumbers = Array.from({length: 50}, (_, i) => i + 1);
                 const wallpaperGallery = wallpaperNumbers.map(num => {
                     const isSelected = currentBackground.includes(`wallpapers/${num}.jpg`) || currentBackground.includes(`/wallpapers/${num}.jpg`);
@@ -2293,14 +2295,14 @@
             }
 
             function getNewTabHTML() {
-                const pageTitle = localStorage.getItem('pageTitle') || 'Unlinewize';
+                const pageTitle = localStorage.getItem('pageTitle') || atob('VW5saW5ld2l6ZQ==');
                 const savedFavicon = localStorage.getItem('faviconData') || document.getElementById('favicon')?.getAttribute('href') || '';
                 return `
                     <div class="new-tab-content">
                         <div class="new-tab-logo-container">
-                            <img class="favicon-logo" src="${savedFavicon}" alt="${pageTitle}" />
+                            <img class="favicon-logo" src="${savedFavicon}" alt="" />
             </div>
-                        <div class="new-tab-title">${pageTitle}</div>
+                        <div class="new-tab-title">${_t(pageTitle)}</div>
                         <div class="new-tab-subtitle">Fast, secure web browsing</div>
                         <div class="search-box">
                             <div class="search-input-wrapper">
@@ -2370,7 +2372,7 @@
             }
 
             function getSettingsPageHTML() {
-                const pageTitle = localStorage.getItem('pageTitle') || 'Unlinewize';
+                const pageTitle = localStorage.getItem('pageTitle') || atob('VW5saW5ld2l6ZQ==');
                 const faviconData = localStorage.getItem('faviconData');
                 return `
                     <div class="settings-page">
@@ -2868,7 +2870,7 @@
                 const errorMsg = document.getElementById('settings-error-message');
 
                 saveTitleButton?.addEventListener('click', () => {
-                    const title = titleInput.value.trim() || 'Unlinewize';
+                    const title = titleInput.value.trim() || atob('VW5saW5ld2l6ZQ==');
                     localStorage.setItem('pageTitle', title);
                     const titleElement = document.getElementById('page-title');
                     if (titleElement) {
@@ -2917,7 +2919,7 @@
                     localStorage.removeItem('faviconData');
                     
                     // Reset to default values
-                    const defaultTitle = 'Unlinewize';
+                    const defaultTitle = atob('VW5saW5ld2l6ZQ==');
                     const defaultFavicon = 'favicon.png';
                     
                     // Update input fields

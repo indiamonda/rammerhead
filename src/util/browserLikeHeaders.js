@@ -282,9 +282,7 @@ const CDN_REFERER_MAP = [
     [/\.?volccdn\.com$/i, 'https://www.doubao.com'],
     [/\.?volces\.com$/i, 'https://www.doubao.com'],
     [/\.?volcengine\.com$/i, 'https://www.doubao.com'],
-    [/\.?byteimg\.com$/i, 'https://www.doubao.com'],
     [/\.?ibytedtos\.com$/i, 'https://www.doubao.com'],
-    [/\.?bytedance\.com$/i, 'https://www.doubao.com'],
     // Qianwen (Alibaba AI)
     [/\.?qianwen\.com$/i, 'https://qianwen.com'],
     [/\.?tongyi\.aliyun\.com$/i, 'https://qianwen.com'],

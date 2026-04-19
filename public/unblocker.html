@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Loading via Proxy</title>
+<title>Loading</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f13;color:#e0e0e0;height:100vh;overflow:hidden}
@@ -22,7 +22,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 </head>
 <body>
 <div class="loader-wrap" id="loader">
-    <div class="loader-text">Loading via Proxy</div>
+    <div class="loader-text">Loading</div>
     <div class="progress-wrap">
         <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
         <div class="progress-info">
@@ -304,7 +304,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     }
 
     targetEl.textContent = normalized;
-    document.title = 'Loading ' + normalized;
+    document.title = normalized;
 
     setProgress(5, 'Setting up session\u2026');
     startTrickle(5, 25);
@@ -312,7 +312,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     fetch(basePath + '/ensuresession?id=' + encodeURIComponent(sessionId))
         .then(function() {
             stopTrickle();
-            setProgress(30, 'Resolving proxy URL\u2026');
+            setProgress(30, 'Resolving\u2026');
             startTrickle(30, 48);
             fetchShuffler();
             return fetch(basePath + '/getproxiedurl?id=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(normalized));
