@@ -68,12 +68,13 @@ const IFRAME_PROXY = [
       'try{el.src=URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}))}catch(e){}',
     '}',
     'function fixIframe(el){',
-      'if(!el||el.tagName!=="IFRAME"||el.__rhIf)return;',
-      'var src=el.getAttribute("src")||"";',
-      'if(!isAbs(src))return;',
-      'el.__rhIf=1;',
-      'if(!getHH()){var p=proxyUrl(src);if(p)try{el.setAttribute("src",p)}catch(e){}}',
-      'var pu=proxyUrl(src);if(!pu)return;',
+    'if(!el||el.tagName!=="IFRAME"||el.__rhIf)return;',
+    'var src=el.getAttribute("src")||"";',
+    'if(!isAbs(src))return;',
+    'if(getCtx()&&src.indexOf(_pOrig)===0)return;',
+    'el.__rhIf=1;',
+    'if(!getHH()){var p=proxyUrl(src);if(p)try{el.setAttribute("src",p)}catch(e){}}',
+    'var pu=proxyUrl(src);if(!pu)return;',
       'el.addEventListener("error",function(){',
         'fetch(pu,{credentials:"include"}).then(function(r){',
           'return r.ok?r.text():Promise.reject()}).then(function(h){blobLoad(el,h)',
@@ -98,7 +99,7 @@ const IFRAME_PROXY = [
               'else try{var f=n.getElementsByTagName("iframe");',
               'for(var k=0;k<f.length;k++)fixIframe(f[k])}catch(e){}}',
           '}else if(m.type==="attributes"&&m.target&&m.target.tagName==="IFRAME"){',
-            'm.target.__rhIf=0;fixIframe(m.target)}',
+            'var _ns=m.target.getAttribute("src")||"";if(isAbs(_ns)&&(!getCtx()||_ns.indexOf(_pOrig)!==0)){m.target.__rhIf=0;fixIframe(m.target)}}',
         '}',
       '}).observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:["src"]})}catch(e){}',
     '}',
@@ -138,7 +139,7 @@ const CF_SKIP_RE = new RegExp([
     'captcha\\.js',
 ].join('|'), 'i');
 // Domains using "lite" page processing — skip AST rewriting for their scripts too.
-const LITE_DOMAIN_RE = /chatgpt\.com|chat\.openai\.com|oaistatic\.com|claude\.ai|claudeusercontent\.com|poki\.com|poki-cdn\.com/i;
+const LITE_DOMAIN_RE = /chatgpt\.com|chat\.openai\.com|oaistatic\.com|oaiusercontent\.com|claude\.ai|claudeusercontent\.com|anthropic\.com|poki\.com|poki-cdn\.com|bilibili\.com|bilibili\.cn|hdslb\.com|bilivideo|biliapi|szbdyd\.com|discord\.com|discordapp\.com|discord\.gg|github\.com|githubassets\.com|githubusercontent\.com|doubao\.com|volccdn\.com|volces\.com|volcengine\.com|ibytedtos\.com|duckduckgo\.com|qianwen\.com|tongyi\.aliyun\.com|alicdn\.com|itch\.io|itch\.zone|hwcdn\.net|gimkit\.com/i;
 
 const scriptProcessor = require('testcafe-hammerhead/lib/processing/resources/script');
 const _origShouldProcess = scriptProcessor.shouldProcessResource.bind(scriptProcessor);

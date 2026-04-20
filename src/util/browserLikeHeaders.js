@@ -293,6 +293,8 @@ const CDN_REFERER_MAP = [
     [/\.?itch\.io$/i, 'https://itch.io'],
     [/\.?itch\.zone$/i, 'https://itch.io'],
     [/\.?hwcdn\.net$/i, 'https://itch.io'],
+    // Gimkit
+    [/\.?gimkit\.com$/i, 'https://www.gimkit.com'],
 ];
 
 // Match both unshuffled (https://...) and shuffled (_rhs...) proxy URLs (indicator is _rhs, no tilde).
@@ -435,6 +437,7 @@ function getRefererOriginFallback(url, referer) {
     if (/doubao\.com|volccdn|volces\.com|volcengine/.test(combined)) return 'https://www.doubao.com';
     if (/qianwen\.com|tongyi\.aliyun/.test(combined)) return 'https://qianwen.com';
     if (/itch\.io|itch\.zone|hwcdn\.net/.test(combined)) return 'https://itch.io';
+    if (/gimkit\.com/.test(combined)) return 'https://www.gimkit.com';
     return null;
 }
 
@@ -493,7 +496,7 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     } catch (_) {}
 
     // Sites that expect same-origin sec-fetch-site for document requests
-    const SAME_ORIGIN_DOC_RE = /\.?bilibili\.(com|cn)$|\.?twitter\.com$|\.?x\.com$|\.?instagram\.com$|\.?facebook\.com$|\.?tiktok\.com$|\.?reddit\.com$|\.?netflix\.com$|\.?discord\.com$|\.?amazon\.(com|co\.\w+)$|\.?linkedin\.com$|\.?canva\.com$|\.?slack\.com$|\.?gitlab\.com$|\.?figma\.com$|\.?youtube\.com$|\.?docs\.google\.com$|\.?vercel\.com$|\.?netlify\.com$|\.?chatgpt\.com$|\.?openai\.com$|\.?deepseek\.com$|\.?claude\.ai$|\.?anthropic\.com$|\.?gemini\.google\.com$|\.?doubao\.com$|\.?qianwen\.com$|\.?poki\.com$/i;
+    const SAME_ORIGIN_DOC_RE = /\.?bilibili\.(com|cn)$|\.?twitter\.com$|\.?x\.com$|\.?instagram\.com$|\.?facebook\.com$|\.?tiktok\.com$|\.?reddit\.com$|\.?netflix\.com$|\.?discord\.com$|\.?amazon\.(com|co\.\w+)$|\.?linkedin\.com$|\.?canva\.com$|\.?slack\.com$|\.?gitlab\.com$|\.?figma\.com$|\.?youtube\.com$|\.?docs\.google\.com$|\.?vercel\.com$|\.?netlify\.com$|\.?chatgpt\.com$|\.?openai\.com$|\.?deepseek\.com$|\.?claude\.ai$|\.?anthropic\.com$|\.?gemini\.google\.com$|\.?doubao\.com$|\.?qianwen\.com$|\.?poki\.com$|\.?gimkit\.com$/i;
     const docOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
     if (isDoc && docOrigin) {
         try {

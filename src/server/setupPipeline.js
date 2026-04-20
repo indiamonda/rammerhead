@@ -367,32 +367,64 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
 
         const targetUrl = info.origin + url;
         const dest = (req.headers['sec-fetch-dest'] || '').toLowerCase();
-
-        // For sub-resources, fetch directly from origin and serve.
-        // This bypasses Hammerhead entirely — more reliable for sites in "lite" mode.
-        if (dest === 'script' || dest === 'style' || dest === 'worker' || dest === 'image' ||
+        const mode = (req.headers['sec-fetch-mode'] || '').toLowerCase();
+        const pathLower = url.split('?')[0].toLowerCase();
+        const isSubResource = dest === 'script' || dest === 'style' || dest === 'worker' || dest === 'image' ||
             dest === 'font' || dest === 'video' || dest === 'audio' || dest === 'track' ||
-            dest === 'manifest' || dest === 'sharedworker') {
-            rawFetch(targetUrl, (err, status, headers, body) => {
-                if (res.headersSent || res.writableEnded) return;
-                if (err) {
-                    devErr('rescue-fetch ' + targetUrl, err);
-                    try { res.writeHead(502); res.end('Proxy error'); } catch (_) {}
-                    return;
-                }
-                const outHeaders = {
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                };
-                if (headers['content-type']) outHeaders['Content-Type'] = headers['content-type'];
-                if (headers['cache-control']) outHeaders['Cache-Control'] = headers['cache-control'];
-                if (headers['etag']) outHeaders['ETag'] = headers['etag'];
-                compressAndSend(req, res, status || 200, outHeaders, body);
-            });
+            dest === 'manifest' || dest === 'sharedworker';
+        const isApiOrFetch = dest === 'empty' || mode === 'cors' || mode === 'no-cors';
+        const looksLikeAsset = /\.(js|mjs|css|json|woff2?|ttf|otf|eot|png|jpe?g|gif|webp|avif|svg|ico|wasm|mp[34]|webm|ogg|map)(\?|$)/.test(pathLower);
+
+        // For sub-resources, API/fetch calls, and asset-like URLs, fetch directly from origin.
+        // This bypasses Hammerhead entirely — more reliable for sites in "lite" mode.
+        if (isSubResource || isApiOrFetch || looksLikeAsset) {
+            const fetchMethod = req.method || 'GET';
+            function doRescueFetch(body) {
+                const extraHeaders = {};
+                if (req.headers['content-type']) extraHeaders['Content-Type'] = req.headers['content-type'];
+                if (req.headers['accept']) extraHeaders['Accept'] = req.headers['accept'];
+                if (req.headers['authorization']) extraHeaders['Authorization'] = req.headers['authorization'];
+                rawFetch(targetUrl, (err, status, headers, respBody) => {
+                    if (res.headersSent || res.writableEnded) return;
+                    if (err) {
+                        devErr('rescue-fetch ' + targetUrl, err);
+                        try { res.writeHead(502); res.end('Proxy error'); } catch (_) {}
+                        return;
+                    }
+                    const outHeaders = {
+                        'Access-Control-Allow-Origin': req.headers['origin'] || '*',
+                        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+                        'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] || '*',
+                        'Access-Control-Allow-Credentials': 'true',
+                    };
+                    if (headers['content-type']) outHeaders['Content-Type'] = headers['content-type'];
+                    if (headers['cache-control']) outHeaders['Cache-Control'] = headers['cache-control'];
+                    if (headers['etag']) outHeaders['ETag'] = headers['etag'];
+                    compressAndSend(req, res, status || 200, outHeaders, respBody);
+                }, 0, { method: fetchMethod, body: body || undefined, extraHeaders });
+            }
+            if (req.method === 'OPTIONS') {
+                res.writeHead(204, {
+                    'Access-Control-Allow-Origin': req.headers['origin'] || '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+                    'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] || '*',
+                    'Access-Control-Allow-Credentials': 'true',
+                    'Access-Control-Max-Age': '86400',
+                });
+                res.end();
+                return true;
+            }
+            if (fetchMethod !== 'GET' && fetchMethod !== 'HEAD') {
+                const chunks = [];
+                req.on('data', c => chunks.push(c));
+                req.on('end', () => doRescueFetch(Buffer.concat(chunks)));
+            } else {
+                doRescueFetch();
+            }
             return true;
         }
 
-        // For navigation/fetch/XHR, rewrite URL for Hammerhead
+        // For navigation, rewrite URL for Hammerhead
         const proxiedUrl = `/${info.sessionId}/${info.origin}${url}`;
         req.url = proxiedUrl;
         return false;

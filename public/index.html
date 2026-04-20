@@ -137,6 +137,9 @@
             <div class="menu-item" data-action="devtools">
                 <span class="material-icons">code</span> Developer Tools
             </div>
+            <div class="menu-item" data-action="fullscreen-page">
+                <span class="material-icons">fullscreen</span> Fullscreen Page
+            </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="theme">
                 <span class="material-icons" id="theme-icon">dark_mode</span> <span id="theme-text">Dark Mode</span>
@@ -588,6 +591,19 @@
             function _getActiveIframe() {
                 const el = document.getElementById(`content-${activeTabId}`);
                 return el?.querySelector('iframe');
+            }
+            function enterFullscreenPage() {
+                const iframe = _getActiveIframe();
+                if (!iframe) return;
+                if (iframe.requestFullscreen) {
+                    iframe.requestFullscreen();
+                } else if (iframe.webkitRequestFullscreen) {
+                    iframe.webkitRequestFullscreen();
+                } else if (iframe.mozRequestFullScreen) {
+                    iframe.mozRequestFullScreen();
+                } else if (iframe.msRequestFullscreen) {
+                    iframe.msRequestFullscreen();
+                }
             }
             function renderStorageTab() {
                 const display = document.getElementById('storage-display');
@@ -3896,6 +3912,9 @@
                                 break;
                             case 'devtools':
                                 toggleDevTools();
+                                break;
+                            case 'fullscreen-page':
+                                enterFullscreenPage();
                                 break;
                             case 'theme':
                                 const currentTheme = getTheme();

@@ -41,6 +41,7 @@ const ANTIDETECT_SCRIPT = [
     'try{Object.defineProperty(window,"%hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
     'try{Object.defineProperty(window,"%is-hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
     'try{if(typeof crypto!=="undefined"&&!crypto.randomUUID){crypto.randomUUID=function(){var b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=(b[6]&0x0f)|0x40;b[8]=(b[8]&0x3f)|0x80;var h="";for(var i=0;i<16;i++){h+=(b[i]<16?"0":"")+b[i].toString(16);if(i===3||i===5||i===7||i===9)h+="-"}return h}}}catch(e){}',
+    'try{if(!window.__tcfapi){window.__tcfapi=function(cmd,ver,cb){if(typeof cb==="function"){cb({cmpId:0,cmpVersion:0,gdprApplies:false,tcfPolicyVersion:2,cmpStatus:"error",eventStatus:"cmpuishown",tcString:"",isServiceSpecific:true,purposeOneTreatment:false,publisherCC:"US"},false)}}}}catch(e){}',
     '})();</script>',
 ].join('\n');
 
@@ -185,26 +186,47 @@ const LITE_DOMAINS_EXACT = new Set([
     'github.com',
     'duckduckgo.com',
     'qianwen.com',
+    'gimkit.com',
 ]);
 const LITE_DOMAINS_SUFFIX = [
     '.chatgpt.com',
     '.openai.com',
+    '.oaistatic.com',
+    '.oaiusercontent.com',
     '.claude.ai',
+    '.anthropic.com',
+    '.claudeusercontent.com',
     '.poki.com',
+    '.poki-cdn.com',
     '.bilibili.com',
+    '.bilibili.cn',
+    '.hdslb.com',
+    '.bilivideo.com',
+    '.bilivideo.cn',
+    '.biliapi.net',
+    '.biliapi.com',
+    '.szbdyd.com',
     '.doubao.com',
     '.discord.com',
+    '.discordapp.com',
+    '.discord.gg',
     '.github.com',
     '.github.io',
+    '.githubassets.com',
+    '.githubusercontent.com',
     '.aliyun.com',
+    '.alicdn.com',
     '.duckduckgo.com',
     '.qianwen.com',
     '.tongyi.aliyun.com',
     '.volccdn.com',
     '.volces.com',
     '.volcengine.com',
+    '.ibytedtos.com',
     '.itch.io',
     '.itch.zone',
+    '.hwcdn.net',
+    '.gimkit.com',
 ];
 function _needsLiteProcessing(ctx) {
     if (!ctx || !ctx.dest) return false;
@@ -266,9 +288,9 @@ function _liteProcess(html, ctx, inject) {
             /(<script(?:[^>]*)>)([\s\S]*?)(<\/script>)/gi,
             (_m, open, body, close) => {
                 if (/type\s*=\s*["']application\/ld\+json["']/i.test(open)) return _m;
-                // Rewrite relative /cdn/ and /cdn-cgi/ paths in string literals
-                // (dynamic import() can't be intercepted by the bridge script)
-                body = body.replace(/(["'])(\/cdn(?:-cgi)?\/[^"']+)(["'])/g,
+                // Rewrite relative asset paths in string literals that dynamic import() or
+                // framework routers use (can't be intercepted by the bridge script)
+                body = body.replace(/(["'])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"']+)(["'])/g,
                     (_m2, q1, path, q2) => q1 + proxyPrefix + origin + path + q2);
                 // Rewrite import()/from/import statements in ALL scripts
                 body = body.replace(/(import\(\s*["'])(\/[^"']+)(["']\s*\))/g,
@@ -409,14 +431,14 @@ if(n!==a)_sSA.call(el,'srcset',n)}
 }catch(e){}}
 function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
 for(var i=0;i<els.length;i++)fixEl(els[i])}catch(e){}}
-var _pendQ=[],_pendRaf=0;
+var _pendQ=[],_pendRaf=0,_pendMax=500;
 function _flushPend(){_pendRaf=0;var t0=performance.now();
 while(_pendQ.length){var nd=_pendQ.shift();try{fixTree(nd)}catch(e){}if(performance.now()-t0>4)break}
 if(_pendQ.length)_pendRaf=requestAnimationFrame(_flushPend)}
 function startObs(){var r=document.documentElement;if(!r){document.addEventListener('DOMContentLoaded',startObs);return}
 fixTree(r);
 new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){var m=ml[i];
-if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++){var nd=m.addedNodes[j];if(nd.nodeType===1)_pendQ.push(nd)}}}
+if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++){var nd=m.addedNodes[j];if(nd.nodeType===1&&_pendQ.length<_pendMax)_pendQ.push(nd)}}}
 if(_pendQ.length&&!_pendRaf)_pendRaf=requestAnimationFrame(_flushPend);
 }).observe(r,{childList:true,subtree:true})}
 startObs();
