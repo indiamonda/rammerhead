@@ -597,16 +597,10 @@
             }
             function enterFullscreenPage() {
                 const iframe = _getActiveIframe();
-                if (!iframe) return;
-                if (iframe.requestFullscreen) {
-                    iframe.requestFullscreen();
-                } else if (iframe.webkitRequestFullscreen) {
-                    iframe.webkitRequestFullscreen();
-                } else if (iframe.mozRequestFullScreen) {
-                    iframe.mozRequestFullScreen();
-                } else if (iframe.msRequestFullscreen) {
-                    iframe.msRequestFullscreen();
-                }
+                const target = iframe || document.getElementById(`content-${activeTabId}`);
+                if (!target) return;
+                const fn = target.requestFullscreen || target.webkitRequestFullscreen || target.mozRequestFullScreen || target.msRequestFullscreen;
+                if (fn) fn.call(target);
             }
             function injectScript() {
                 const iframe = _getActiveIframe();
