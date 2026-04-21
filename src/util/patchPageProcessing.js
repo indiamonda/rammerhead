@@ -40,6 +40,7 @@ const ANTIDETECT_SCRIPT = [
     'try{Object.defineProperty(document,"referrer",{get:function(){return ""},configurable:true})}catch(e){}',
     'try{Object.defineProperty(window,"%hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
     'try{Object.defineProperty(window,"%is-hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
+    'try{if(window.top!==window.self){Object.defineProperty(window,"top",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"parent",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"frameElement",{get:function(){return null},configurable:true})}}catch(e){}',
     'try{if(typeof crypto!=="undefined"&&!crypto.randomUUID){crypto.randomUUID=function(){var b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=(b[6]&0x0f)|0x40;b[8]=(b[8]&0x3f)|0x80;var h="";for(var i=0;i<16;i++){h+=(b[i]<16?"0":"")+b[i].toString(16);if(i===3||i===5||i===7||i===9)h+="-"}return h}}}catch(e){}',
     'try{if(!window.__tcfapi){window.__tcfapi=function(cmd,ver,cb){if(typeof cb==="function"){cb({cmpId:0,cmpVersion:0,gdprApplies:false,tcfPolicyVersion:2,cmpStatus:"error",eventStatus:"cmpuishown",tcString:"",isServiceSpecific:true,purposeOneTreatment:false,publisherCC:"US"},false)}}}}catch(e){}',
     '})();</script>',
@@ -187,6 +188,7 @@ const LITE_DOMAINS_EXACT = new Set([
     'duckduckgo.com',
     'qianwen.com',
     'gimkit.com',
+    'turbowarp.org',
 ]);
 const LITE_DOMAINS_SUFFIX = [
     '.chatgpt.com',
@@ -227,6 +229,8 @@ const LITE_DOMAINS_SUFFIX = [
     '.itch.zone',
     '.hwcdn.net',
     '.gimkit.com',
+    '.turbowarp.org',
+    '.turbowarp.xyz',
 ];
 function _needsLiteProcessing(ctx) {
     if (!ctx || !ctx.dest) return false;

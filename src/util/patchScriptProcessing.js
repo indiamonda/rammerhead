@@ -139,7 +139,7 @@ const CF_SKIP_RE = new RegExp([
     'captcha\\.js',
 ].join('|'), 'i');
 // Domains using "lite" page processing — skip AST rewriting for their scripts too.
-const LITE_DOMAIN_RE = /chatgpt\.com|chat\.openai\.com|oaistatic\.com|oaiusercontent\.com|claude\.ai|claudeusercontent\.com|anthropic\.com|poki\.com|poki-cdn\.com|bilibili\.com|bilibili\.cn|hdslb\.com|bilivideo|biliapi|szbdyd\.com|discord\.com|discordapp\.com|discord\.gg|github\.com|githubassets\.com|githubusercontent\.com|doubao\.com|volccdn\.com|volces\.com|volcengine\.com|ibytedtos\.com|duckduckgo\.com|qianwen\.com|tongyi\.aliyun\.com|alicdn\.com|itch\.io|itch\.zone|hwcdn\.net|gimkit\.com/i;
+const LITE_DOMAIN_RE = /chatgpt\.com|chat\.openai\.com|oaistatic\.com|oaiusercontent\.com|claude\.ai|claudeusercontent\.com|anthropic\.com|poki\.com|poki-cdn\.com|bilibili\.com|bilibili\.cn|hdslb\.com|bilivideo|biliapi|szbdyd\.com|discord\.com|discordapp\.com|discord\.gg|github\.com|githubassets\.com|githubusercontent\.com|doubao\.com|volccdn\.com|volces\.com|volcengine\.com|ibytedtos\.com|duckduckgo\.com|qianwen\.com|tongyi\.aliyun\.com|alicdn\.com|itch\.io|itch\.zone|hwcdn\.net|gimkit\.com|turbowarp\.org|turbowarp\.xyz/i;
 
 const scriptProcessor = require('testcafe-hammerhead/lib/processing/resources/script');
 const _origShouldProcess = scriptProcessor.shouldProcessResource.bind(scriptProcessor);
