@@ -3,7 +3,7 @@
 
 ### Original rammerhead
 
-- Original Rammerhead by [binary-person](https://github.com/binary-person)
+- [Original Rammerhead](https://github.com/binary-person/rammerhead) by [binary-person](https://github.com/binary-person)
 - Based on [testcafe-hammerhead](https://github.com/DevExpress/testcafe-hammerhead)
 
 ### Fixes
