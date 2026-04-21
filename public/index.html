@@ -140,6 +140,9 @@
             <div class="menu-item" data-action="fullscreen-page">
                 <span class="material-icons">fullscreen</span> Fullscreen Page
             </div>
+            <div class="menu-item" data-action="inject-script">
+                <span class="material-icons">terminal</span> Insert Script
+            </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="theme">
                 <span class="material-icons" id="theme-icon">dark_mode</span> <span id="theme-text">Dark Mode</span>
@@ -603,6 +606,22 @@
                     iframe.mozRequestFullScreen();
                 } else if (iframe.msRequestFullscreen) {
                     iframe.msRequestFullscreen();
+                }
+            }
+            function injectScript() {
+                const iframe = _getActiveIframe();
+                if (!iframe) { alert('No active page to inject into.'); return; }
+                const input = prompt('Paste a javascript: bookmarklet or raw JS code:');
+                if (!input || !input.trim()) return;
+                let code = input.trim();
+                if (code.toLowerCase().startsWith('javascript:')) {
+                    code = code.slice('javascript:'.length);
+                    try { code = decodeURIComponent(code); } catch (_) {}
+                }
+                try {
+                    iframe.contentWindow.eval(code);
+                } catch (e) {
+                    alert('Script error: ' + e.message);
                 }
             }
             function renderStorageTab() {
@@ -3915,6 +3934,9 @@
                                 break;
                             case 'fullscreen-page':
                                 enterFullscreenPage();
+                                break;
+                            case 'inject-script':
+                                injectScript();
                                 break;
                             case 'theme':
                                 const currentTheme = getTheme();
