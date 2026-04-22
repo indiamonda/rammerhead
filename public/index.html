@@ -1806,6 +1806,55 @@
                         }
                     });
                 }
+                // Scope Ctrl/Cmd+A to the devtools "code box" the user is working in,
+                // rather than letting the shortcut select the whole page. Applies to
+                // the sources viewer, console log, elements tree, and any `.dt-scroll` pane.
+                const _DT_CODE_BOX_SELECTOR = [
+                    '#sources-viewer',
+                    '#console-log-area',
+                    '#elements-tree',
+                    '#elements-styles',
+                    '#storage-display',
+                    '#network-table-body',
+                    '.dt-scroll'
+                ].join(', ');
+                const dtPanel = document.getElementById('devtools-panel');
+                let _dtLastCodeBox = null;
+                dtPanel?.addEventListener('mousedown', (e) => {
+                    const box = e.target.closest(_DT_CODE_BOX_SELECTOR);
+                    if (box) _dtLastCodeBox = box;
+                }, true);
+                dtPanel?.addEventListener('keydown', (e) => {
+                    if (!(e.ctrlKey || e.metaKey) || (e.key !== 'a' && e.key !== 'A')) return;
+                    // Leave native behavior for real text inputs
+                    const tag = (e.target.tagName || '').toLowerCase();
+                    if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
+
+                    let container = null;
+                    const sel = window.getSelection && window.getSelection();
+                    const anchor = sel && sel.anchorNode;
+                    if (anchor) {
+                        const anchorEl = anchor.nodeType === 1 ? anchor : anchor.parentElement;
+                        container = anchorEl?.closest(_DT_CODE_BOX_SELECTOR);
+                    }
+                    if (!container && _dtLastCodeBox && dtPanel.contains(_dtLastCodeBox)) {
+                        container = _dtLastCodeBox;
+                    }
+                    // Fallback: use the active tab's content pane
+                    if (!container && _dtActiveTab) {
+                        container = document.getElementById('devtools-' + _dtActiveTab);
+                    }
+                    if (!container) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                        const range = document.createRange();
+                        range.selectNodeContents(container);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    } catch (_) {}
+                });
+
                 document.getElementById('console-filter-errors')?.addEventListener('change', renderConsoleTab);
                 document.getElementById('elements-refresh-btn')?.addEventListener('click', renderElementsTab);
                 document.getElementById('elements-search')?.addEventListener('input', (e) => {
