@@ -101,7 +101,8 @@ function printConsoleMessage(entry) {
 function buildBridgeScript(proxyOrigin, sessionId, targetUrl) {
     return `<script>(function(){
 var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sessionId)},D=${JSON.stringify(targetUrl || '')};
-try{document.cookie='__rh_sess='+S+'|'+D+';path=/'}catch(e){}
+// Clear any legacy __rh_sess cookie (removed to prevent cross-destination header leaks).
+try{document.cookie='__rh_sess=; Max-Age=0; path=/'}catch(e){}
 function px(u){return O+'/'+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
@@ -341,16 +342,12 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return null;
     }
 
-    function _extractFromCookie(req) {
-        const cookie = req.headers['cookie'] || '';
-        const m = cookie.match(/(?:^|;\s*)__rh_sess=([a-f0-9]{32}(?:![^\|]*)?)\|([^;]+)/i);
-        if (!m) return null;
-        const sessionId = m[1];
-        try {
-            const origin = new URL(decodeURIComponent(m[2])).origin;
-            return { sessionId, origin };
-        } catch (_) { return null; }
-    }
+    // NOTE: The previous `_extractFromCookie` fallback was removed. A path=/ cookie on a
+    // single proxy host cannot safely encode "which destination this request belongs to"
+    // because it's shared across all proxied sites. In practice it caused cross-destination
+    // header leaks (e.g. jmail.world's origin bleeding into chatgpt.com requests). The
+    // Referer header covers >99% of real subresource rescues; anything without a Referer
+    // that we can't identify via URL/Referer now gracefully 404s instead of being mis-routed.
 
     proxyServer.addToOnRequestPipeline((req, res) => {
         const url = req.url || '';
@@ -359,7 +356,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         if (url === '/' || url === '/rammerhead' || url === '/rammerhead/') return false;
 
         const referer = req.headers['referer'] || '';
-        const info = _extractOriginFromReferer(referer) || _extractFromCookie(req);
+        const info = _extractOriginFromReferer(referer);
         if (!info) {
             if (process.env.DEVELOPMENT) devErr('rescue-miss ' + url, 'ref=' + referer.substring(0, 80));
             return false;

@@ -40,7 +40,9 @@ const ANTIDETECT_SCRIPT = [
     'try{Object.defineProperty(document,"referrer",{get:function(){return ""},configurable:true})}catch(e){}',
     'try{Object.defineProperty(window,"%hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
     'try{Object.defineProperty(window,"%is-hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
-    'try{if(window.top!==window.self){Object.defineProperty(window,"top",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"parent",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"frameElement",{get:function(){return null},configurable:true})}}catch(e){}',
+    // Unconditional top/parent/self spoof so anti-iframe guards (TurboWarp, ad networks, etc.)
+    // see top === self === parent even when hammerhead\'s own wrapping is still settling.
+    'try{Object.defineProperty(window,"top",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"parent",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"frameElement",{get:function(){return null},configurable:true});}catch(e){}',
     'try{if(typeof crypto!=="undefined"&&!crypto.randomUUID){crypto.randomUUID=function(){var b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=(b[6]&0x0f)|0x40;b[8]=(b[8]&0x3f)|0x80;var h="";for(var i=0;i<16;i++){h+=(b[i]<16?"0":"")+b[i].toString(16);if(i===3||i===5||i===7||i===9)h+="-"}return h}}}catch(e){}',
     'try{if(!window.__tcfapi){window.__tcfapi=function(cmd,ver,cb){if(typeof cb==="function"){cb({cmpId:0,cmpVersion:0,gdprApplies:false,tcfPolicyVersion:2,cmpStatus:"error",eventStatus:"cmpuishown",tcString:"",isServiceSpecific:true,purposeOneTreatment:false,publisherCC:"US"},false)}}}}catch(e){}',
     '})();</script>',
@@ -315,7 +317,8 @@ function _liteProcess(html, ctx, inject) {
     const bridge = `<script>(function(){
 var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sid)},D=${JSON.stringify(destUrl)};
 var _OP=O+'/';var _oGA=Element.prototype.getAttribute;var _sSA=Element.prototype.setAttribute;
-try{document.cookie='__rh_sess='+S+'|'+D+';path=/'}catch(e){}
+// Clear any legacy __rh_sess cookie (removed to prevent cross-destination header leaks).
+try{document.cookie='__rh_sess=; Max-Age=0; path=/'}catch(e){}
 function px(u){return _OP+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
@@ -433,16 +436,28 @@ a=_oGA.call(el,'poster');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)_sSA.call(el
 a=_oGA.call(el,'srcset');if(a&&a.indexOf(_OP)!==0){n=a.replace(/((?:https?:)?\\/\\/[^\\s,]+)/gi,function(u){return rw(u)});
 if(n!==a)_sSA.call(el,'srcset',n)}
 }catch(e){}}
-function fixTree(n){fixEl(n);try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
+// Host-aware throttling: dense-SPA hosts (e.g. bilibili) add thousands of feed-card
+// subtrees per scroll. The deep querySelectorAll pass on every mutation is what makes
+// the page unresponsive; on those hosts we skip the descent and only fix the directly
+// added node(s). The setAttribute/property override above still catches late src/href
+// assignments on inner descendants when the site actually touches them.
+var _HEAVY_SPA=/(^|\\.)bilibili\\.(com|cn)$|(^|\\.)hdslb\\.com$|(^|\\.)doubao\\.com$|(^|\\.)qianwen\\.com$|(^|\\.)tongyi\\.aliyun\\.com$|(^|\\.)chatgpt\\.com$|(^|\\.)claude\\.ai$/i;
+var _SKIP_DEEP=false;try{_SKIP_DEEP=_HEAVY_SPA.test(location.hostname||'')}catch(e){}
+function fixTree(n){fixEl(n);if(_SKIP_DEEP)return;
+try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
 for(var i=0;i<els.length;i++)fixEl(els[i])}catch(e){}}
-var _pendQ=[],_pendRaf=0,_pendMax=500;
+var _pendQ=[],_pendRaf=0,_pendMax=_SKIP_DEEP?150:500,_pendSlice=_SKIP_DEEP?2:4;
 function _flushPend(){_pendRaf=0;var t0=performance.now();
-while(_pendQ.length){var nd=_pendQ.shift();try{fixTree(nd)}catch(e){}if(performance.now()-t0>4)break}
+while(_pendQ.length){var nd=_pendQ.shift();try{fixTree(nd)}catch(e){}if(performance.now()-t0>_pendSlice)break}
 if(_pendQ.length)_pendRaf=requestAnimationFrame(_flushPend)}
 function startObs(){var r=document.documentElement;if(!r){document.addEventListener('DOMContentLoaded',startObs);return}
 fixTree(r);
 new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){var m=ml[i];
-if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++){var nd=m.addedNodes[j];if(nd.nodeType===1&&_pendQ.length<_pendMax)_pendQ.push(nd)}}}
+if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++){var nd=m.addedNodes[j];
+if(nd.nodeType!==1||_pendQ.length>=_pendMax)continue;
+// On heavy SPAs, only enqueue nodes that have or could have rewritable attrs; skip pure text/plain div wrappers.
+if(_SKIP_DEEP){var tg=nd.tagName;if(tg!=='IFRAME'&&tg!=='SCRIPT'&&tg!=='IMG'&&tg!=='LINK'&&tg!=='A'&&tg!=='FORM'&&tg!=='SOURCE'&&tg!=='VIDEO'&&tg!=='AUDIO'&&tg!=='EMBED'&&tg!=='OBJECT'&&tg!=='AREA')continue}
+_pendQ.push(nd)}}}
 if(_pendQ.length&&!_pendRaf)_pendRaf=requestAnimationFrame(_flushPend);
 }).observe(r,{childList:true,subtree:true})}
 startObs();

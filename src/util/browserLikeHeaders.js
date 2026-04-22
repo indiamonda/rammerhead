@@ -31,6 +31,10 @@ const CHROME_SUB_ORDER = [
     'sec-ch-ua-arch', 'sec-ch-ua-bitness', 'sec-ch-ua-model',
     'sec-ch-ua-platform-version',
     'user-agent', 'accept', 'x-requested-with',
+    // Discord-specific headers used for anti-abuse fingerprinting. Keep them in a stable
+    // position (after x-requested-with, before referer) to match real Chrome behavior.
+    'x-super-properties', 'x-fingerprint', 'x-discord-locale', 'x-discord-timezone',
+    'x-debug-options', 'x-track',
     'referer', 'origin',
     'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest',
     'accept-encoding', 'accept-language', 'dnt',
@@ -446,6 +450,21 @@ function isProxiedRequest(req) {
     return PROXY_REQUEST_RE.test(req.url.split('?')[0]);
 }
 
+// hCaptcha + reCAPTCHA endpoints validate the Referer against the site-key binding and
+// are extremely sensitive to header mutation. We preserve whatever the client sent and
+// only enforce Chrome-like ordering at the end.
+const CAPTCHA_HOST_RE = /(^|\.)(hcaptcha\.com|newassets\.hcaptcha\.com|js\.hcaptcha\.com|imgs\.hcaptcha\.com|recaptcha\.net|google\.com\/recaptcha|gstatic\.com\/recaptcha)$/i;
+function _isCaptchaDest(destOrigin, url) {
+    try {
+        if (destOrigin) {
+            const host = new URL(destOrigin + '/').hostname;
+            if (CAPTCHA_HOST_RE.test(host)) return true;
+        }
+    } catch (_) {}
+    if (typeof url === 'string' && /\/recaptcha\//.test(url)) return true;
+    return false;
+}
+
 /**
  * @param {http.IncomingMessage} req
  * @param {boolean} isRoute - from pipeline; session proxy requests are false
@@ -530,8 +549,11 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
         req.headers['content-type'] = origContentType;
     }
 
-    // Anti-proxy bypass: spoof Referer/Origin so Poki CDN and similar accept requests
-    if (refererOrigin) {
+    // Anti-proxy bypass: spoof Referer/Origin so Poki CDN and similar accept requests.
+    // Skip for captcha endpoints — hCaptcha/reCAPTCHA validate Referer against the sitekey
+    // binding and will reject the widget if we rewrite an already-correct Referer.
+    const isCaptchaDest = _isCaptchaDest(destOrigin, req.url);
+    if (refererOrigin && !isCaptchaDest) {
         // Prefer full Referer URL (with path) when available — some CDNs validate page path
         const fullRefererUrl = !isDoc ? getRefererFullUrl(req.headers['referer'], sessionStore) : null;
         const ref = (fullRefererUrl && fullRefererUrl.startsWith(refererOrigin))
