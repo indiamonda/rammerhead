@@ -83,12 +83,24 @@ Deploy Unlinewize to cloud platforms for permanent, always-on access from anywhe
    - Do **not** add a Postgres or Redis database when prompted
    - Fly will use the included `Dockerfile` and `fly.toml`
 
-4. **Deploy updates later**:
+4. **Create the persistent volume for sessions (one-time)**:
+   ```bash
+   fly volumes create data --region iad --size 1
+   ```
+   Replace `iad` with whatever `primary_region` you chose in `fly.toml`. This
+   creates a 1 GB volume named `data` that gets mounted at `/data` inside the
+   container (see `[mounts]` in `fly.toml`). Without it, session files at
+   `/data/sessions` are stored on the ephemeral rootfs and are wiped on every
+   machine restart, which causes "Generate Link" (never-expire) URLs to stop
+   working at random. If you scale to multiple machines in the same region,
+   create one volume per machine.
+
+5. **Deploy updates later**:
    ```bash
    fly deploy
    ```
 
-5. **Access your proxy**:
+6. **Access your proxy**:
    - Your app will be at `https://rammerhead.fly.dev`
 
 **Pros:**

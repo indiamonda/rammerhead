@@ -17,6 +17,21 @@ primary_region = "iad"
   NODE_ENV = "production"
   PORT = "8080"
 
+# Persistent volume for session storage. The app writes session files to
+# /data/sessions (see src/config.js). Without this mount, session files
+# live on the ephemeral rootfs and are wiped every time the machine
+# restarts (deploy, health-check failure, infra maintenance, etc.), which
+# causes "Generate Link" never-expire URLs to silently stop working.
+#
+# One-time setup (per Fly region/machine):
+#   fly volumes create data --region iad --size 1
+# After the volume exists, `fly deploy` will auto-attach it on the next
+# machine boot. If you scale to multiple machines in the same region you
+# must create one volume per machine (fly volumes list).
+[mounts]
+  source = "data"
+  destination = "/data"
+
 [http_service]
   internal_port = 8080
   force_https = true
