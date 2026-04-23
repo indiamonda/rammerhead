@@ -13,7 +13,7 @@
 #### Major Fixes
 
 - Added a brand-new browser UI, easier to navigate, more customizations and settings
-- Removed speed limit and improved loading speed
+- Improved loading speed
 - Fixed bypass Cloudflare anti-bot protection
 
 #### Minor Improvements
