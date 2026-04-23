@@ -460,7 +460,9 @@ function _isCaptchaDest(destOrigin, url) {
             const host = new URL(destOrigin + '/').hostname;
             if (CAPTCHA_HOST_RE.test(host)) return true;
         }
-    } catch (_) {}
+    } catch (_) {
+        // URL parse may fail on malformed origins — treat as "not captcha".
+    }
     if (typeof url === 'string' && /\/recaptcha\//.test(url)) return true;
     return false;
 }
