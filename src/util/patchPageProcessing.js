@@ -45,6 +45,23 @@ const ANTIDETECT_SCRIPT = [
     'try{Object.defineProperty(window,"top",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"parent",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"frameElement",{get:function(){return null},configurable:true});}catch(e){}',
     'try{if(typeof crypto!=="undefined"&&!crypto.randomUUID){crypto.randomUUID=function(){var b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=(b[6]&0x0f)|0x40;b[8]=(b[8]&0x3f)|0x80;var h="";for(var i=0;i<16;i++){h+=(b[i]<16?"0":"")+b[i].toString(16);if(i===3||i===5||i===7||i===9)h+="-"}return h}}}catch(e){}',
     'try{if(!window.__tcfapi){window.__tcfapi=function(cmd,ver,cb){if(typeof cb==="function"){cb({cmpId:0,cmpVersion:0,gdprApplies:false,tcfPolicyVersion:2,cmpStatus:"error",eventStatus:"cmpuishown",tcString:"",isServiceSpecific:true,purposeOneTreatment:false,publisherCC:"US"},false)}}}}catch(e){}',
+    // Fix cross-origin postMessage for captcha widgets (hCaptcha, reCAPTCHA, Turnstile, etc.).
+    // In a proxy, both the parent page and the captcha iframe share the proxy origin, but the
+    // captcha JS calls parent.postMessage(token, "https://discord.com") with the *real* target
+    // origin. This silently fails because the parent\'s actual origin is the proxy host. We
+    // intercept postMessage and relax the targetOrigin to "*" when it would mismatch, while
+    // preserving same-origin calls as-is. This is safe because we already run in a proxy
+    // context where all frames share the same origin anyway.
+    'try{var _oPM=window.postMessage.bind(window);',
+    'window.postMessage=function(msg,tgt){',
+        'if(typeof tgt==="string"&&tgt!=="*"&&tgt.indexOf(location.protocol+"//"+location.host)!==0){tgt="*"}',
+        'return _oPM(msg,tgt)};',
+    'var _oPM2=Window.prototype.postMessage;',
+    'Window.prototype.postMessage=function(msg,tgt){',
+        'var self=this;try{var loc=self.location;var cur=loc.protocol+"//"+loc.host}catch(e){cur=""}',
+        'if(typeof tgt==="string"&&tgt!=="*"&&cur&&tgt.indexOf(cur)!==0){tgt="*"}',
+        'return _oPM2.call(self,msg,tgt)};',
+    '}catch(e){}',
     '})();</script>',
 ].join('\n');
 
@@ -191,6 +208,8 @@ const LITE_DOMAINS_EXACT = new Set([
     'qianwen.com',
     'gimkit.com',
     'turbowarp.org',
+    'chat.deepseek.com',
+    'deepseek.com',
 ]);
 const LITE_DOMAINS_SUFFIX = [
     '.chatgpt.com',
@@ -233,6 +252,8 @@ const LITE_DOMAINS_SUFFIX = [
     '.gimkit.com',
     '.turbowarp.org',
     '.turbowarp.xyz',
+    '.deepseek.com',
+    '.deepseek.ai',
 ];
 function _needsLiteProcessing(ctx) {
     if (!ctx || !ctx.dest) return false;
@@ -240,6 +261,35 @@ function _needsLiteProcessing(ctx) {
     if (LITE_DOMAINS_EXACT.has(host)) return true;
     for (let i = 0; i < LITE_DOMAINS_SUFFIX.length; i++) {
         if (host.endsWith(LITE_DOMAINS_SUFFIX[i])) return true;
+    }
+    return false;
+}
+
+// Generic bot-challenge detection. Full hammerhead AST rewriting breaks the
+// obfuscated JS in challenge pages (AWS WAF, Cloudflare, DataDome, Kasada, etc.).
+// When we detect a challenge response we force lite processing so the browser can
+// execute the challenge natively, get the token cookie, and reload.
+function _isChallengeResponse(html, ctx) {
+    if (!ctx || !ctx.destRes) return false;
+    const status = ctx.destRes.statusCode;
+    const headers = ctx.destRes.headers || {};
+
+    // AWS WAF: 202 + x-amzn-waf-action: challenge
+    if (status === 202 && (headers['x-amzn-waf-action'] || '').toLowerCase() === 'challenge') return true;
+
+    // Cloudflare: 403/503 with cf-mitigated header or challenge-platform in body
+    if ((status === 403 || status === 503) && headers['cf-mitigated'] === 'challenge') return true;
+
+    // DataDome: 403 with x-datadome header
+    if (status === 403 && headers['x-datadome']) return true;
+
+    // Generic fallback: short HTML with known challenge SDK markers
+    if (typeof html === 'string' && html.length < 60000) {
+        if (/AwsWafIntegration|aws-waf-token|awswaf\.com/i.test(html)) return true;
+        if (/challenge-platform.*?turnstile|turnstile.*?challenge-platform/i.test(html)) return true;
+        if (/DataDome.*?captcha|dd\.js/i.test(html)) return true;
+        if (/px-captcha|human-challenge|PerimeterX/i.test(html)) return true;
+        if (/Kasada.*?challenge|ips\.js/i.test(html)) return true;
     }
     return false;
 }
@@ -404,13 +454,24 @@ var oRS=history.replaceState.bind(history);history.replaceState=function(s,t,u){
 if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href}}return oRS(s,t,u)}}catch(e){}
 window.addEventListener('popstate',function(){try{du=new URL(_rl.pathname+(_rl.search||'')+(_rl.hash||''),DO+'/');window.__rhDestUrl=du.href}catch(e){}});
 try{var sSA=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){
-var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')&&typeof v==='string'){v=rw(v)}
+var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')&&typeof v==='string'){v=rw(v);v=_fixCaptchaParams(v)}
 return sSA.call(this,n,v)};
 var oGA=Element.prototype.getAttribute;Element.prototype.getAttribute=function(n){
 var v=oGA.call(this,n);if(v&&typeof v==='string'){var nl=n.toLowerCase();
 if(nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')return _stripProxy(v)}return v}}catch(e){}
 var _SP=_OP+S+'/';
 function _stripProxy(v){if(typeof v==='string'&&v.indexOf(_SP)===0)return v.substring(_SP.length);return v}
+var _captchaRe=/hcaptcha\\.com|recaptcha\\.net|google\\.com\\/recaptcha|gstatic\\.com\\/recaptcha|challenges\\.cloudflare\\.com|turnstile/i;
+var _proxyHost=_rl.hostname+((_rl.port&&_rl.port!=='443'&&_rl.port!=='80')?':'+_rl.port:'');
+var _proxyHostNP=_rl.hostname;
+function _fixCaptchaParams(v){
+if(typeof v!=='string'||!_captchaRe.test(v))return v;
+v=v.replace(/([?&#]host=|#host=)([^&#]*)/gi,function(_,pre,val){
+if(val===_proxyHost||val===_proxyHostNP)return pre+du.hostname;return _});
+v=v.replace(/([?&#]origin=|#origin=)([^&#]*)/gi,function(_,pre,val){
+var dv=decodeURIComponent(val);
+if(dv.indexOf(_rl.protocol+'//'+_proxyHost)===0||dv.indexOf(_rl.protocol+'//'+_proxyHostNP)===0)return pre+encodeURIComponent(DO);return _});
+return v}
 try{['src','href','action','poster'].forEach(function(attr){
 var els=[HTMLImageElement,HTMLScriptElement,HTMLLinkElement,HTMLAnchorElement,HTMLSourceElement,
 HTMLVideoElement,HTMLAudioElement,HTMLIFrameElement,HTMLEmbedElement,HTMLAreaElement];
@@ -418,7 +479,7 @@ els.forEach(function(E){if(!E||!E.prototype)return;
 var d=Object.getOwnPropertyDescriptor(E.prototype,attr);
 if(d&&d.set){var oSet=d.set,oGet=d.get;Object.defineProperty(E.prototype,attr,{configurable:true,enumerable:true,
 get:function(){return _stripProxy(oGet?oGet.call(this):undefined)},
-set:function(v){if(typeof v==='string')v=rw(v);oSet.call(this,v)}})}})
+set:function(v){if(typeof v==='string'){v=rw(v);v=_fixCaptchaParams(v)}oSet.call(this,v)}})}})
 })}catch(e){}
 try{var dCookie=Object.getOwnPropertyDescriptor(Document.prototype,'cookie');
 if(dCookie){var ogSet=dCookie.set,ogGet=dCookie.get;
@@ -496,6 +557,12 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
 
     // Use lite processing for complex SPAs that break under full instrumentation
     if (typeof html === 'string' && _needsLiteProcessing(ctx) && !isSrcdoc) {
+        return _liteProcess(html, ctx, inject);
+    }
+
+    // Bot-challenge pages (AWS WAF, Cloudflare, DataDome, etc.): use lite processing
+    // so the browser can execute the challenge JS natively and auto-solve.
+    if (typeof html === 'string' && _isChallengeResponse(html, ctx) && !isSrcdoc) {
         return _liteProcess(html, ctx, inject);
     }
 
