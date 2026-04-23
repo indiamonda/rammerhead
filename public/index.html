@@ -2424,7 +2424,7 @@
                                     subtree: true
                                 });
                             } catch (_) {}
-
+                            
                             // Run any user scripts configured to auto-inject on page load
                             try { _runAutoInjectScripts(iframe, tab.url || normalizedUrl); } catch (_) {}
 
@@ -4532,7 +4532,7 @@
                     }
                 } catch (_) {}
             }
-
+            
             // Menu and UI Event Handlers
             function initUIHandlers() {
                 // Menu button - use event delegation to handle dynamically
@@ -4786,7 +4786,7 @@
             // Initialize UI handlers
             initUIHandlers();
             refreshAdblockMenuLabel();
-
+            
             // Initialize navigation buttons (disabled until first tab is created)
             updateNavigationButtons(null);
             
