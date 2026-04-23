@@ -12,9 +12,10 @@
 
 #### Major Fixes
 
+- Fixed bypass Cloudflare anti-bot protection
 - Added a brand-new browser UI, easier to navigate, more customizations and settings
 - Improved loading speed
-- Fixed bypass Cloudflare anti-bot protection
+- Improved Adblocker
 
 #### Minor Improvements
 
