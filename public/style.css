@@ -1037,58 +1037,48 @@ body {
 
 /* ============================================
    Project Credits Footer
-   A frosted-glass pill ensures the credits stay legible on top of any
-   wallpaper or theme color, even when the text color happens to be close
-   to the background behind it.
+   A simple, always-visible credits strip. Links inherit the surrounding
+   text color and are underlined so they stay readable no matter what
+   background or theme the page is using.
    ============================================ */
 .jq-footer {
+    width: 100%;
+    box-sizing: border-box;
     text-align: center;
-    padding: 28px 16px 20px;
-    font-size: 12.5px;
+    padding: 24px 16px 20px;
+    margin-top: 32px;
+    border-top: 1px solid var(--color-border);
+    font-size: 13px;
     line-height: 1.7;
-    margin-top: 8px;
+    color: var(--color-text-primary);
 }
 .jq-footer-inner {
     display: inline-block;
-    max-width: min(680px, 92%);
-    padding: 8px 18px;
-    border-radius: 999px;
-    color: var(--color-text-secondary);
-    background: var(--color-bg-primary);
-    border: 1px solid var(--color-border);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.05);
+    max-width: min(720px, 94%);
+    color: inherit;
     white-space: normal;
     word-spacing: 0.02em;
 }
-[data-theme="dark"] .jq-footer-inner {
-    background: var(--color-bg-secondary);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 4px 14px rgba(0, 0, 0, 0.24);
-}
-@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-    .jq-footer-inner {
-        background: rgba(255, 255, 255, 0.72);
-        -webkit-backdrop-filter: saturate(160%) blur(10px);
-        backdrop-filter: saturate(160%) blur(10px);
-    }
-    [data-theme="dark"] .jq-footer-inner {
-        background: rgba(32, 33, 36, 0.62);
-    }
-}
-.jq-footer-inner a {
-    color: var(--color-primary);
-    text-decoration: none;
-    font-weight: 500;
-}
-.jq-footer-inner a:hover {
-    text-decoration: underline;
-}
 .jq-footer-inner strong {
     font-weight: 600;
-    color: var(--color-text-primary);
+    color: inherit;
+}
+.jq-footer-inner a,
+.jq-footer-inner a:visited {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-weight: inherit;
+}
+.jq-footer-inner a:hover,
+.jq-footer-inner a:focus {
+    color: inherit;
+    text-decoration: underline;
+    opacity: 0.8;
 }
 .jq-footer-sep {
-    margin: 0 6px;
-    opacity: 0.55;
+    margin: 0 8px;
+    opacity: 0.6;
     user-select: none;
 }
 

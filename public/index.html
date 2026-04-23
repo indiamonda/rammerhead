@@ -144,6 +144,9 @@
             <div class="menu-item" data-action="inject-script">
                 <span class="material-icons">terminal</span> Insert Script
             </div>
+            <div class="menu-item" data-action="toggle-adblock" id="menu-adblock-item">
+                <span class="material-icons" id="menu-adblock-icon">block</span> <span id="menu-adblock-label">Turn Adblocker Off</span>
+            </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="theme">
                 <span class="material-icons" id="theme-icon">dark_mode</span> <span id="theme-text">Dark Mode</span>
@@ -4486,7 +4489,50 @@
                     }
                 }
             };
-            
+
+            // Ad Blocker preference helpers — default ON. The label in the 3-dots
+            // menu flips between "Turn Adblocker Off" (when on) and "Turn Adblocker On"
+            // (when off) so a single click always moves the setting to the opposite state.
+            function isAdblockerEnabled() {
+                try {
+                    const v = localStorage.getItem('adBlockerEnabled');
+                    return v !== '0';
+                } catch (_) { return true; }
+            }
+            function refreshAdblockMenuLabel() {
+                const label = document.getElementById('menu-adblock-label');
+                const icon = document.getElementById('menu-adblock-icon');
+                if (!label) return;
+                const on = isAdblockerEnabled();
+                label.textContent = on ? 'Turn Adblocker Off' : 'Turn Adblocker On';
+                if (icon) icon.textContent = on ? 'block' : 'block';
+            }
+            function toggleAdblockerPref() {
+                const next = !isAdblockerEnabled();
+                try { localStorage.setItem('adBlockerEnabled', next ? '1' : '0'); } catch (_) {}
+                document.cookie = '__rh_ab=' + (next ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
+                refreshAdblockMenuLabel();
+                // Keep the Settings page toggle in sync if it's currently rendered
+                const settingsToggle = document.getElementById('settings-adblock-toggle');
+                if (settingsToggle) {
+                    settingsToggle.checked = next;
+                    const slider = settingsToggle.parentElement && settingsToggle.parentElement.querySelector('.slider');
+                    const knob = settingsToggle.parentElement && settingsToggle.parentElement.querySelector('.knob');
+                    if (slider) slider.style.background = next ? 'var(--color-accent, #1976d2)' : '#ccc';
+                    if (knob) knob.style.left = next ? '26px' : '2px';
+                    const status = document.getElementById('settings-adblock-status');
+                    if (status) status.textContent = next ? 'Enabled' : 'Disabled';
+                }
+                // Changes only take effect on the next page load — reload the active tab
+                // so the user immediately sees the new behaviour.
+                try {
+                    const active = tabs.find(t => t.id === activeTabId);
+                    if (active && active.iframe) {
+                        try { active.iframe.contentWindow.location.reload(); } catch (_) { active.iframe.src = active.iframe.src; }
+                    }
+                } catch (_) {}
+            }
+
             // Menu and UI Event Handlers
             function initUIHandlers() {
                 // Menu button - use event delegation to handle dynamically
@@ -4502,7 +4548,7 @@
                             if (isVisible) {
                                 menuDropdown.style.display = 'none';
                             } else {
-                                // Position dropdown relative to button
+                                refreshAdblockMenuLabel();
                                 const rect = menuButton.getBoundingClientRect();
                                 menuDropdown.style.top = (rect.bottom + 4) + 'px';
                                 menuDropdown.style.right = (window.innerWidth - rect.right) + 'px';
@@ -4544,6 +4590,9 @@
                                 break;
                             case 'inject-script':
                                 injectScript();
+                                break;
+                            case 'toggle-adblock':
+                                toggleAdblockerPref();
                                 break;
                             case 'theme':
                                 const currentTheme = getTheme();
@@ -4736,7 +4785,8 @@
             
             // Initialize UI handlers
             initUIHandlers();
-            
+            refreshAdblockMenuLabel();
+
             // Initialize navigation buttons (disabled until first tab is created)
             updateNavigationButtons(null);
             

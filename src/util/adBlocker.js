@@ -124,6 +124,62 @@ const AD_DOMAINS_EXACT = new Set([
     'vungle.com', 'api.vungle.com',
     'applovin.com', 'ms.applovin.com',
     'onclckds.com', 'clkads.com',
+    // Social-network pixels / retargeting (not the main domains, just their tracking endpoints)
+    'snap.licdn.com', 'px.ads.linkedin.com',
+    'ct.pinterest.com', 'log.pinterest.com', 'widgets.pinterest.com',
+    'analytics.tiktok.com', 'business-api.tiktok.com',
+    'sb.scorecardresearch.com', 'b.scorecardresearch.com',
+    'ads.reddit.com', 'events.reddit.com',
+    'static.ads-twitter.com',
+    // Video-ad SDKs (VAST/VPAID players embedded by publishers)
+    'imasdk.googleapis.com', 'pagead2.googleadservices.com',
+    'ima3.js', 'ads.youtube.com',
+    'cdn.spotxchange.com', 'js.spotx.tv',
+    'aniview.com', 'player.aniview.com', 'track.aniview.com',
+    'brid.tv', 'cdn.brid.tv', 'services.brid.tv',
+    'unrulymedia.com', 'video.unrulymedia.com',
+    'teads.tv', 's8t.teads.tv', 'a.teads.tv',
+    'jwpsrv.com', 'analytics.jwpcdn.com',
+    // Comment/embed trackers that double as ad-scoring pixels
+    'disquscdn.com/count-data', 'links.services.disqus.com',
+    'spot.im', 'www.spot.im', 'static.spot.im', 'events.spot.im',
+    'apester.com', 'media.apester.com',
+    'jeeng.com', 'cdn.jeeng.com',
+    'shareaholic.com', 'cdn.shareaholic.com', 'launchpad.shareaholic.com',
+    'addthis.com', 's7.addthis.com', 'm.addthis.com',
+    'sharethis.com', 'w.sharethis.com', 'buttons.sharethis.com',
+    // Integral Ad Science / viewability pixels
+    'iasds01.com', 'static.iasds01.com', 'pixel.iasds01.com',
+    'adsafeprotected.com', 'dt.adsafeprotected.com',
+    // Session replay + marketing analytics (heavy trackers)
+    'snowplowanalytics.com', 'collector.snowplowanalytics.com',
+    'smartlook.com', 'rec.smartlook.com',
+    'luckyorange.com', 'cs.luckyorange.net',
+    'crazyegg.com', 'script.crazyegg.com',
+    'chartbeat.com', 'ping.chartbeat.net', 'static.chartbeat.com',
+    'parsely.com', 'cdn.parsely.com', 'srv.buysellads.com',
+    // Push-notification ad networks (browser-push malvertising)
+    'push-ads.net', 'pushhouse.com', 'pushuncle.com', 'rollerads.com',
+    'notix.co', 'cdn.notix.co', 'push.ads.push-ads.net',
+    'webpush.io', 'push.world', 'onesignal-ads.com',
+    // Crypto-mining / background worker ad alternatives
+    'coinhive.com', 'coin-hive.com', 'crypto-loot.com', 'jsecoin.com',
+    'authedmine.com', 'webminepool.com', 'minero.cc',
+    // More affiliate/tracking networks
+    'skimresources.com', 'go.skimresources.com', 'r.skimresources.com',
+    'viglink.com', 'go.redirectingat.com', 'api.viglink.com',
+    'commission-junction.com', 'commissionjunction.com', 'www.dpbolvw.net',
+    'anrdoezrs.net', 'jdoqocy.com', 'qksrv.net', 'tkqlhce.com',
+    'impact-ad.jp', 'impact.com', 'impactradius.com',
+    'cj.dotomi.com', 'dotomi.com',
+    'rakuten-advertising.com', 'rakutenmarketing.com', 'linksynergy.com',
+    // Popup-bait / redirect-bait networks
+    'tnative.com', 'n.native.com', 'cpmleader.com', 'cpxcenter.com',
+    'smowtion.com', 'ads.smowtion.com',
+    'propellerads.com', 'propellerads2.com', 'propellerclick.com',
+    // Unity / mobile game ad networks often active in-browser
+    'unityads.unity3d.com', 'webview.unityads.unity3d.com',
+    'ads.mopub.com', 'analytics.mopub.com',
 ]);
 
 // Suffix-matched ad/tracker TLDs — blocks all subdomains of these hosts.
@@ -162,6 +218,25 @@ const AD_DOMAINS_SUFFIX = [
     '.undertone.com', '.inmobi.com', '.chartboost.com',
     '.vungle.com', '.applovin.com', '.onclckds.com',
     '.adsco.re', '.clkads.com',
+    // Social retargeting / analytics pixels (suffix-match)
+    '.licdn.com', '.pinterest.com', '.tiktok.com',
+    '.ads-twitter.com', '.teads.tv', '.aniview.com', '.brid.tv',
+    '.unrulymedia.com', '.spotxchange.com', '.jwpsrv.com',
+    '.shareaholic.com', '.addthis.com', '.sharethis.com',
+    '.iasds01.com', '.snowplowanalytics.com',
+    '.smartlook.com', '.luckyorange.net', '.crazyegg.com',
+    '.chartbeat.com', '.chartbeat.net', '.parsely.com',
+    '.skimresources.com', '.viglink.com',
+    '.commission-junction.com', '.linksynergy.com',
+    '.anrdoezrs.net', '.jdoqocy.com', '.qksrv.net', '.tkqlhce.com',
+    '.dpbolvw.net', '.rakutenmarketing.com', '.rakuten-advertising.com',
+    '.notix.co', '.rollerads.com', '.pushhouse.com', '.pushuncle.com',
+    '.coinhive.com', '.coin-hive.com', '.crypto-loot.com',
+    '.authedmine.com', '.webminepool.com',
+    '.mopub.com', '.unityads.unity3d.com',
+    '.spot.im', '.apester.com', '.jeeng.com',
+    // Rest of common single-word TLDs associated with malvertising
+    '.smowtion.com', '.cpmleader.com', '.cpxcenter.com',
 ];
 
 // Path-level patterns — block ad endpoints on hosts we don't want to block entirely.
@@ -206,6 +281,20 @@ const AD_PATH_RE = new RegExp([
     '/(?:ads?|pop|push|click|redirect)[_\\-][a-z0-9]{4,}\\.js',
     // Common "?key=<random-hex>" endpoints used by popup networks
     '/[a-z0-9]{6,12}\\?key=[a-f0-9]{16,}',
+    // Tracking pixel / beacon endpoints (tightened to only hit obvious analytics paths;
+    // must end in .gif/.png and live under /pixel|/p|/track|/collect to be considered an ad).
+    '/p\\.gif$', '/pixel\\.(?:gif|png)$',
+    '/(?:track|collect|beacon|telemetry)/[a-z0-9_\\-./]*\\.(?:gif|png|jpg|js|json)$',
+    // Google AdSense auto ads + prebid bundles
+    '/adsbygoogle/[a-z0-9.]*\\.js', '/pubads_impl\\.js',
+    '/prebid[-_][\\d.]+\\.js',
+    // Video ad VAST/VPAID endpoints
+    '/vast[\\d]*\\.xml', '/vmap[\\d]*\\.xml', '/vpaid/',
+    '/midroll', '/preroll(?:\\?|$)',
+    // Session-replay recordings (often privacy invasive)
+    '/sessionreplay/', '/r/[a-zA-Z0-9]{10,}\\.js',
+    // Push-notification service worker registrations used for ads
+    '/sw-push\\.js', '/push[-_]notifications?\\.js',
 ].join('|'), 'i');
 
 // URLs whose *response body* needs rewriting (not blocking outright).

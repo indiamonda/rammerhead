@@ -104,7 +104,7 @@ const AD_BLOCKER_SCRIPT = [
     //                                                       -> block as "first-click popunder"
     //      (document-level onclick hook used by motorsnag, popcash, propellerads, etc.)
     //   5. Same-origin popup without user-control           -> allow (app dialogs, etc.)
-    'var _AD_HOST_RE=/doubleclick\\.net|googlesyndication|popads\\.net|popcash|propellerads|adsterra|exosrv|onclkds|adcash|juicyads|trafficjunky|motorsnag|kueezrtb|kueez\\.com|rev\\.iq|r9x\\.in|venatusmedia|snigelweb|playwire|ezoic|nitropay|adthrive|mediavine|onetag-sys|pushground|clickadilla|clickaine|clixad|popmyads|pubdirecte|onclickperformance|revrolldirect|tpid\\.ws|tyche\\.pw|anyclip|engageya|primis\\.tech|connatix|undertone|inmobi|chartboost|vungle|applovin|onclckds|clkads|freestar\\.com|pub\\.network|adinplay|raptive|taboola|outbrain|revcontent/i;',
+    'var _AD_HOST_RE=/doubleclick\\.net|googlesyndication|popads\\.net|popcash|propellerads|adsterra|exosrv|onclkds|adcash|juicyads|trafficjunky|motorsnag|kueezrtb|kueez\\.com|rev\\.iq|r9x\\.in|venatusmedia|snigelweb|playwire|ezoic|nitropay|adthrive|mediavine|onetag-sys|pushground|clickadilla|clickaine|clixad|popmyads|pubdirecte|onclickperformance|revrolldirect|tpid\\.ws|tyche\\.pw|anyclip|engageya|primis\\.tech|connatix|undertone|inmobi|chartboost|vungle|applovin|onclckds|clkads|freestar\\.com|pub\\.network|adinplay|raptive|taboola|outbrain|revcontent|bemobtrack|zeydoo|onlineloadpgm|popmansion|dailysurveyoffers|mellowads|adblade|bidgear|clkmon|notix\\.co|rollerads|pushhouse|pushuncle|coinhive|coin-hive|crypto-loot|authedmine|webminepool|cpmleader|cpxcenter|smowtion|adsco\\.re|webpush\\.io|push\\.world|onesignal-ads|skimresources|viglink|dpbolvw\\.net|anrdoezrs|jdoqocy|qksrv\\.net|tkqlhce|linksynergy|impactradius|adsterra|juicyads|trafficstars/i;',
     'try{var _lastUserTs=0,_lastUserTarget=null,_lastTrustedTs=0;',
     // We capture every click-like event; popunders typically fire without any click at all,
     // so mere presence of a recent click (even untrusted/synthetic) means SOMETHING user-like
@@ -183,15 +183,43 @@ const AD_BLOCKER_SCRIPT = [
     // --- AUTO-REDIRECT GUARD ---
     // Block top-frame location changes triggered without a recent user gesture
     // (common malvertising pattern: setTimeout(()=>top.location=adUrl,500)).
-    'try{var _blockedHosts=/doubleclick\\.net|googlesyndication|popads\\.net|popcash|propellerads|adsterra|exosrv|onclkds|adcash|juicyads|trafficjunky|revcontent|taboola|outbrain|mgid\\.com|motorsnag|kueezrtb|kueez\\.com|rev\\.iq|r9x\\.in|venatusmedia|snigelweb|playwire|ezoic|nitropay|adthrive|mediavine|onetag-sys|pushground|clickadilla|clickaine|clixad|popmyads|pubdirecte|revrolldirect|tpid\\.ws|tyche\\.pw|anyclip|engageya|primis\\.tech|connatix|undertone|onclickperformance|revrolldirect|freestar\\.com|pub\\.network|adinplay|raptive|onclckds|clkads/i;',
-    'function _isAdRedirect(u){return typeof u==="string"&&_blockedHosts.test(u)}',
-    'var _locSet=Object.getOwnPropertyDescriptor(Window.prototype,"location");',
-    // Intercept location.assign / replace / href= on top window
-    'try{var _oAssign=window.location.assign.bind(window.location);',
-    'window.location.assign=function(u){if(_isAdRedirect(u)){try{console.debug("[rh-adblock] blocked redirect:",u)}catch(e){}return}return _oAssign(u)};',
-    'var _oReplace=window.location.replace.bind(window.location);',
-    'window.location.replace=function(u){if(_isAdRedirect(u)){try{console.debug("[rh-adblock] blocked redirect:",u)}catch(e){}return}return _oReplace(u)};',
-    '}catch(e){}',
+    // Covers all navigation surface: location.assign/replace, location.href=, window.location=,
+    // document.location=, top.location=, and parent.location=. We must install AFTER
+    // hammerhead has wrapped Location so we sit on top of its URL rewriter and still see
+    // the original ad URL before it\'s proxified.
+    'try{var _blockedHosts=/doubleclick\\.net|googlesyndication|popads\\.net|popcash|propellerads|adsterra|exosrv|onclkds|adcash|juicyads|trafficjunky|revcontent|taboola|outbrain|mgid\\.com|motorsnag|kueezrtb|kueez\\.com|rev\\.iq|r9x\\.in|venatusmedia|snigelweb|playwire|ezoic|nitropay|adthrive|mediavine|onetag-sys|pushground|clickadilla|clickaine|clixad|popmyads|pubdirecte|revrolldirect|tpid\\.ws|tyche\\.pw|anyclip|engageya|primis\\.tech|connatix|undertone|onclickperformance|revrolldirect|freestar\\.com|pub\\.network|adinplay|raptive|onclckds|clkads|bemobtrack|zeydoo|onlineloadpgm|popmansion|dailysurveyoffers|mellowads|adblade|bidgear|clkmon|adsco\\.re/i;',
+    'function _isAdRedirect(u){try{if(typeof u!=="string")return false;if(_blockedHosts.test(u))return true;var uh="";try{uh=new URL(u,location.href).hostname}catch(e){}return uh&&_blockedHosts.test(uh)}catch(e){return false}}',
+    // Intercept location.assign / replace methods
+    'function _installLocGuard(){try{',
+    'var _loc=window.location;if(!_loc||_loc.__rhLocGuard)return;',
+    'try{var _oAssign=_loc.assign.bind(_loc);_loc.assign=function(u){if(_isAdRedirect(u)){try{console.debug("[rh-adblock] blocked location.assign:",u)}catch(e){}return}return _oAssign(u)}}catch(e){}',
+    'try{var _oReplace=_loc.replace.bind(_loc);_loc.replace=function(u){if(_isAdRedirect(u)){try{console.debug("[rh-adblock] blocked location.replace:",u)}catch(e){}return}return _oReplace(u)}}catch(e){}',
+    // Intercept location.href setter on this Location instance (may be hammerhead-wrapped Location)
+    'try{var _hrefDesc=Object.getOwnPropertyDescriptor(_loc.__proto__||Location.prototype,"href");',
+    'if(_hrefDesc&&_hrefDesc.set){',
+    'var _oHrefSet=_hrefDesc.set,_oHrefGet=_hrefDesc.get;',
+    'Object.defineProperty(_loc,"href",{configurable:true,get:function(){return _oHrefGet.call(this)},set:function(v){if(_isAdRedirect(v)){try{console.debug("[rh-adblock] blocked location.href=:",v)}catch(e){}return}return _oHrefSet.call(this,v)}})}}catch(e){}',
+    // Intercept window.location = "..." (setter on Window.prototype). Hammerhead wraps this;
+    // wrapping again here adds our guard on top of theirs.
+    'try{var _wlDesc=Object.getOwnPropertyDescriptor(Window.prototype,"location")||Object.getOwnPropertyDescriptor(window,"location");',
+    'if(_wlDesc&&_wlDesc.set){',
+    'var _oWLSet=_wlDesc.set,_oWLGet=_wlDesc.get;',
+    'try{Object.defineProperty(window,"location",{configurable:true,get:function(){return _oWLGet?_oWLGet.call(this):_loc},set:function(v){if(_isAdRedirect(v)){try{console.debug("[rh-adblock] blocked window.location=:",v)}catch(e){}return}return _oWLSet.call(this,v)}})}catch(e){}}}catch(e){}',
+    // document.location setter
+    'try{var _dlDesc=Object.getOwnPropertyDescriptor(Document.prototype,"location")||Object.getOwnPropertyDescriptor(document,"location");',
+    'if(_dlDesc&&_dlDesc.set){var _oDLSet=_dlDesc.set,_oDLGet=_dlDesc.get;',
+    'try{Object.defineProperty(document,"location",{configurable:true,get:function(){return _oDLGet?_oDLGet.call(this):_loc},set:function(v){if(_isAdRedirect(v)){try{console.debug("[rh-adblock] blocked document.location=:",v)}catch(e){}return}return _oDLSet.call(this,v)}})}catch(e){}}}catch(e){}',
+    '_loc.__rhLocGuard=true;',
+    '}catch(e){}}',
+    // Install now AND after hammerhead init so our guard sits on top
+    '_installLocGuard();',
+    'setTimeout(_installLocGuard,0);',
+    'setTimeout(_installLocGuard,100);',
+    'setTimeout(_installLocGuard,500);',
+    // Guard window.open-style programmatic form submissions that some popunder networks
+    // use to bypass window.open checks (form.target="_blank", form.action=adUrl, form.submit()).
+    'try{var _oFormSubmit=HTMLFormElement.prototype.submit;',
+    'HTMLFormElement.prototype.submit=function(){try{var a=this.action||"";var t=(this.target||"").toLowerCase();if(_isAdRedirect(a)&&(t==="_blank"||t==="_new"||t==="_top"||t==="")){try{console.debug("[rh-adblock] blocked form.submit ad:",a)}catch(e){}return}}catch(e){}return _oFormSubmit.apply(this,arguments)};}catch(e){}',
     '}catch(e){}',
     // --- META-REFRESH STRIPPING ---
     // Remove <meta http-equiv="refresh" content="0; url=..."> that redirects to ads.
@@ -211,8 +239,49 @@ const AD_BLOCKER_SCRIPT = [
     // We spoof common ad-detection primitives so those walls stay down.
     'try{window.canRunAds=true;window.adblockDetected=false;window.adsbygoogle=window.adsbygoogle||[];',
     'window.adsbygoogle.push=function(){return 1};',
+    'Object.defineProperty(window.adsbygoogle,"loaded",{value:true,configurable:true});',
     'window.googletag=window.googletag||{cmd:[],pubads:function(){return{addEventListener:function(){},refresh:function(){},enableSingleRequest:function(){},collapseEmptyDivs:function(){}}},defineSlot:function(){return{addService:function(){return this},setTargeting:function(){return this}}},display:function(){},enableServices:function(){}};',
+    'window.googletag.apiReady=true;window.googletag.pubadsReady=true;',
     'try{Object.defineProperty(window,"_gaq",{value:{push:function(){}},writable:false})}catch(e){}',
+    // Spoof common "is adblock on" detection stubs: most popular detection libraries check these
+    'try{window.CookieConsent=window.CookieConsent||{};}catch(e){}',
+    'try{window.blockAdBlock={setOption:function(){return this},onDetected:function(){return this},onNotDetected:function(cb){try{typeof cb==="function"&&cb()}catch(e){}return this},check:function(){return this},emitEvent:function(){return this}};',
+    'window.BlockAdBlock=window.blockAdBlock;',
+    'window.FuckAdBlock=function(){return window.blockAdBlock};',
+    'window.fuckAdBlock=window.blockAdBlock;',
+    'window.adblock=false;window.adblocker=false;window.adBlockEnabled=false;',
+    '}catch(e){}',
+    '}catch(e){}',
+    // --- ADBLOCK BAIT-ELEMENT DETECTION BYPASS ---
+    // Many sites create hidden "bait" divs with class/id hinting at ads (adsbox,
+    // ad-container, advertisement, etc.) and test whether offsetHeight==0 or
+    // getComputedStyle(el).display==="none" to infer "adblock present" and show
+    // a paywall. Our CSS hides those with display:none (which WOULD give 0 height).
+    // To spoof detection, we tag each matching element as it appears, override
+    // its own offsetHeight/clientHeight/offsetParent to truthy values, and hook
+    // window.getComputedStyle to return display!=="none" for those elements.
+    'try{var _BAIT_RE=/(^|\\s|-|_)(adsbox|adsbygoogle|ad-container|ad_container|ad-banner|adbanner|banner_ad|banner-ad|ad-wrapper|advertisement|ad-bait|ad_bait|ad-sense|adsense|sponsored-content|googlead)(\\s|-|_|$)/i;',
+    'function _looksLikeBait(el){try{if(!el||el.nodeType!==1)return false;var c=(el.className&&el.className.toString)?el.className.toString():"";var i=(el.id||"")+"";return _BAIT_RE.test(c)||_BAIT_RE.test(i)}catch(e){return false}}',
+    'var _oOffH=Object.getOwnPropertyDescriptor(HTMLElement.prototype,"offsetHeight");',
+    'var _oOffW=Object.getOwnPropertyDescriptor(HTMLElement.prototype,"offsetWidth");',
+    'var _oOffP=Object.getOwnPropertyDescriptor(HTMLElement.prototype,"offsetParent");',
+    'var _oCliH=Object.getOwnPropertyDescriptor(Element.prototype,"clientHeight");',
+    'var _oCliW=Object.getOwnPropertyDescriptor(Element.prototype,"clientWidth");',
+    'var _oGBC=Element.prototype.getBoundingClientRect;',
+    'var _oCompS=window.getComputedStyle;',
+    'function _spoofBait(el){try{Object.defineProperty(el,"offsetHeight",{configurable:true,get:function(){return 100}});',
+    'Object.defineProperty(el,"offsetWidth",{configurable:true,get:function(){return 160}});',
+    'Object.defineProperty(el,"clientHeight",{configurable:true,get:function(){return 100}});',
+    'Object.defineProperty(el,"clientWidth",{configurable:true,get:function(){return 160}});',
+    'Object.defineProperty(el,"offsetParent",{configurable:true,get:function(){return document.body||document.documentElement}});',
+    'var _oElGBC=el.getBoundingClientRect;el.getBoundingClientRect=function(){return{top:0,left:0,right:160,bottom:100,width:160,height:100,x:0,y:0,toJSON:function(){return this}}};',
+    'el.__rhBaitSpoofed=true}catch(e){}}',
+    'window.getComputedStyle=function(el,ps){var cs=_oCompS.call(this,el,ps);',
+    'try{if(el&&el.__rhBaitSpoofed){return new Proxy(cs,{get:function(t,k){if(k==="display")return"block";if(k==="visibility")return"visible";if(k==="opacity")return"1";if(k==="height")return"100px";if(k==="width")return"160px";var v=t[k];return typeof v==="function"?v.bind(t):v}})}}catch(e){}return cs};',
+    // Scan existing DOM now + observe for new bait elements
+    'function _scanBait(){try{document.querySelectorAll("[class*=\\"ads\\"],[id*=\\"ads\\"],[class*=\\"ad-\\"],[id*=\\"ad-\\"],[class*=\\"banner\\"],[id*=\\"banner\\"],[class*=\\"sponsor\\"],ins.adsbygoogle").forEach(function(el){if(_looksLikeBait(el)&&!el.__rhBaitSpoofed)_spoofBait(el)})}catch(e){}}',
+    'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_scanBait);else _scanBait();',
+    'new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var an=muts[i].addedNodes;for(var j=0;j<an.length;j++){var n=an[j];if(_looksLikeBait(n)&&!n.__rhBaitSpoofed)_spoofBait(n)}}}).observe(document.documentElement||document,{childList:true,subtree:true});',
     '}catch(e){}',
     // --- YOUTUBE AD SKIPPER ---
     // If the page is YouTube, watch for ad-showing state and either skip or fast-forward.
@@ -242,6 +311,86 @@ const AD_BLOCKER_SCRIPT = [
     'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_collapseAds);',
     'else _collapseAds();',
     'new MutationObserver(function(){_collapseAds()}).observe(document.documentElement||document,{childList:true,subtree:true});',
+    '}catch(e){}',
+    // --- COOKIE CONSENT / PAYWALL / SUBSCRIBE-WALL HIDER ---
+    // Many news sites wrap their content behind a "Accept cookies to continue" or
+    // "Subscribe to read" modal that disables body scroll. Element-hiding alone is
+    // not enough — we also have to restore scroll on <body>/<html> because the
+    // banner scripts set overflow:hidden and position:fixed on the scroll container.
+    // Selectors below cover the most-common CMPs + paywall CMPs.
+    'try{var _CONSENT_SEL=[',
+    '"#onetrust-consent-sdk","#onetrust-banner-sdk","#onetrust-pc-sdk",".onetrust-pc-dark-filter",',
+    '"#CybotCookiebotDialog","#CybotCookiebotDialogBodyUnderlay","#CookiebotWidget",',
+    '".fc-consent-root",".fc-dialog-container",".fc-dialog-overlay",',
+    '"#cmpbox","#cmpbox2","#cmpwrapper","#cmpcontainer","#cmpbase",',
+    '".qc-cmp2-container",".qc-cmp-cleanslate",".qc-cmp2-persistent-link",',
+    '".eu-cookie-compliance",".eu-cookie-compliance-banner",".eu-cookie-withdraw-tab",',
+    '"#cookie-banner","#cookieBanner","#cookie-consent","#cookie-notice","#cookieChoiceInfo",',
+    '".cky-overlay",".cky-modal",".cky-consent-container",".cky-consent-bar",',
+    '".cc-window",".cc-banner",".cc-compliance",".cookie-law-info-bar",',
+    '"#truste-consent-track","#truste-consent-button",".truste_overlay",".truste_box_overlay",',
+    '"#usercentrics-root",".uc-banner-wrapper",',
+    '".didomi-popup-container","#didomi-notice","#didomi-host",',
+    '".evidon-banner",".evidon-barrier",".evidon-background",',
+    '".sp_veil",".sp_message_container",".sp-message-open",".message-container",',
+    '"#popup-buttons","#popup-text","#popup-title","#accept-choices",',
+    // Subscribe-walls / Paywalls
+    '".tp-modal",".tp-backdrop",".tp-iframe-wrapper",',
+    '".piano-id-login-dialog",".piano-offer-template-container",',
+    '".poool-widget",".poool-lock",".poool-widget-layer",',
+    '".piano-widget-container",".pane-locked",".piano-paywall-container",',
+    '".subscription-wall",".paywall",".paywall-overlay",".paywall-container","#paywall",',
+    '".premium-gate",".premium-article-gate",".premium-content-gate",',
+    '".article-paywall","#paywall-container",".paywall-dialog",',
+    '".nyt-paywall",".css-mcm29f",".fc-article-ad",',
+    '"#bx-slab-message-container-modal","#bx-slab-message-container",',
+    // Subscribe push / newsletter popups
+    '".subscribe-push-modal",".push-subscribe-modal",".notification-permission-container",',
+    '".newsletter-popup",".newsletter-modal",".mailmunch-template-container",',
+    '".sumolib-overlay",".sumo-overlay",".popup-maker-popup",".pum-container",',
+    '".optinmonster-html",".optinmonster-overlay",".popmake-overlay",',
+    '".klaviyo-form",".klaviyo-overlay","[data-testid=\\"signup-overlay\\"]",',
+    // Medium / Substack / Quora clap-walls / login-walls
+    '".meteredContent",".tierthreeWall",".overlay-content",".bg-white.fixed.inset-0",',
+    '".qu-screenReaderAccessibilityText + .paywall",',
+    // Role-based matches (covers custom-named dialogs)
+    '"[role=\\"dialog\\"][aria-label*=\\"subscribe\\" i]",',
+    '"[role=\\"dialog\\"][aria-label*=\\"paywall\\" i]",',
+    '"[role=\\"dialog\\"][aria-label*=\\"cookie\\" i]",',
+    '"[role=\\"dialog\\"][aria-label*=\\"consent\\" i]",',
+    '"[role=\\"dialog\\"][aria-label*=\\"newsletter\\" i]",',
+    '"[role=\\"dialog\\"][aria-label*=\\"sign up\\" i]",',
+    '"[aria-labelledby*=\\"paywall\\" i]","[aria-labelledby*=\\"consent\\" i]",',
+    '"[class*=\\"CookieConsent\\" i]","[id*=\\"CookieConsent\\" i]",',
+    '"[class*=\\"cookie-consent\\"]","[id*=\\"cookie-consent\\"]",',
+    '"[class*=\\"consent-banner\\"]","[id*=\\"consent-banner\\"]",',
+    '"[class*=\\"gdpr-notice\\"]","[id*=\\"gdpr-notice\\"]"',
+    '].join(",");',
+    'var _s=document.createElement("style");_s.id="__rh_consent_css";',
+    '_s.textContent=_CONSENT_SEL+"{display:none!important;visibility:hidden!important;pointer-events:none!important;opacity:0!important;}"+',
+    // Restore scroll when CMPs lock the body
+    '"html,body{overflow:visible!important;}html.no-scroll,body.no-scroll,body.modal-open,html.modal-open,body.is-locked,body.overlay-open,body.stop-scroll,body.fixed-body,body.lock-scroll,html.lock-scroll,body.scroll-lock,html.scroll-lock{overflow:auto!important;position:static!important;}";',
+    'try{(document.head||document.documentElement).appendChild(_s)}catch(e){}',
+    // Imperative scroll-restore (some sites re-lock body every click)
+    'function _unlockScroll(){try{',
+    'var b=document.body;if(b){',
+    'var cls=["modal-open","no-scroll","is-locked","overlay-open","stop-scroll","fixed-body","lock-scroll","scroll-lock","noscroll"];',
+    'for(var i=0;i<cls.length;i++){if(b.classList&&b.classList.contains(cls[i]))b.classList.remove(cls[i])}',
+    // Inline styles take priority. Only override if they actively block scroll.
+    'var cs=getComputedStyle(b);',
+    'if(cs.overflow==="hidden"||cs.overflowY==="hidden"){b.style.setProperty("overflow","auto","important");b.style.setProperty("overflow-y","auto","important")}',
+    'if(cs.position==="fixed"){b.style.setProperty("position","static","important");b.style.setProperty("top","auto","important")}}',
+    'var h=document.documentElement;if(h){',
+    'var cls2=["no-scroll","modal-open","lock-scroll","scroll-lock","noscroll"];',
+    'for(var j=0;j<cls2.length;j++){if(h.classList&&h.classList.contains(cls2[j]))h.classList.remove(cls2[j])}',
+    'var ch=getComputedStyle(h);',
+    'if(ch.overflow==="hidden"||ch.overflowY==="hidden"){h.style.setProperty("overflow","auto","important");h.style.setProperty("overflow-y","auto","important")}}',
+    '}catch(e){}}',
+    'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_unlockScroll);else _unlockScroll();',
+    // Re-check every second; paywalls re-apply locks on route change / timer
+    'setInterval(_unlockScroll,1500);',
+    // Also when any ancestor class changes, re-unlock
+    'try{new MutationObserver(_unlockScroll).observe(document.documentElement,{attributes:true,attributeFilter:["class","style"],subtree:true});}catch(e){}',
     '}catch(e){}',
     '})();',
     '</script>',
@@ -613,10 +762,10 @@ function rw(u){if(!u||typeof u!=='string')return u;u=u.trim();
 if(u.indexOf(_OP)===0)return u;
 if(isProto(u))return px('https:'+u);if(isExt(u))return px(u);if(isRel(u))return pxRel(u);return u}
 try{var du=new URL(D);var DO=du.origin;
-try{history.replaceState(history.state,'',du.pathname+(du.search||'')+(du.hash||''))}catch(e){}
 window.__rhDestUrl=du.href;
 function isRel(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/'&&u.indexOf('/'+S+'/')!==0}
 function pxRel(u){return O+'/'+S+'/'+DO+u}
+function _destFromPath(p){var sp='/'+S+'/';if(!p||p.indexOf(sp)!==0)return null;var r=p.substring(sp.length);if(/^https?:\\/\\//i.test(r))return r;return null}
 var _rl=window.location,_rr=_rl.replace.bind(_rl),_ra=_rl.assign.bind(_rl),_rrl=_rl.reload.bind(_rl);
 var lp={href:{get:function(){return du.href},set:function(v){_rr(rw(v)||v)}},
 hostname:{get:function(){return du.hostname}},host:{get:function(){return du.host}},
@@ -627,7 +776,7 @@ hash:{get:function(){return du.hash},set:function(v){du.hash=v}},
 port:{get:function(){return du.port}},
 assign:{value:function(u){_ra(rw(u)||u)}},
 replace:{value:function(u){_rr(rw(u)||u)}},
-reload:{value:function(){_rrl()}},
+reload:{value:function(){return _rrl.apply(_rl,arguments)}},
 toString:{value:function(){return du.href}}};
 var _locCache=null,_locHref='';
 try{Object.defineProperty(window,'location',{configurable:true,enumerable:true,
@@ -685,10 +834,14 @@ var oSW=window.SharedWorker;if(oSW){window.SharedWorker=function(u,o){
 if(typeof u==='string')u=rw(u);return new oSW(u,o)};
 window.SharedWorker.prototype=oSW.prototype}
 try{var oPS=history.pushState.bind(history);history.pushState=function(s,t,u){
-if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href}}return oPS(s,t,u)};
+if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;u=pxRel(u)}}return oPS(s,t,u)};
 var oRS=history.replaceState.bind(history);history.replaceState=function(s,t,u){
-if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href}}return oRS(s,t,u)}}catch(e){}
-window.addEventListener('popstate',function(){try{du=new URL(_rl.pathname+(_rl.search||'')+(_rl.hash||''),DO+'/');window.__rhDestUrl=du.href}catch(e){}});
+if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;u=pxRel(u)}}return oRS(s,t,u)}}catch(e){}
+window.addEventListener('popstate',function(){try{
+var r=_destFromPath(_rl.pathname);
+if(r){du=new URL(r+(_rl.search||'')+(_rl.hash||''));window.__rhDestUrl=du.href}
+else{du=new URL(_rl.pathname+(_rl.search||'')+(_rl.hash||''),DO+'/');window.__rhDestUrl=du.href}
+}catch(e){}});
 try{var sSA=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){
 var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')&&typeof v==='string'){v=rw(v);v=_fixCaptchaParams(v)}
 return sSA.call(this,n,v)};
@@ -719,9 +872,39 @@ set:function(v){if(typeof v==='string'){v=rw(v);v=_fixCaptchaParams(v)}oSet.call
 })}catch(e){}
 try{var dCookie=Object.getOwnPropertyDescriptor(Document.prototype,'cookie');
 if(dCookie){var ogSet=dCookie.set,ogGet=dCookie.get;
+function _pCk(v){var p={};var parts=String(v).split(';');for(var i=0;i<parts.length;i++){var t=parts[i].replace(/^\\s+|\\s+$/g,'');if(!t)continue;var eq=t.indexOf('=');var k=eq===-1?t:t.substring(0,eq);var vv=eq===-1?'':t.substring(eq+1);k=k.replace(/^\\s+|\\s+$/g,'');vv=vv.replace(/^\\s+|\\s+$/g,'');if(i===0){p.name=k;p.value=vv}else{var kl=k.toLowerCase();if(kl==='domain')p.domain=vv;else if(kl==='path')p.path=vv;else if(kl==='max-age')p.maxAge=vv;else if(kl==='expires')p.expires=vv;else if(kl==='samesite')p.samesite=vv;else if(kl==='secure')p.secure=true}}return p}
+// Filter for getter: hide sync-cookie/proxy-internal noise, but re-expose the
+// *original* names from our own sync cookies so page scripts that do
+// document.cookie.indexOf('aws-waf-token=') etc. still work on reload.
+function _fSync(c){if(!c)return c;var seen={};var out=[];var parts=c.split(/;\\s*/);
+for(var i=0;i<parts.length;i++){var p=parts[i];if(!p)continue;
+if(p.indexOf('__rh_')===0)continue;
+var m=p.match(/^c\\|[^|]+\\|([^|]+)\\|[^|]*\\|[^|]*\\|[^|]*\\|[^|]*\\|[^=]*=(.*)$/);
+if(m){var nm;try{nm=decodeURIComponent(m[1])}catch(e){nm=m[1]}
+if(!seen[nm]){seen[nm]=1;out.push(nm+'='+m[2])}continue}
+if(/^[scw]+\\|/.test(p))continue;
+var eq=p.indexOf('=');var nm2=eq>=0?p.substring(0,eq):p;
+if(!seen[nm2]){seen[nm2]=1;out.push(p)}}
+return out.join('; ')}
 Object.defineProperty(document,'cookie',{configurable:true,
-get:function(){var c=ogGet.call(this);return c.replace(/__rh_[^;]*(;\\s*)?/g,'').replace(/;\\s*$/,'')},
-set:function(v){ogSet.call(this,v)}})}}catch(e){}
+get:function(){return _fSync(ogGet.call(this))},
+set:function(v){
+try{var p=_pCk(v);
+if(p.name&&p.name.charAt(0)!=='_'&&!/^[scw]+\\|/.test(p.name)){
+var dom=p.domain||du.hostname;if(dom.charAt(0)==='.')dom=dom.substring(1);
+var path=p.path||'/';
+var exp='';if(p.expires){try{var t=Date.parse(p.expires);if(!isNaN(t))exp=t.toString(36)}catch(e){}}
+var ma='';if(p.maxAge){var mn=parseInt(p.maxAge,10);if(!isNaN(mn))ma=mn.toString(36)}
+var now=Date.now().toString(36);
+var sk='c|'+S+'|'+encodeURIComponent(p.name)+'|'+encodeURIComponent(dom)+'|'+encodeURIComponent(path)+'|'+exp+'|'+now+'|'+ma;
+var attrs=';path=/';
+if(p.maxAge)attrs+=';max-age='+p.maxAge;
+if(p.expires)attrs+=';expires='+p.expires;
+if(p.samesite)attrs+=';samesite='+p.samesite;
+ogSet.call(this,sk+'='+p.value+attrs);return
+}}catch(e){}
+ogSet.call(this,v);
+}})}}catch(e){}
 }catch(e){}
 function fixEl(el){if(!el||el.nodeType!==1||el.__rhLite)return;el.__rhLite=1;
 try{var a,n;

@@ -2390,3 +2390,49 @@ body {
     font-size: 14px;
 }
 
+/* ============================================
+   Project Credits Footer
+   A simple, always-visible credits strip. Links inherit the surrounding
+   text color and are underlined so they stay readable no matter what
+   background or theme the page is using.
+   ============================================ */
+.jq-footer {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+    padding: 24px 16px 20px;
+    margin-top: 32px;
+    border-top: 1px solid var(--color-border);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--color-text-primary);
+}
+.jq-footer-inner {
+    display: inline-block;
+    max-width: min(720px, 94%);
+    color: inherit;
+    white-space: normal;
+    word-spacing: 0.02em;
+}
+.jq-footer-inner strong {
+    font-weight: 600;
+    color: inherit;
+}
+.jq-footer-inner a,
+.jq-footer-inner a:visited {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-weight: inherit;
+}
+.jq-footer-inner a:hover,
+.jq-footer-inner a:focus {
+    color: inherit;
+    text-decoration: underline;
+    opacity: 0.8;
+}
+.jq-footer-sep {
+    margin: 0 8px;
+    opacity: 0.6;
+    user-select: none;
+}
