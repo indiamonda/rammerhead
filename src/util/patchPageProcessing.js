@@ -11,6 +11,242 @@
 
 const pageProcessor = require('testcafe-hammerhead/lib/processing/resources/page');
 
+// ---------------------------------------------------------------------------
+// AD BLOCKER — client-side cosmetic filter + popup/redirect suppressor.
+// The server-side request blocker lives in src/util/adBlocker.js. These two
+// pieces of code are injected into every proxied page to attack the visual
+// and behavioural side of ads that survive network-level blocking:
+//   • element-hiding CSS: hides ad containers even if the creative loads
+//   • popup/open-tab blocker: kills window.open/popunders triggered from
+//     untrusted events (autoplay, timers, first scroll, etc.)
+//   • meta-refresh & auto-redirect guard: neutralises redirect-ad chains
+//   • YouTube SPA patcher: skips pre/mid/end-roll ads in the player
+// Respects an opt-out cookie (__rh_ab=0) just like the server-side blocker.
+// ---------------------------------------------------------------------------
+const AD_CSS_RULES = [
+    // Generic ad containers by id/class (EasyList element-hiding excerpt)
+    '[id*="google_ads"], [id*="googlead"], [id*="ad-container"], [id*="adContainer"], ',
+    '[id*="adBanner"], [id*="ad-banner"], [id*="banner-ad"], [id*="banner_ad"], ',
+    '[id*="ad-slot"], [id*="adslot"], [id*="ad-placement"], [id*="adplacement"], ',
+    '[id*="adsense"], [id*="ad-sense"], [id*="sponsored"], [id*="outbrain"], [id*="taboola"], ',
+    '[class*="google_ads"], [class*="googlead"], [class*="ad-container"], [class*="adContainer"], ',
+    '[class*="ad-banner"], [class*="banner-ad"], [class*="banner_ad"], ',
+    '[class*="ad-slot"], [class*="adslot"], [class*="ad-placement"], [class*="adplacement"], ',
+    '[class*="adsense"], [class*="ad-sense"], [class*="sponsored-content"], [class*="taboola"], [class*="outbrain"], ',
+    'ins.adsbygoogle, ins.adsbygoogle-noablate, ',
+    'iframe[src*="googlesyndication"], iframe[src*="doubleclick"], iframe[src*="googletagservices"], ',
+    'iframe[src*="/ads/"], iframe[src*="/ad/"], iframe[src*="/pagead/"], iframe[src*="adserver"], ',
+    'iframe[src*="amazon-adsystem"], iframe[src*="adnxs"], iframe[src*="criteo"], ',
+    'iframe[src*="rubiconproject"], iframe[src*="pubmatic"], iframe[src*="openx.net"], ',
+    'iframe[src*="taboola"], iframe[src*="outbrain"], iframe[src*="revcontent"], iframe[src*="mgid"], ',
+    'iframe[id*="google_ads"], iframe[id*="aswift"], iframe[name*="google_ads"], ',
+    'div[data-ad-slot], div[data-ad-client], div[data-google-query-id], div[data-ad-unit], ',
+    // Generic [data-ad] + gaming/unblocker-site ad slot containers
+    '[data-ad], [data-ad-id], [data-ad-name], [data-ad-type], [data-ad-zone], ',
+    '[data-ad-region], [data-ad-size], [data-advertising], [data-cnx-ps], ',
+    'div[class^="adcontainer"], div[class^="ad-cont"], div[id^="adcont"], ',
+    'div[class*="leaderboard-1"], div[class*="billboard-1"], div[class*="skyscraper"], ',
+    'div[class*="rectangle-1"], div[class*="rectangle-2"], div[class*="halfpage"], ',
+    'div[class*="mpu-ad"], div[class*="ad-mpu"], div[class*="mpu-1"], div[class*="mpu-2"], ',
+    // Rev/Kueez/Playwire/AdInPlay/Snigel wrappers
+    '[id^="rev-"], [id^="kueez-"], [id^="aip-"], [id^="snigel_"], [id^="pwAd_"], ',
+    '[class^="pwAd"], [class^="aip-"], [class^="primis-"], [class^="connatix-"], ',
+
+    'div[aria-label="Advertisement" i], div[aria-label="advertisement" i], div[aria-label*="sponsored" i], ',
+    'a[href*="googleadservices.com"], a[href*="doubleclick.net"], a[href*="googlesyndication"], ',
+    // YouTube ad overlays & banners (doesn\'t kill the video player)
+    'ytd-display-ad-renderer, ytd-companion-slot-renderer, ytd-action-companion-ad-renderer, ',
+    'ytd-promoted-sparkles-web-renderer, ytd-promoted-video-renderer, ',
+    'ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-banner-promo-renderer, ',
+    'ytd-statement-banner-renderer, ytd-reel-video-renderer ytd-ad-slot-renderer, ',
+    '.ytp-ad-overlay-container, .ytp-ad-text-overlay, .ytp-ad-image-overlay, ',
+    'div#masthead-ad, ytd-rich-item-renderer[is-slim-media][has-ad], ',
+    '.video-ads.ytp-ad-module, div.ytp-ad-player-overlay, div.ytp-ad-player-overlay-instream-info, ',
+    // Reddit / Twitter / Facebook promoted content
+    'shreddit-ad-post, article[data-testid="placementTracking"], ',
+    '[data-testid="placementTracking"], [data-testid="inlineAd"], ',
+    '[aria-label*="Promoted" i], [data-ad-preview="message"], ',
+    'div[data-pagelet="FeedUnit_{fbid}"][data-sponsored="true"], ',
+    // Generic class-prefixes used by many CMSes
+    '.adsbox, .ad_box, .ad-box, .adbox, .advert, .advertise, .advertisement, ',
+    '.ad-banner-container, .ad-wrapper, .ad-inline, .ad-rectangle, .ad-unit, ',
+    '.ad-leaderboard, .ad-sidebar, .ad-content, .sponsored, .sponsored-post, ',
+    '.native-ad, .promo-ad, .OUTBRAIN, .taboola-placement, ',
+    // Common popup/sticky-footer "support us" walls
+    '[id*="cookie-banner"][id*="sponsor"], [class*="sticky-ad"], [class*="fixed-ad"], ',
+    '[class*="leaderboard-ad"], [class*="MPUholder"], [class*="dfp-ad"]',
+].join('');
+const AD_BLOCKER_SCRIPT = [
+    '<style id="__rh_ab_css">',
+    // Hide ad containers. !important so sites can\'t override.
+    AD_CSS_RULES,
+    '{display:none!important;visibility:hidden!important;height:0!important;width:0!important;min-height:0!important;min-width:0!important;max-height:0!important;max-width:0!important;pointer-events:none!important;}',
+    // YouTube: collapse video player ad state container so ads can\'t cover video
+    '.ad-showing video.html5-main-video{display:none!important;}',
+    '.ad-showing .ytp-chrome-bottom, .ad-showing .ytp-ad-skip-button-modern, .ad-showing .ytp-ad-skip-button-slot{display:none!important;}',
+    '</style>',
+    '<script id="__rh_ab_js">',
+    '(function(){',
+    'if(typeof window==="undefined"||window.__rhABinit)return;window.__rhABinit=1;',
+    // Respect opt-out via localStorage (client-side) or __rh_ab cookie (server-side)
+    'try{if(localStorage.getItem("__rh_ab")==="0")return}catch(e){}',
+    'try{if(document.cookie.indexOf("__rh_ab=0")!==-1)return}catch(e){}',
+    // --- POPUP / POPUNDER GUARD ---
+    // Block ad popups while still allowing legitimate cross-origin popups (Discord invite
+    // links, OAuth flows, share buttons). Decision tree inside the window.open override:
+    //   1. Target URL matches known ad-network host regex  -> block unconditionally
+    //   2. Recent (<=2.5s) trusted gesture on a user-control element (A[href], BUTTON,
+    //      INPUT button/submit, [role=button/link/menuitem/tab], [onclick], [tabindex],
+    //      SUMMARY, LABEL)                                  -> allow (user intent is clear)
+    //   3. No gesture within 2.5s                           -> block as "untrusted popup"
+    //      (autoplay / setTimeout / onscroll popunder pattern)
+    //   4. Gesture happened but not on a user-control, AND popup is cross-origin
+    //                                                       -> block as "first-click popunder"
+    //      (document-level onclick hook used by motorsnag, popcash, propellerads, etc.)
+    //   5. Same-origin popup without user-control           -> allow (app dialogs, etc.)
+    'var _AD_HOST_RE=/doubleclick\\.net|googlesyndication|popads\\.net|popcash|propellerads|adsterra|exosrv|onclkds|adcash|juicyads|trafficjunky|motorsnag|kueezrtb|kueez\\.com|rev\\.iq|r9x\\.in|venatusmedia|snigelweb|playwire|ezoic|nitropay|adthrive|mediavine|onetag-sys|pushground|clickadilla|clickaine|clixad|popmyads|pubdirecte|onclickperformance|revrolldirect|tpid\\.ws|tyche\\.pw|anyclip|engageya|primis\\.tech|connatix|undertone|inmobi|chartboost|vungle|applovin|onclckds|clkads|freestar\\.com|pub\\.network|adinplay|raptive|taboola|outbrain|revcontent/i;',
+    'try{var _lastUserTs=0,_lastUserTarget=null,_lastTrustedTs=0;',
+    // We capture every click-like event; popunders typically fire without any click at all,
+    // so mere presence of a recent click (even untrusted/synthetic) means SOMETHING user-like
+    // happened. We separately track isTrusted timestamps for stricter checks if ever needed.
+    'function _noteUser(e){if(!e)return;_lastUserTs=Date.now();_lastUserTarget=e.target||null;if(e.isTrusted)_lastTrustedTs=_lastUserTs}',
+    '["click","auxclick","keydown","keyup","mousedown","mouseup","touchstart","touchend","pointerdown","pointerup","contextmenu","submit"].forEach(function(t){',
+    'try{window.addEventListener(t,_noteUser,true)}catch(e){}',
+    'try{document.addEventListener(t,_noteUser,true)}catch(e){}});',
+    // A click is considered "directly actionable" if the target or any ancestor is a control
+    // element (anchor, button, input-button, role=button, or has an onclick attribute).
+    'function _isDirectUserControl(el){try{var depth=0;while(el&&el.nodeType===1&&depth<12){',
+    'var tg=(el.tagName||"").toUpperCase();',
+    'if(tg==="A"&&el.getAttribute&&el.getAttribute("href"))return true;',
+    'if(tg==="BUTTON"||tg==="SUMMARY"||tg==="LABEL")return true;',
+    'if(tg==="INPUT"){var it=(el.type||"").toLowerCase();',
+    'if(it==="button"||it==="submit"||it==="image"||it==="reset")return true}',
+    'if(el.getAttribute){',
+    'var r=el.getAttribute("role");',
+    'if(r==="button"||r==="link"||r==="menuitem"||r==="option"||r==="tab")return true;',
+    'if(el.getAttribute("onclick"))return true;',
+    'if(el.getAttribute("tabindex")!==null)return true;}',
+    'el=el.parentNode;depth++}}catch(e){}return false}',
+    'var _myHost="";try{_myHost=location.hostname}catch(e){}',
+    // Hammerhead\'s runtime installs its own window.open wrapper AFTER our script runs, and
+    // internally rewrites ad URLs to shuffled proxy URLs before dispatching. If we simply
+    // overwrote window.open here, hammerhead would wrap our wrapper and we\'d only ever see
+    // shuffled URLs (making ad-host regex matches impossible). Instead we re-install the
+    // guard AFTER hammerhead has set up, so we sit ON TOP of hammerhead\'s wrapper and
+    // receive the ORIGINAL URL the page passed to window.open. We retry over a growing
+    // window to account for async runtime init.
+    'function _installOpenGuard(){try{',
+    'var cur=window.open;if(!cur||cur.__rhAdGuard)return;',
+    'var _guardDepth=0;',
+    'var _oOpen=cur;',
+    'var guarded=function(u,n,f){',
+    '_guardDepth++;',
+    // If hammerhead\'s wrapper internally re-enters via nativeMethods.windowOpen (which
+    // may point to a previous wrapper of ours), avoid double-checking and just pass through.
+    'if(_guardDepth>1){_guardDepth--;return _oOpen.apply(this,arguments)}',
+    'try{',
+    // Signal 1: known ad-network host -> always block (even if user-initiated)
+    'if(typeof u==="string"&&_AD_HOST_RE.test(u)){',
+    'try{console.debug("[rh-adblock] blocked ad popup:",u)}catch(e){}',
+    'return null}',
+    'var gestureAge=Date.now()-_lastUserTs;',
+    // Signal 2: recent gesture on a real user-control (Discord "Join", share buttons, OAuth) -> allow
+    'if(gestureAge<=2500&&_isDirectUserControl(_lastUserTarget)){',
+    'return _oOpen.apply(this,arguments)}',
+    // Signal 3: no gesture at all (timer-fired popunder) -> block
+    'if(gestureAge>2500){',
+    'try{console.debug("[rh-adblock] blocked untrusted popup:",u)}catch(e){}',
+    'return null}',
+    // Signal 4: gesture happened on non-user-control element (document-level onclick popunder).
+    // For cross-origin popups this is the "first-click popunder" pattern (motorsnag/popcash/etc).
+    'if(typeof u==="string"&&u){',
+    'var _uHost="";try{_uHost=new URL(u,location.href).hostname}catch(e){}',
+    'if(_uHost&&_myHost&&_uHost!==_myHost){',
+    'try{console.debug("[rh-adblock] blocked first-click popunder:",u)}catch(e){}',
+    'return null}}',
+    // Otherwise (same-origin popup, even without user-control) -> allow
+    'return _oOpen.apply(this,arguments);',
+    '}finally{_guardDepth--}',
+    '};',
+    'guarded.__rhAdGuard=true;',
+    'window.open=guarded;',
+    '}catch(e){}}',
+    // Install now (in case no runtime wraps window.open) AND after short delays so we end
+    // up wrapping hammerhead\'s wrapper (which in turn calls the real native method).
+    '_installOpenGuard();',
+    'setTimeout(_installOpenGuard,0);',
+    'setTimeout(_installOpenGuard,100);',
+    'setTimeout(_installOpenGuard,500);',
+    'setTimeout(_installOpenGuard,2000);',
+    'try{document.addEventListener("DOMContentLoaded",_installOpenGuard,true)}catch(e){}',
+    '}catch(e){}',
+    // --- AUTO-REDIRECT GUARD ---
+    // Block top-frame location changes triggered without a recent user gesture
+    // (common malvertising pattern: setTimeout(()=>top.location=adUrl,500)).
+    'try{var _blockedHosts=/doubleclick\\.net|googlesyndication|popads\\.net|popcash|propellerads|adsterra|exosrv|onclkds|adcash|juicyads|trafficjunky|revcontent|taboola|outbrain|mgid\\.com|motorsnag|kueezrtb|kueez\\.com|rev\\.iq|r9x\\.in|venatusmedia|snigelweb|playwire|ezoic|nitropay|adthrive|mediavine|onetag-sys|pushground|clickadilla|clickaine|clixad|popmyads|pubdirecte|revrolldirect|tpid\\.ws|tyche\\.pw|anyclip|engageya|primis\\.tech|connatix|undertone|onclickperformance|revrolldirect|freestar\\.com|pub\\.network|adinplay|raptive|onclckds|clkads/i;',
+    'function _isAdRedirect(u){return typeof u==="string"&&_blockedHosts.test(u)}',
+    'var _locSet=Object.getOwnPropertyDescriptor(Window.prototype,"location");',
+    // Intercept location.assign / replace / href= on top window
+    'try{var _oAssign=window.location.assign.bind(window.location);',
+    'window.location.assign=function(u){if(_isAdRedirect(u)){try{console.debug("[rh-adblock] blocked redirect:",u)}catch(e){}return}return _oAssign(u)};',
+    'var _oReplace=window.location.replace.bind(window.location);',
+    'window.location.replace=function(u){if(_isAdRedirect(u)){try{console.debug("[rh-adblock] blocked redirect:",u)}catch(e){}return}return _oReplace(u)};',
+    '}catch(e){}',
+    '}catch(e){}',
+    // --- META-REFRESH STRIPPING ---
+    // Remove <meta http-equiv="refresh" content="0; url=..."> that redirects to ads.
+    'try{function _stripMetaRefresh(){',
+    'var ms=document.querySelectorAll("meta[http-equiv]");',
+    'for(var i=0;i<ms.length;i++){var m=ms[i];',
+    'if((m.httpEquiv||m.getAttribute("http-equiv")||"").toLowerCase()!=="refresh")continue;',
+    'var c=m.getAttribute("content")||"";',
+    'var um=c.match(/url\\s*=\\s*([^;]+)/i);',
+    'if(um&&_blockedHosts&&_blockedHosts.test(um[1])){',
+    'try{console.debug("[rh-adblock] stripped meta-refresh:",um[1]);m.remove()}catch(e){}}}}',
+    'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_stripMetaRefresh);',
+    'else _stripMetaRefresh();',
+    '}catch(e){}',
+    // --- ANTI-ADBLOCK / WALLPAPER AD GUARD ---
+    // Some sites hide content behind a full-page ad wall when adblock is detected.
+    // We spoof common ad-detection primitives so those walls stay down.
+    'try{window.canRunAds=true;window.adblockDetected=false;window.adsbygoogle=window.adsbygoogle||[];',
+    'window.adsbygoogle.push=function(){return 1};',
+    'window.googletag=window.googletag||{cmd:[],pubads:function(){return{addEventListener:function(){},refresh:function(){},enableSingleRequest:function(){},collapseEmptyDivs:function(){}}},defineSlot:function(){return{addService:function(){return this},setTargeting:function(){return this}}},display:function(){},enableServices:function(){}};',
+    'try{Object.defineProperty(window,"_gaq",{value:{push:function(){}},writable:false})}catch(e){}',
+    '}catch(e){}',
+    // --- YOUTUBE AD SKIPPER ---
+    // If the page is YouTube, watch for ad-showing state and either skip or fast-forward.
+    'try{if(/(^|\\.)youtube(-nocookie)?\\.com$/.test(location.hostname)){',
+    'var _ytSkip=function(){',
+    // Click skip button whenever it appears
+    'try{var sb=document.querySelector(".ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button");',
+    'if(sb&&typeof sb.click==="function"){sb.click();return}}catch(e){}',
+    // Otherwise, fast-forward to end of ad video
+    'try{if(document.querySelector(".ad-showing")){',
+    'var v=document.querySelector("video.html5-main-video");',
+    'if(v&&isFinite(v.duration)&&v.duration>0){v.currentTime=Math.max(v.duration-0.1,0);v.muted=true;v.playbackRate=16}}}catch(e){}',
+    // Remove companion / masthead ads
+    'try{["ytd-display-ad-renderer","ytd-companion-slot-renderer","ytd-promoted-sparkles-web-renderer","ytd-action-companion-ad-renderer","ytd-promoted-video-renderer","ytd-ad-slot-renderer","ytd-in-feed-ad-layout-renderer","ytd-banner-promo-renderer","ytd-statement-banner-renderer","#masthead-ad",".ytp-ad-overlay-container"].forEach(function(s){document.querySelectorAll(s).forEach(function(e){e.remove()})})}catch(e){}',
+    '};',
+    'setInterval(_ytSkip,500);',
+    'new MutationObserver(_ytSkip).observe(document.documentElement,{childList:true,subtree:true});',
+    '}}catch(e){}',
+    // --- EMPTY AD-CONTAINER COLLAPSER ---
+    // Even after CSS hiding, some sites reserve huge blank slots for failed ads.
+    // Collapse empty common ad containers post-load.
+    'try{function _collapseAds(){',
+    'var sel=["ins.adsbygoogle","[data-ad-slot]","[data-ad-unit]","[data-google-query-id]","[class*=\\"ad-slot\\"]","[class*=\\"adslot\\"]","[id*=\\"adSlot\\"]","[id*=\\"ad-slot\\"]"];',
+    'sel.forEach(function(s){document.querySelectorAll(s).forEach(function(e){',
+    'if(e.childElementCount===0&&(!e.textContent||e.textContent.trim().length===0)){',
+    'e.style.setProperty("display","none","important")}})})}',
+    'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_collapseAds);',
+    'else _collapseAds();',
+    'new MutationObserver(function(){_collapseAds()}).observe(document.documentElement||document,{childList:true,subtree:true});',
+    '}catch(e){}',
+    '})();',
+    '</script>',
+].join('\n');
+
 const ANTIDETECT_SCRIPT = [
     '<script>',
     '(function(){',
@@ -533,8 +769,8 @@ if(f&&f.tagName==='FORM'){var fa=_oGA.call(f,'action');if(fa){var n=rw(fa);if(n!
 }
 
 const _DEV = !!process.env.DEVELOPMENT;
-const INJECT_PROD = ANTIDETECT_SCRIPT;
-const INJECT_DEV = ANTIDETECT_SCRIPT + DEVTOOLS_SCRIPT;
+const INJECT_PROD = ANTIDETECT_SCRIPT + AD_BLOCKER_SCRIPT;
+const INJECT_DEV = ANTIDETECT_SCRIPT + AD_BLOCKER_SCRIPT + DEVTOOLS_SCRIPT;
 
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
     const inject = _DEV ? INJECT_DEV : INJECT_PROD;

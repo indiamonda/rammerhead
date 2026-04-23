@@ -5,6 +5,7 @@ const config = require('../config');
 const getSessionId = require('../util/getSessionId');
 const { injectBrowserLikeHeaders } = require('../util/browserLikeHeaders');
 const sessionAffinity = require('../util/sessionAffinity');
+const adBlocker = require('../util/adBlocker');
 const fs = require('fs');
 const path = require('path');
 
@@ -211,6 +212,112 @@ function rawFetch(url, callback, hops, options) {
  */
 module.exports = function setupPipeline(proxyServer, sessionStore) {
     const stream = require('stream');
+    const StrShuffler = require('../util/StrShuffler');
+
+    // Extract the real destination URL from a proxied request. Handles unshuffled
+    // (`/<sid>/https://...`) and shuffled (`/<sid>!a!1!s*host/_rhs...`) URL forms.
+    // Returns null when the URL can't be mapped to a destination.
+    const _PROXY_DEST_RE = /^(?:\/rammerhead)?\/([a-f0-9]{32})(?:(?:![^/]+)*)\/(.+?)(?:\?|$)/i;
+    function _extractDestForAdBlock(reqUrl) {
+        if (!reqUrl) return null;
+        const pathOnly = reqUrl.split('?')[0];
+        const m = pathOnly.match(_PROXY_DEST_RE);
+        if (!m) return null;
+        const sessionId = m[1];
+        let destPart = m[2];
+        const qi = reqUrl.indexOf('?');
+        const query = qi === -1 ? '' : reqUrl.slice(qi);
+
+        if (/^https?:\/\//i.test(destPart)) return destPart + query;
+
+        // Shuffled: unshuffle with session's dict
+        if (destPart.startsWith(StrShuffler.shuffledIndicator)) {
+            const session = sessionStore.get(sessionId) || proxyServer.openSessions.get(sessionId);
+            if (session && session.shuffleDict) {
+                try {
+                    const shuffler = new StrShuffler(session.shuffleDict);
+                    const unshuffled = shuffler.unshuffle(destPart);
+                    const firstUrl = unshuffled.split(',')[0].trim();
+                    if (/^https?:\/\//i.test(firstUrl)) return firstUrl + query;
+                } catch (_) {}
+            }
+        }
+        return null;
+    }
+
+    // YouTube player-response JSON rewriter. When hammerhead proxies a request that returns
+    // YouTube's /youtubei/v1/player JSON, we buffer the body and strip ad placements before
+    // sending to the client. Runs BEFORE gzip so we mutate decompressed bytes.
+    proxyServer.addToOnRequestPipeline((req, res, _serverInfo, _isRoute, isWebsocket) => {
+        if (isWebsocket) return false;
+        if (res instanceof stream.Duplex) return false;
+        if (!adBlocker.isEnabledFor(req)) return false;
+        const dest = _extractDestForAdBlock(req.url);
+        if (!dest) return false;
+        if (!adBlocker.YOUTUBE_PLAYER_RE.test(dest)) return false;
+
+        const origWriteHead = res.writeHead.bind(res);
+        const origWrite = res.write.bind(res);
+        const origEnd = res.end.bind(res);
+        const chunks = [];
+        let active = false;
+        let savedArgs = null;
+
+        res.writeHead = function (code, reasonOrHeaders, maybeHeaders) {
+            const headers = maybeHeaders || (typeof reasonOrHeaders === 'object' ? reasonOrHeaders : {});
+            // Look for JSON content-type
+            let ct = '';
+            if (headers) {
+                if (Array.isArray(headers)) {
+                    for (let i = 0; i < headers.length - 1; i += 2) {
+                        if (headers[i].toLowerCase() === 'content-type') ct = headers[i + 1] || '';
+                    }
+                } else {
+                    for (const k in headers) if (k.toLowerCase() === 'content-type') ct = headers[k] || '';
+                }
+            }
+            if (/application\/json|text\/json/i.test(ct)) {
+                active = true;
+                savedArgs = [code, reasonOrHeaders, maybeHeaders];
+                // Delay real writeHead — need to recompute Content-Length after body rewrite
+                return;
+            }
+            return origWriteHead(code, reasonOrHeaders, maybeHeaders);
+        };
+        res.write = function (chunk, encoding, cb) {
+            if (active && chunk) {
+                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding));
+                if (cb) cb();
+                return true;
+            }
+            return origWrite(chunk, encoding, cb);
+        };
+        res.end = function (chunk, encoding, cb) {
+            if (active) {
+                if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding));
+                const body = Buffer.concat(chunks);
+                const rewritten = adBlocker.rewriteYoutubePlayerJson(body.toString('utf-8'));
+                const outBuf = Buffer.from(rewritten, 'utf-8');
+                const [code, reasonOrHeaders, maybeHeaders] = savedArgs;
+                const headers = maybeHeaders || (typeof reasonOrHeaders === 'object' ? reasonOrHeaders : {});
+                if (headers) {
+                    if (Array.isArray(headers)) {
+                        for (let i = 0; i < headers.length - 1; i += 2) {
+                            if (headers[i].toLowerCase() === 'content-length') { headers.splice(i, 2); i -= 2; }
+                        }
+                        headers.push('Content-Length', String(outBuf.length));
+                    } else {
+                        for (const k in headers) if (k.toLowerCase() === 'content-length') delete headers[k];
+                        headers['Content-Length'] = outBuf.length;
+                    }
+                }
+                try { origWriteHead(code, reasonOrHeaders, maybeHeaders); } catch (_) {}
+                return origEnd(outBuf, undefined, cb);
+            }
+            return origEnd(chunk, encoding, cb);
+        };
+        return false;
+    }, true);
 
     // Global gzip compression for all non-websocket responses with compressible content
     proxyServer.addToOnRequestPipeline((req, res, _serverInfo, _isRoute, isWebsocket) => {
@@ -316,7 +423,6 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // The browser resolves them to http://proxy/path without a session ID.
     // We extract the session from the Referer and rewrite to the correct proxy URL.
     const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getproxiedurl|generatelink|health|debug-proxy|syncLocalStorage|api\/shuffleDict|__rh_|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__rh_devtools\.js|[a-f0-9]{32}[\/?!])/i;
-    const StrShuffler = require('../util/StrShuffler');
 
     function _extractOriginFromReferer(referer) {
         const sessionId = getSessionId(referer);
@@ -363,6 +469,16 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         }
 
         const targetUrl = info.origin + url;
+
+        // Ad Blocker rescue-path check: block ad/tracker URLs that resolved via Referer
+        if (adBlocker.isEnabledFor(req) && adBlocker.shouldBlockUrl(targetUrl)) {
+            if (process.env.DEVELOPMENT) {
+                process.stdout.write(`\x1b[90m[AD-BLOCK-RESCUE]\x1b[0m ${targetUrl.substring(0, 120)}\n`);
+            }
+            adBlocker.writeBlockedResponse(req, res, targetUrl);
+            return true;
+        }
+
         const dest = (req.headers['sec-fetch-dest'] || '').toLowerCase();
         const mode = (req.headers['sec-fetch-mode'] || '').toLowerCase();
         const pathLower = url.split('?')[0].toLowerCase();
@@ -694,6 +810,23 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             }
         } catch (e) { devErr('task.js session warm-up', e); }
         return false;
+    }, true);
+
+    // Ad Blocker (request-level). Short-circuits requests to ad networks and tracker
+    // endpoints with an empty stub (1x1 GIF / empty JS / 204). Matches on the real
+    // destination host+path extracted from the proxied URL (including shuffled form).
+    // Disabled per-request via the `__rh_ab=0` cookie set by the user settings UI.
+    proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
+        if (isRoute) return false;
+        if (!req.url || !adBlocker.isEnabledFor(req)) return false;
+        const targetUrl = _extractDestForAdBlock(req.url);
+        if (!targetUrl) return false;
+        if (!adBlocker.shouldBlockUrl(targetUrl)) return false;
+        if (process.env.DEVELOPMENT) {
+            process.stdout.write(`\x1b[90m[AD-BLOCK]\x1b[0m ${targetUrl.substring(0, 120)}\n`);
+        }
+        adBlocker.writeBlockedResponse(req, res, targetUrl);
+        return true;
     }, true);
 
     // Google services: bypass broken auth redirect chain by rewriting to direct sign-in URL.

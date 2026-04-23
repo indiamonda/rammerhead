@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>
         (function(){var t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();
+        (function(){try{var ab=localStorage.getItem('adBlockerEnabled');if(ab===null){ab='1';localStorage.setItem('adBlockerEnabled','1')}document.cookie='__rh_ab='+(ab==='0'?'0':'1')+'; Path=/; Max-Age=31536000; SameSite=Lax'}catch(e){}})();
         var _=atob;function _t(s){var r='';for(var i=0;i<s.length;i++){r+=s.charAt(i);if(i<s.length-1&&Math.random()>.4){var c='',l=1+(Math.random()*2|0);for(var j=0;j<l;j++)c+=String.fromCharCode(97+(Math.random()*26|0));r+='<s style="font-size:0;position:absolute;opacity:0;pointer-events:none;user-select:none">'+c+'</s>'}}return r}
         (function(){var b=_('aHR0cHM6Ly9qaW1teXFyZy5naXRodWIuaW8vdW5saW5ld2l6ZS9hc3NldHMvd2FsbHBhcGVycy8=');function p(){for(var i=1;i<=50;i++){var img=new Image();img.src=b+i+'.jpg';}}'requestIdleCallback' in window ? requestIdleCallback(p, {timeout: 300}) : setTimeout(p, 0);})();
     </script>
@@ -181,7 +182,13 @@
             
             const basePath = getBasePath();
 
-            const _jqFooterHTML = '<footer style="text-align: center; padding: 24px 0 16px; color: var(--color-text-muted); font-size: 13px;">&copy; JimmyQrg 2026</footer>';
+            const _jqFooterHTML = '<footer class="jq-footer"><span class="jq-footer-inner">'
+                + '<strong>Rammerhead</strong>'
+                + '<span class="jq-footer-sep">·</span>'
+                + 'Created by <a href="https://github.com/binary-person" target="_blank" rel="noopener noreferrer">Binary Person</a>'
+                + '<span class="jq-footer-sep">·</span>'
+                + 'Additional development by <a href="https://github.com/JimmyQrg" target="_blank" rel="noopener noreferrer">JimmyQrg</a>'
+                + '</span></footer>';
 
             // ============================================
             // URL Shuffler (client-side mirror of server StrShuffler)
@@ -2003,6 +2010,20 @@
                 switchToTab(tabId);
                 _saveTabs();
 
+                // When opening a fresh new-tab page, auto-focus the top URL bar
+                // and select its contents so the user can start typing a URL or
+                // search query immediately. The urlInput's existing "focus"
+                // handler calls select() and reveals suggestions, so we only
+                // need to place focus here. A short delay lets any inner
+                // newtab-page init (e.g. suggestion wiring) run first.
+                if (url === 'jq://newtab/') {
+                    setTimeout(() => {
+                        if (activeTabId === tabId) {
+                            try { urlInput.focus(); } catch (_) {}
+                        }
+                    }, 80);
+                }
+
                 return tabId;
             }
 
@@ -2986,6 +3007,28 @@
                             <button class="button" id="save-search-engine-button">Save</button>
                         </div>
                         <div class="settings-section">
+                            <h2><i class="fas fa-ban"></i> Ad Blocker</h2>
+                            <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Blocks ad networks, trackers, pop-ups, redirect ads, and in-video YouTube ads across every proxied site.</p>
+                            <div class="form-group" style="display:flex;align-items:center;gap:12px;">
+                                <label class="switch" for="settings-adblock-toggle" style="display:inline-block;position:relative;width:52px;height:28px;">
+                                    <input type="checkbox" id="settings-adblock-toggle" ${(localStorage.getItem('adBlockerEnabled') !== '0') ? 'checked' : ''} style="opacity:0;width:0;height:0;">
+                                    <span class="slider" style="position:absolute;inset:0;background:${(localStorage.getItem('adBlockerEnabled') !== '0') ? 'var(--color-accent, #1976d2)' : '#ccc'};border-radius:28px;transition:.2s;cursor:pointer;"></span>
+                                    <span class="knob" style="position:absolute;left:${(localStorage.getItem('adBlockerEnabled') !== '0') ? '26px' : '2px'};top:2px;width:24px;height:24px;background:white;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2);pointer-events:none;"></span>
+                                </label>
+                                <div>
+                                    <div id="settings-adblock-status" style="font-weight:600;">${(localStorage.getItem('adBlockerEnabled') !== '0') ? 'Enabled' : 'Disabled'}</div>
+                                    <div style="color: var(--color-text-secondary); font-size: 13px;">Changes apply to new page loads.</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 12px; color: var(--color-text-secondary); font-size: 13px;">
+                                <div><i class="fas fa-check-circle" style="color: #4caf50;"></i> Network-level blocking of 100+ ad/tracker domains</div>
+                                <div><i class="fas fa-check-circle" style="color: #4caf50;"></i> Element-hiding CSS for in-page ads</div>
+                                <div><i class="fas fa-check-circle" style="color: #4caf50;"></i> Popup / popunder / open-tab guard</div>
+                                <div><i class="fas fa-check-circle" style="color: #4caf50;"></i> YouTube pre-roll / mid-roll skipper</div>
+                                <div><i class="fas fa-check-circle" style="color: #4caf50;"></i> Meta-refresh redirect-ad guard</div>
+                            </div>
+                        </div>
+                        <div class="settings-section">
                             <h2><i class="fas fa-shield-alt"></i> Privacy & Security</h2>
                             <p style="color: var(--color-text-secondary); margin-bottom: 16px;">Manage your privacy and security settings</p>
                             <div class="action-buttons">
@@ -3445,6 +3488,26 @@
                 const successMsg = document.getElementById('settings-success-message');
                 const errorMsg = document.getElementById('settings-error-message');
 
+                // Ad Blocker toggle — writes both localStorage (client-side) and __rh_ab cookie
+                // (server-side) so both layers stay in sync.
+                const adBlockToggle = document.getElementById('settings-adblock-toggle');
+                const adBlockStatus = document.getElementById('settings-adblock-status');
+                function _applyAdBlockerPref(enabled) {
+                    localStorage.setItem('adBlockerEnabled', enabled ? '1' : '0');
+                    document.cookie = '__rh_ab=' + (enabled ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
+                    if (adBlockStatus) adBlockStatus.textContent = enabled ? 'Enabled' : 'Disabled';
+                    const slider = adBlockToggle && adBlockToggle.parentElement && adBlockToggle.parentElement.querySelector('.slider');
+                    const knob = adBlockToggle && adBlockToggle.parentElement && adBlockToggle.parentElement.querySelector('.knob');
+                    if (slider) slider.style.background = enabled ? 'var(--color-accent, #1976d2)' : '#ccc';
+                    if (knob) knob.style.left = enabled ? '26px' : '2px';
+                }
+                if (adBlockToggle) {
+                    adBlockToggle.addEventListener('change', (e) => {
+                        _applyAdBlockerPref(!!e.target.checked);
+                        showMessage(successMsg, `Ad Blocker ${e.target.checked ? 'enabled' : 'disabled'}`, 'success');
+                    });
+                }
+
                 saveTitleButton?.addEventListener('click', () => {
                     const title = titleInput.value.trim() || atob('VW5saW5ld2l6ZQ==');
                     localStorage.setItem('pageTitle', title);
@@ -3659,10 +3722,12 @@
                     }
                 }
 
-                // Auto-focus the search input when newtab is opened
+                // The top nav-bar URL input is auto-focused on new-tab creation
+                // (see createTab), so we don't auto-focus the inner search input
+                // here anymore; doing so would briefly steal focus and cause a
+                // visible flicker of the search box's expanded state. Users can
+                // still click the inner search input to use it.
                 if (searchInput) {
-                    setTimeout(() => searchInput.focus(), 50);
-
                     const searchBox = searchInput.closest('.search-box');
                     const ntContent = searchInput.closest('.new-tab-content');
                     if (searchBox) {
