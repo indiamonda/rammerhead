@@ -47,7 +47,6 @@
     --color-icon-css: #264de4;
     --color-icon-html: #e34f26;
     --color-icon-image: #27ae60;
-    --footer-backdrop-rgb: 255,255,255;
     --font-family: 'Red Hat Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
     --font-family-mono: 'Consolas', 'Courier New', monospace;
     --font-family-jq: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -117,7 +116,6 @@
     --color-icon-css: #8ab4f8;
     --color-icon-html: #f28b82;
     --color-icon-image: #81c995;
-    --footer-backdrop-rgb: 32,33,36;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
     --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
     --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
@@ -1037,27 +1035,48 @@ body {
 }
 
 /* ============================================
-   Project Credits Footer
-   A simple, always-visible credits strip. Links inherit the surrounding
-   text color and are underlined so they stay readable no matter what
-   background or theme the page is using.
+   Project Credits Footer — Light / Dark
+   Thin colour-overlay strip behind the text so
+   the footer never disappears against wallpapers
+   or similar-coloured backgrounds.
    ============================================ */
 .jq-footer {
     width: 100%;
     box-sizing: border-box;
     text-align: center;
-    padding: 24px 16px 20px;
+    padding: 10px 16px;
     margin-top: 32px;
-    border-top: 1px solid var(--color-border);
     font-size: 13px;
     line-height: 1.7;
-    color: var(--color-text-primary);
-    background: rgba(var(--footer-backdrop-rgb, 255,255,255), 0.75);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    text-shadow: 0 0 4px rgba(var(--footer-backdrop-rgb, 255,255,255), 0.9);
-    border-radius: 12px 12px 0 0;
+    border-radius: 8px 8px 0 0;
 }
+
+/* ---------- Light mode ---------- */
+:root .jq-footer,
+:root:not([data-theme]) .jq-footer {
+    color: #3c4043;
+    background: rgba(255, 255, 255, 0.82);
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+:root .jq-footer-inner a,
+:root .jq-footer-inner a:visited,
+:root:not([data-theme]) .jq-footer-inner a,
+:root:not([data-theme]) .jq-footer-inner a:visited {
+    color: #3c4043;
+}
+
+/* ---------- Dark mode ---------- */
+[data-theme="dark"] .jq-footer {
+    color: #bdc1c6;
+    background: rgba(32, 33, 36, 0.85);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .jq-footer-inner a,
+[data-theme="dark"] .jq-footer-inner a:visited {
+    color: #bdc1c6;
+}
+
+/* ---------- Shared ---------- */
 .jq-footer-inner {
     display: inline-block;
     max-width: min(720px, 94%);
@@ -1078,13 +1097,12 @@ body {
 }
 .jq-footer-inner a:hover,
 .jq-footer-inner a:focus {
-    color: inherit;
     text-decoration: underline;
-    opacity: 0.8;
+    opacity: 0.75;
 }
 .jq-footer-sep {
     margin: 0 8px;
-    opacity: 0.6;
+    opacity: 0.5;
     user-select: none;
 }
 

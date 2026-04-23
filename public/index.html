@@ -2427,7 +2427,7 @@
                             
                             // Run any user scripts configured to auto-inject on page load
                             try { _runAutoInjectScripts(iframe, tab.url || normalizedUrl); } catch (_) {}
-
+                            
                         } catch (e) {
                             // Cross-origin or other error, use URL hostname
                             try {
