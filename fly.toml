@@ -23,8 +23,10 @@ primary_region = "iad"
 # restarts (deploy, health-check failure, infra maintenance, etc.), which
 # causes "Generate Link" never-expire URLs to silently stop working.
 #
-# One-time setup (per Fly region/machine):
-#   fly volumes create data --region iad --size 1
+# One-time setup (per Fly region/machine). Volumes MUST be created in the
+# same region as the machine that will mount them -- check with
+# `fly machines list -a rammerhead` and use that region below:
+#   fly volumes create data --region <region> --size 1
 # After the volume exists, `fly deploy` will auto-attach it on the next
 # machine boot. If you scale to multiple machines in the same region you
 # must create one volume per machine (fly volumes list).
