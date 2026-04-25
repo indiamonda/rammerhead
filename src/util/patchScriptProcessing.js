@@ -145,8 +145,87 @@ const scriptProcessor = require('testcafe-hammerhead/lib/processing/resources/sc
 const _origShouldProcess = scriptProcessor.shouldProcessResource.bind(scriptProcessor);
 scriptProcessor.shouldProcessResource = function (ctx) {
     if (ctx && ctx.dest && ctx.dest.url && CF_SKIP_RE.test(ctx.dest.url)) return false;
-    if (ctx && ctx.dest && ctx.dest.host && LITE_DOMAIN_RE.test(ctx.dest.host)) return false;
+    // Lite domains were previously skipped entirely. We now process them with simple
+    // string rewriting (no AST) so dynamic import() of paths like /cdn/assets/... gets
+    // a proxy-prefixed URL. Without this, ChatGPT's React Router enters an infinite
+    // reload loop because dynamic imports resolve to /cdn/assets/<hash>.js on the
+    // proxy origin (no session prefix) and 404. Cf. processResource override below.
     return _origShouldProcess(ctx);
+};
+
+// ---------------------------------------------------------------------------
+// LITE-DOMAIN JS REWRITING
+// Hammerhead's full AST rewriting breaks complex SPAs (React/Remix/Next/Vue),
+// so for "lite" domains we keep their JS source intact except for a few
+// surgical string replacements: absolute asset paths and dynamic import()
+// calls get prefixed with the proxy URL. Without these rewrites, dynamic
+// import() — which can NOT be intercepted at runtime by JavaScript — resolves
+// against the proxy origin and 404s, causing infinite reload loops on sites
+// like ChatGPT (React Router auto-reloads on import failure).
+//
+// Asset path categories rewritten in string literals:
+//   /cdn/...            ChatGPT, OpenAI
+//   /cdn-cgi/...        Cloudflare challenge platform
+//   /assets/...         Generic build assets
+//   /_next/...          Next.js
+//   /static/...         Generic static assets
+//   /build/...          Remix
+//   /dist/...           Generic build output
+//   /chunks/...         Webpack code splitting
+//   /bundles/...        Generic bundles
+//   /js/...             Generic JS folders
+//   /css/...            Generic CSS folders
+//   /media/...          Generic media folders
+//   /fonts/...          Generic fonts folders
+//   /images/...         Generic images folders
+// ---------------------------------------------------------------------------
+const LITE_PATH_LITERAL_RE = /(["'])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"'`\n\r\s<>]+)(["'])/g;
+const LITE_IMPORT_DYNAMIC_RE = /(import\(\s*["'])(\/[^"'`\n\r]+)(["']\s*[,)])/g;
+
+function _liteRewriteJs(script, ctx) {
+    if (!script || typeof script !== 'string') return script;
+    if (!ctx || !ctx.dest) return script;
+
+    const proto = ctx.dest.protocol || 'https:';
+    const dHost = ctx.dest.host || '';
+    if (!dHost) return script;
+    const origin = proto + '//' + dHost;
+
+    const serverInfo = ctx.serverInfo || {};
+    const proxyPort = serverInfo.port || '';
+    const protocol = serverInfo.protocol || 'http:';
+    const hostname = serverInfo.hostname || 'localhost';
+    const proxyOrigin =
+        protocol + '//' + hostname + (proxyPort == 443 || proxyPort == 80 ? '' : ':' + proxyPort);
+    const sid = (ctx.session && ctx.session.id) || '';
+    if (!sid) return script;
+    const proxyPrefix = proxyOrigin + '/' + sid + '/';
+
+    let result = script;
+    result = result.replace(LITE_PATH_LITERAL_RE, (_m, q1, p, q2) => {
+        // Skip already-proxied paths
+        if (p.indexOf('/' + sid + '/') === 0) return _m;
+        return q1 + proxyPrefix + origin + p + q2;
+    });
+    result = result.replace(LITE_IMPORT_DYNAMIC_RE, (_m, pre, p, post) => {
+        if (p.indexOf('/' + sid + '/') === 0) return _m;
+        return pre + proxyPrefix + origin + p + post;
+    });
+    return result;
+}
+
+// Install instance-level processResource that handles lite domains. We use
+// Object.getPrototypeOf at call time so we always delegate to whatever sits on
+// the prototype now (addJSDiskCache replaces it later when the proxy is built).
+scriptProcessor.processResource = async function patchedProcessResource(script, ctx, charset, urlReplacer) {
+    if (ctx && ctx.dest && ctx.dest.host && LITE_DOMAIN_RE.test(ctx.dest.host)) {
+        return _liteRewriteJs(script, ctx);
+    }
+    const proto = Object.getPrototypeOf(this);
+    if (proto && typeof proto.processResource === 'function') {
+        return proto.processResource.call(this, script, ctx, charset, urlReplacer);
+    }
+    return script;
 };
 
 const END_HEADER = headerModule.SCRIPT_PROCESSING_END_HEADER_COMMENT;

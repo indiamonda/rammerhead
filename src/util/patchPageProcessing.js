@@ -756,15 +756,54 @@ function _liteProcess(html, ctx, inject) {
 
     const bridge = `<script>(function(){
 var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sid)},D=${JSON.stringify(destUrl)};
-var _OP=O+'/';var _oGA=Element.prototype.getAttribute;var _sSA=Element.prototype.setAttribute;
+var _OP=O+'/';var _SP=_OP+S+'/';var _oGA=Element.prototype.getAttribute;var _sSA=Element.prototype.setAttribute;
 // Clear any legacy __rh_sess cookie (removed to prevent cross-destination header leaks).
 try{document.cookie='__rh_sess=; Max-Age=0; path=/'}catch(e){}
-function px(u){return _OP+S+'/'+u}
+// ------- INFINITE RELOAD-LOOP GUARD -------
+// Some SPAs (React Router, Remix, Next.js) call location.reload() when a dynamic
+// import fails. If we have a bug that makes those imports keep failing, the page
+// loops at multiple reloads/sec and pegs both the user's CPU and our server.
+// We track recent reload timestamps in sessionStorage and, after seeing 4 reloads
+// within 6 seconds, we no-op location.reload/replace/assign for 30 seconds. The
+// user can still navigate manually; we just stop the runaway loop.
+var _RH_RL_KEY='__rh_rl_'+S;var _RH_RL_BLOCK_KEY='__rh_rl_block_'+S;
+var _rhBlocked=false;
+try{
+  var ss=window.sessionStorage;
+  if(ss){
+    var now=Date.now();
+    var blockUntil=parseInt(ss.getItem(_RH_RL_BLOCK_KEY)||'0',10)||0;
+    if(blockUntil&&now<blockUntil){_rhBlocked=true}
+    else{
+      var raw=ss.getItem(_RH_RL_KEY)||'[]';var arr=[];
+      try{arr=JSON.parse(raw);if(!Array.isArray(arr))arr=[]}catch(e){arr=[]}
+      arr.push(now);
+      arr=arr.filter(function(t){return now-t<6000});
+      if(arr.length>=4){
+        ss.setItem(_RH_RL_BLOCK_KEY,String(now+30000));
+        ss.removeItem(_RH_RL_KEY);
+        _rhBlocked=true;
+        try{console.warn('[rammerhead] reload-loop detected ('+arr.length+' reloads in 6s); blocking reloads for 30s')}catch(e){}
+      }else{
+        ss.setItem(_RH_RL_KEY,JSON.stringify(arr));
+      }
+    }
+  }
+}catch(e){}
+function px(u){return _SP+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
 function isProto(u){return typeof u==='string'&&u.length>2&&u.charCodeAt(0)===47&&u.charCodeAt(1)===47&&u.charCodeAt(2)!==47}
+// Is this a proxy-internal route (e.g. /__rh_console, /<sid>/...)? Don't rewrite those.
+function _isProxyInternal(p){return p==='/'||p.indexOf('/__rh_')===0||p.indexOf('/'+S+'/')===0||/^\\/[a-f0-9]{32}(\\/|!|$)/i.test(p)}
 function rw(u){if(!u||typeof u!=='string')return u;u=u.trim();
-if(u.indexOf(_OP)===0)return u;
+if(u.indexOf(_SP)===0)return u;
+if(u.indexOf(_OP)===0){
+  // Naked proxy URL — strip proxy origin and treat the rest as a relative path on the destination.
+  var rest=u.substring(O.length);
+  if(_isProxyInternal(rest))return u;
+  return pxRel(rest);
+}
 if(isProto(u))return px('https:'+u);if(isExt(u))return px(u);if(isRel(u))return pxRel(u);return u}
 try{var du=new URL(D);var DO=du.origin;
 window.__rhDestUrl=du.href;
@@ -772,23 +811,24 @@ function isRel(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='
 function pxRel(u){return O+'/'+S+'/'+DO+u}
 function _destFromPath(p){var sp='/'+S+'/';if(!p||p.indexOf(sp)!==0)return null;var r=p.substring(sp.length);if(/^https?:\\/\\//i.test(r))return r;return null}
 var _rl=window.location,_rr=_rl.replace.bind(_rl),_ra=_rl.assign.bind(_rl),_rrl=_rl.reload.bind(_rl);
-var lp={href:{get:function(){return du.href},set:function(v){_rr(rw(v)||v)}},
+function _rhSafeNav(fn,arg){if(_rhBlocked){try{console.warn('[rammerhead] navigation blocked (reload-loop guard active)')}catch(e){}return}return fn(arg)}
+var lp={href:{get:function(){return du.href},set:function(v){_rhSafeNav(_rr,rw(v)||v)}},
 hostname:{get:function(){return du.hostname}},host:{get:function(){return du.host}},
 origin:{get:function(){return du.origin}},protocol:{get:function(){return du.protocol}},
-pathname:{get:function(){return du.pathname},set:function(v){_rr(pxRel(v))}},
-search:{get:function(){return du.search},set:function(v){du.search=v;_rr(pxRel(du.pathname+v))}},
+pathname:{get:function(){return du.pathname},set:function(v){_rhSafeNav(_rr,pxRel(v))}},
+search:{get:function(){return du.search},set:function(v){du.search=v;_rhSafeNav(_rr,pxRel(du.pathname+v))}},
 hash:{get:function(){return du.hash},set:function(v){du.hash=v}},
 port:{get:function(){return du.port}},
-assign:{value:function(u){_ra(rw(u)||u)}},
-replace:{value:function(u){_rr(rw(u)||u)}},
-reload:{value:function(){return _rrl.apply(_rl,arguments)}},
+assign:{value:function(u){_rhSafeNav(_ra,rw(u)||u)}},
+replace:{value:function(u){_rhSafeNav(_rr,rw(u)||u)}},
+reload:{value:function(){if(_rhBlocked){try{console.warn('[rammerhead] reload blocked (reload-loop guard active)')}catch(e){}return}return _rrl.apply(_rl,arguments)}},
 toString:{value:function(){return du.href}}};
 var _locCache=null,_locHref='';
 try{Object.defineProperty(window,'location',{configurable:true,enumerable:true,
 get:function(){var h=du.href;if(_locCache&&_locHref===h)return _locCache;
 var o=Object.create(null);for(var k in lp){try{Object.defineProperty(o,k,lp[k])}catch(e){}}
 o[Symbol.toPrimitive]=function(){return du.href};_locCache=o;_locHref=h;return o},
-set:function(v){_rr(rw(''+v)||(''+v))}})}catch(e){}
+set:function(v){_rhSafeNav(_rr,rw(''+v)||(''+v))}})}catch(e){}
 try{Object.defineProperty(document,'location',{configurable:true,enumerable:true,
 get:function(){return window.location},set:function(v){window.location=v}})}catch(e){}
 try{Object.defineProperty(document,'domain',{get:function(){return du.hostname},set:function(){},configurable:true})}catch(e){}
@@ -854,7 +894,6 @@ return sSA.call(this,n,v)};
 var oGA=Element.prototype.getAttribute;Element.prototype.getAttribute=function(n){
 var v=oGA.call(this,n);if(v&&typeof v==='string'){var nl=n.toLowerCase();
 if(nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')return _stripProxy(v)}return v}}catch(e){}
-var _SP=_OP+S+'/';
 function _stripProxy(v){if(typeof v==='string'&&v.indexOf(_SP)===0)return v.substring(_SP.length);return v}
 var _captchaRe=/hcaptcha\\.com|recaptcha\\.net|google\\.com\\/recaptcha|gstatic\\.com\\/recaptcha|challenges\\.cloudflare\\.com|turnstile/i;
 var _proxyHost=_rl.hostname+((_rl.port&&_rl.port!=='443'&&_rl.port!=='80')?':'+_rl.port:'');
