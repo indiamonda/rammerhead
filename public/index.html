@@ -145,7 +145,7 @@
                 <span class="material-icons">terminal</span> Insert Script
             </div>
             <div class="menu-item" data-action="toggle-adblock" id="menu-adblock-item">
-                <span class="material-icons" id="menu-adblock-icon">block</span> <span id="menu-adblock-label">Turn Adblocker Off</span>
+                <span class="material-icons" id="menu-adblock-icon">block</span> <span id="menu-adblock-label">Disable Adblocker</span>
             </div>
             <div class="menu-divider"></div>
             <div class="menu-item" data-action="theme">
@@ -2565,7 +2565,29 @@
                 // Generate wallpaper gallery HTML with refined design
                 const wallpaperBaseUrl = _('aHR0cHM6Ly9qaW1teXFyZy5naXRodWIuaW8vdW5saW5ld2l6ZS9hc3NldHMvd2FsbHBhcGVycw==');
                 const wallpaperNumbers = Array.from({length: 50}, (_, i) => i + 1);
-                const wallpaperGallery = wallpaperNumbers.map(num => {
+                const isBlankSelected = !currentBackground && !uploadedBackground;
+                const blankThumb = `
+                    <div class="wallpaper-thumb" data-wallpaper="none" style="
+                        width: 140px;
+                        height: 90px;
+                        background: var(--color-bg-secondary);
+                        border: 3px solid ${isBlankSelected ? 'var(--color-primary)' : 'transparent'};
+                        border-radius: 8px;
+                        cursor: pointer;
+                        position: relative;
+                        transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+                        box-shadow: ${isBlankSelected ? 'var(--shadow-thumb-selected)' : 'var(--shadow-thumb)'};
+                        overflow: hidden;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    " ${isBlankSelected ? 'data-selected="true"' : ''}>
+                        <div style="position: absolute; inset: 0; background: ${isBlankSelected ? 'var(--color-overlay)' : 'transparent'}; transition: background 0.5s;"></div>
+                        <span style="color: var(--color-text-muted); font-size: 12px; font-weight: 600; z-index: 1; pointer-events: none;">None</span>
+                        ${isBlankSelected ? '<div style="position: absolute; top: 8px; right: 8px; background: var(--color-primary); color: var(--color-on-primary); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: var(--shadow-overlay); z-index: 1;"><i class="fas fa-check"></i></div>' : ''}
+                    </div>
+                `;
+                const wallpaperGallery = blankThumb + wallpaperNumbers.map(num => {
                     const isSelected = currentBackground.includes(`wallpapers/${num}.jpg`) || currentBackground.includes(`/wallpapers/${num}.jpg`);
                     return `
                         <div class="wallpaper-thumb" data-wallpaper="${num}.jpg" style="
@@ -2797,12 +2819,18 @@
                         
                         // Select clicked wallpaper
                         const wallpaper = thumb.dataset.wallpaper;
-                        const wallpaperUrl = `${wallpaperBaseUrl}/${wallpaper}`;
-                        backgroundInput.value = wallpaperUrl;
-                        // Clear uploaded image
-                        localStorage.removeItem('uploadedBackground');
-                        uploadedPreview.style.display = 'none';
-                        backgroundUpload.value = '';
+                        if (wallpaper === 'none') {
+                            backgroundInput.value = '';
+                            localStorage.removeItem('uploadedBackground');
+                            uploadedPreview.style.display = 'none';
+                            backgroundUpload.value = '';
+                        } else {
+                            const wallpaperUrl = `${wallpaperBaseUrl}/${wallpaper}`;
+                            backgroundInput.value = wallpaperUrl;
+                            localStorage.removeItem('uploadedBackground');
+                            uploadedPreview.style.display = 'none';
+                            backgroundUpload.value = '';
+                        }
                         
                         thumb.style.borderColor = 'var(--color-primary)';
                         thumb.setAttribute('data-selected', 'true');
@@ -4491,7 +4519,7 @@
             };
 
             // Ad Blocker preference helpers — default ON. The label in the 3-dots
-            // menu flips between "Turn Adblocker Off" (when on) and "Turn Adblocker On"
+            // menu flips between "Disable Adblocker" (when on) and "Enable Adblocker"
             // (when off) so a single click always moves the setting to the opposite state.
             function isAdblockerEnabled() {
                 try {
@@ -4504,7 +4532,7 @@
                 const icon = document.getElementById('menu-adblock-icon');
                 if (!label) return;
                 const on = isAdblockerEnabled();
-                label.textContent = on ? 'Turn Adblocker Off' : 'Turn Adblocker On';
+                label.textContent = on ? 'Disable Adblocker' : 'Enable Adblocker';
                 if (icon) icon.textContent = on ? 'block' : 'block';
             }
             function toggleAdblockerPref() {

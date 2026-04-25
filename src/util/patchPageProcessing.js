@@ -88,9 +88,10 @@ const AD_BLOCKER_SCRIPT = [
     '<script id="__rh_ab_js">',
     '(function(){',
     'if(typeof window==="undefined"||window.__rhABinit)return;window.__rhABinit=1;',
-    // Respect opt-out via localStorage (client-side) or __rh_ab cookie (server-side)
-    'try{if(localStorage.getItem("__rh_ab")==="0")return}catch(e){}',
-    'try{if(document.cookie.indexOf("__rh_ab=0")!==-1)return}catch(e){}',
+    'var _off=false;',
+    'try{_off=localStorage.getItem("adBlockerEnabled")==="0"}catch(e){}',
+    'if(!_off){try{_off=document.cookie.indexOf("__rh_ab=0")!==-1}catch(e){}}',
+    'if(_off){try{var cs=document.getElementById("__rh_ab_css");if(cs)cs.remove()}catch(e){}return}',
     // --- POPUP / POPUNDER GUARD ---
     // Block ad popups while still allowing legitimate cross-origin popups (Discord invite
     // links, OAuth flows, share buttons). Decision tree inside the window.open override:
@@ -595,6 +596,8 @@ const LITE_DOMAINS_EXACT = new Set([
     'turbowarp.org',
     'chat.deepseek.com',
     'deepseek.com',
+    'jmail.world',
+    'mk48.io',
 ]);
 const LITE_DOMAINS_SUFFIX = [
     '.chatgpt.com',
@@ -639,6 +642,8 @@ const LITE_DOMAINS_SUFFIX = [
     '.turbowarp.xyz',
     '.deepseek.com',
     '.deepseek.ai',
+    '.jmail.world',
+    '.mk48.io',
 ];
 function _needsLiteProcessing(ctx) {
     if (!ctx || !ctx.dest) return false;

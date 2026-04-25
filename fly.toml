@@ -4,12 +4,12 @@
 
 app = "rammerhead"
 
-# 1GB to handle complex proxied sites with JS rewriting
 [[vm]]
-  memory = "1024mb"
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
 
-# Try IAD (US East) if ams has connection issues
-primary_region = "iad"
+primary_region = "sjc"
 
 [build]
 
