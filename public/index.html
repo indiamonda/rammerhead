@@ -245,7 +245,9 @@
                 if (_shuffler) return _shuffler;
                 try {
                     const sessionId = getDeviceSessionId();
-                    const resp = await fetch(`${basePath}/api/shuffleDict?id=${encodeURIComponent(sessionId)}`);
+                    const qs = `?id=${encodeURIComponent(sessionId)}`;
+                    let resp = await fetch(`${basePath}/_a/sd${qs}`);
+                    if (!resp.ok) resp = await fetch(`${basePath}/api/shuffleDict${qs}`);
                     if (resp.ok) {
                         const dictText = await resp.text();
                         const dict = JSON.parse(dictText);
@@ -1296,7 +1298,8 @@
                 if (!viewer) return;
                 viewer.innerHTML = '<div class="dt-empty">Loading...</div>';
                 try {
-                    const resp = await fetch('/__rh_sources?url=' + encodeURIComponent(url));
+                    let resp = await fetch('/_a/sr?url=' + encodeURIComponent(url));
+                    if (!resp.ok) resp = await fetch('/__rh_sources?url=' + encodeURIComponent(url));
                     if (!resp.ok) throw new Error('HTTP ' + resp.status);
                     const raw = await resp.text();
                     const type = _detectSourceType(url, raw);
@@ -2230,12 +2233,19 @@
                                             batch.forEach(function(e) { if (e.l === 'error') _devtoolsErrorCount++; });
                                             _renderConsoleIfVisible();
                                             _updateErrorBadge();
-                                            fetch('/__rh_console', {
+                                            fetch('/_a/cl', {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
                                                 body: JSON.stringify(batch),
                                                 keepalive: true
-                                            }).catch(function(){});
+                                            }).catch(function(){
+                                                fetch('/__rh_console', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify(batch),
+                                                    keepalive: true
+                                                }).catch(function(){});
+                                            });
                                         }
                                         // Network requests
                                         var net = win.__rhNet;

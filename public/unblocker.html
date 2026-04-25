@@ -162,6 +162,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
     // ========== Current state ==========
     var currentRealUrl = '';
+    var lastBroadcastUrl = '';
+
+    // ========== Parent (embed) messaging ==========
+    // When this page is iframed (e.g. inside jimmyqrg.github.io), keep the
+    // host informed about which real URL is currently loaded so its address
+    // bar / history can stay in sync, and accept navigation commands back.
+    function inIframe() {
+        try { return window.self !== window.top; } catch (_) { return true; }
+    }
+    function postToParent(msg) {
+        if (!inIframe()) return;
+        try { window.parent.postMessage(msg, '*'); } catch (_) {}
+    }
+    function broadcastUrl(url, title) {
+        if (!url || url === lastBroadcastUrl) return;
+        lastBroadcastUrl = url;
+        postToParent({ type: 'jqrg:url-changed', url: url, title: title || '' });
+    }
+
+    window.addEventListener('message', function(ev) {
+        var d = ev && ev.data;
+        if (!d || typeof d !== 'object') return;
+        if (d.type === 'jqrg:navigate' && typeof d.url === 'string') {
+            var u = d.url;
+            if (d.raw === true && u.indexOf('raw!') !== 0) u = 'raw!' + u;
+            navigateProxy(u);
+        } else if (d.type === 'jqrg:ping') {
+            postToParent({ type: 'jqrg:ready', url: currentRealUrl || '' });
+        }
+    }, false);
 
     // ========== Core: load a URL through the proxy ==========
     function navigateProxy(inputUrl) {
@@ -170,6 +200,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         var normalized = normalizeUrl(inputUrl);
         currentRealUrl = rawMode ? 'raw!' + normalized : normalized;
         document.title = currentRealUrl;
+        broadcastUrl(currentRealUrl, '');
 
         if (rawMode) {
             frame.src = basePath + '/' + sessionId + '!raw/' + normalized;
@@ -232,6 +263,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         try {
             iframeWin.close = function() { frame.src = 'about:blank'; };
         } catch (_) {}
+
+        // Notify the embedding parent of the real URL the user is now on.
+        // This is what lets the host page (e.g. jimmyqrg.github.io) keep its
+        // address bar updated when links are clicked inside the proxied page.
+        try {
+            var titleNow = '';
+            try { titleNow = iframeDoc.title || ''; } catch (_) {}
+            broadcastUrl(currentRealUrl || '', titleNow);
+        } catch (_) {}
     }
 
     function makeMockWindow() {
@@ -250,9 +290,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     // ========== Fetch shuffler dict ==========
     function fetchShuffler() {
         if (_shuffler) return;
-        fetch(basePath + '/api/shuffleDict?id=' + encodeURIComponent(sessionId))
+        var qs = '?id=' + encodeURIComponent(sessionId);
+        fetch(basePath + '/_a/sd' + qs)
             .then(function(r) { return r.ok ? r.text() : Promise.reject(); })
+            .catch(function() {
+                return fetch(basePath + '/api/shuffleDict' + qs).then(function(r) { return r.text(); });
+            })
             .then(function(t) {
+                if (typeof t !== 'string') return;
                 var dict = JSON.parse(t);
                 if (dict) _shuffler = new StrShuffler(dict);
             })
@@ -281,6 +326,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
     var normalized = normalizeUrl(url);
     currentRealUrl = normalized;
+    postToParent({ type: 'jqrg:ready', url: currentRealUrl });
+    broadcastUrl(currentRealUrl, '');
 
     if (rawParam) {
         loader.style.display = 'none';

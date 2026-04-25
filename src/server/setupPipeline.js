@@ -6,8 +6,19 @@ const getSessionId = require('../util/getSessionId');
 const { injectBrowserLikeHeaders } = require('../util/browserLikeHeaders');
 const sessionAffinity = require('../util/sessionAffinity');
 const adBlocker = require('../util/adBlocker');
+const { NEW_PATHS, OLD_PATHS, PROXY_PATHS } = require('../util/patchServiceRoutes');
 const fs = require('fs');
 const path = require('path');
+
+// Helper: does a request URL match either the new (/_a/...) path or its legacy
+// (/__rh_*/api/shuffleDict/...) alias? We accept both during the transition so
+// any cached page or bookmarked link still works.
+function _urlMatchesEither(reqUrl, newPath, oldPath) {
+    if (!reqUrl) return false;
+    if (newPath && reqUrl.indexOf(newPath) !== -1) return true;
+    if (oldPath && reqUrl.indexOf(oldPath) !== -1) return true;
+    return false;
+}
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: 60000 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: 60000, rejectUnauthorized: false });
@@ -422,7 +433,10 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Claude), URLs stay as relative paths (/cdn/assets/..., /cdn-cgi/..., etc.).
     // The browser resolves them to http://proxy/path without a session ID.
     // We extract the session from the Referer and rewrite to the correct proxy URL.
-    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getproxiedurl|generatelink|health|debug-proxy|syncLocalStorage|api\/shuffleDict|__rh_|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__rh_devtools\.js|[a-f0-9]{32}[\/?!])/i;
+    // Match all known proxy-internal paths (both renamed `/_a/...` and legacy
+    // `/__rh_*` / `/hammerhead.js` etc.) so the rescue mechanism doesn't try to
+    // proxy them to the destination.
+    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getproxiedurl|generatelink|health|debug-proxy|syncLocalStorage|api\/shuffleDict|__rh_|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__rh_devtools\.js|[a-f0-9]{32}[\/?!])/i;
 
     function _extractOriginFromReferer(referer) {
         const sessionId = getSessionId(referer);
@@ -479,67 +493,54 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             return true;
         }
 
-        const dest = (req.headers['sec-fetch-dest'] || '').toLowerCase();
-        const mode = (req.headers['sec-fetch-mode'] || '').toLowerCase();
-        const pathLower = url.split('?')[0].toLowerCase();
-        const isSubResource = dest === 'script' || dest === 'style' || dest === 'worker' || dest === 'image' ||
-            dest === 'font' || dest === 'video' || dest === 'audio' || dest === 'track' ||
-            dest === 'manifest' || dest === 'sharedworker';
-        const isApiOrFetch = dest === 'empty' || mode === 'cors' || mode === 'no-cors';
-        const looksLikeAsset = /\.(js|mjs|css|json|woff2?|ttf|otf|eot|png|jpe?g|gif|webp|avif|svg|ico|wasm|mp[34]|webm|ogg|map)(\?|$)/.test(pathLower);
-
-        // For sub-resources, API/fetch calls, and asset-like URLs, fetch directly from origin.
-        // This bypasses Hammerhead entirely — more reliable for sites in "lite" mode.
-        if (isSubResource || isApiOrFetch || looksLikeAsset) {
-            const fetchMethod = req.method || 'GET';
-            function doRescueFetch(body) {
-                const extraHeaders = {};
-                if (req.headers['content-type']) extraHeaders['Content-Type'] = req.headers['content-type'];
-                if (req.headers['accept']) extraHeaders['Accept'] = req.headers['accept'];
-                if (req.headers['authorization']) extraHeaders['Authorization'] = req.headers['authorization'];
-                rawFetch(targetUrl, (err, status, headers, respBody) => {
-                    if (res.headersSent || res.writableEnded) return;
-                    if (err) {
-                        devErr('rescue-fetch ' + targetUrl, err);
-                        try { res.writeHead(502); res.end('Proxy error'); } catch (_) {}
-                        return;
-                    }
-                    const outHeaders = {
-                        'Access-Control-Allow-Origin': req.headers['origin'] || '*',
-                        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-                        'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] || '*',
-                        'Access-Control-Allow-Credentials': 'true',
-                    };
-                    if (headers['content-type']) outHeaders['Content-Type'] = headers['content-type'];
-                    if (headers['cache-control']) outHeaders['Cache-Control'] = headers['cache-control'];
-                    if (headers['etag']) outHeaders['ETag'] = headers['etag'];
-                    compressAndSend(req, res, status || 200, outHeaders, respBody);
-                }, 0, { method: fetchMethod, body: body || undefined, extraHeaders });
-            }
-            if (req.method === 'OPTIONS') {
-                res.writeHead(204, {
-                    'Access-Control-Allow-Origin': req.headers['origin'] || '*',
-                    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-                    'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] || '*',
-                    'Access-Control-Allow-Credentials': 'true',
-                    'Access-Control-Max-Age': '86400',
-                });
-                res.end();
-                return true;
-            }
-            if (fetchMethod !== 'GET' && fetchMethod !== 'HEAD') {
-                const chunks = [];
-                req.on('data', c => chunks.push(c));
-                req.on('end', () => doRescueFetch(Buffer.concat(chunks)));
-            } else {
-                doRescueFetch();
-            }
+        // CORS preflight requests don't go to the destination — answer locally so
+        // the actual request can proceed with credentials.
+        if (req.method === 'OPTIONS') {
+            res.writeHead(204, {
+                'Access-Control-Allow-Origin': req.headers['origin'] || '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] || '*',
+                'Access-Control-Allow-Credentials': 'true',
+                'Access-Control-Max-Age': '86400',
+            });
+            res.end();
             return true;
         }
 
-        // For navigation, rewrite URL for Hammerhead
+        // Route everything (sub-resources, fetch/XHR, navigation) through Hammerhead's
+        // pipeline by rewriting the URL to its proxied form. This is critical for SPAs
+        // like ChatGPT/Remix/React-Router where:
+        //
+        //   1. Cookies must be forwarded so Cloudflare-protected paths (e.g. /cdn-cgi/
+        //      challenge-platform endpoints) authenticate. The previous `rawFetch`
+        //      shortcut sent no cookies at all.
+        //
+        //   2. JS responses must hit our `_liteRewriteJs` (in patchScriptProcessing.js)
+        //      so that internal `import('/cdn/assets/...')` calls get prefixed with
+        //      the proxy origin + session ID. Without this, every nested dynamic
+        //      import 404s and React Router throws "No result found for routeId".
+        //
+        //   3. Set-Cookie headers from the destination get translated into our shared
+        //      cookie store, which keeps cf_clearance / __cf_bm valid across the
+        //      session.
+        //
+        // Hammerhead is fast enough now (with our addJSDiskCache layer caching the
+        // rewritten JS), and `_liteRewriteJs` is a tiny string-replace pass, so the
+        // overhead vs. rawFetch is negligible.
         const proxiedUrl = `/${info.sessionId}/${info.origin}${url}`;
         req.url = proxiedUrl;
+
+        // Re-inject browser-like headers now that the URL is in proxied form. The
+        // earlier injectBrowserLikeHeaders handler ran first (both unshift to the
+        // head of the pipeline, with the LAST registered ending up at index 0),
+        // saw a "naked" `/path` URL with `isProxiedRequest` returning false, and
+        // early-returned without setting any headers. Cloudflare-protected sites
+        // (ChatGPT) reject requests missing the Chrome-shaped header set with 404
+        // on the challenge-platform endpoint, so we redo the injection here. This
+        // also ensures Hammerhead's downstream transforms see a coherent header
+        // set keyed off the *destination* origin (e.g. https://chatgpt.com) rather
+        // than the proxy's own host.
+        try { injectBrowserLikeHeaders(req, false, sessionStore); } catch (_) {}
         return false;
     }, true);
 
@@ -613,9 +614,9 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return true;
     }, true);
 
-    // Console capture endpoint — intercepts /__rh_console at the end of any proxied URL path
+    // Console capture endpoint — accepts either the new generic path or the legacy /__rh_console.
     proxyServer.addToOnRequestPipeline((req, res) => {
-        if (!req.url || !req.url.includes('/__rh_console')) return false;
+        if (!_urlMatchesEither(req.url, PROXY_PATHS.console, PROXY_PATHS.consoleLegacy)) return false;
         if (req.method === 'POST') {
             let body = '';
             req.on('data', chunk => { body += chunk; if (body.length > 65536) body = body.substring(0, 65536); });
@@ -623,7 +624,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 try {
                     const batch = JSON.parse(body);
                     (Array.isArray(batch) ? batch : [batch]).forEach(printConsoleMessage);
-                } catch (e) { devErr('/__rh_console parse', e); }
+                } catch (e) { devErr('console parse', e); }
                 res.writeHead(204);
                 res.end();
             });
@@ -648,7 +649,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return null;
     }
     proxyServer.addToOnRequestPipeline((req, res) => {
-        if (!req.url || !req.url.includes('/__rh_sources')) return false;
+        if (!_urlMatchesEither(req.url, PROXY_PATHS.sources, PROXY_PATHS.sourcesLegacy)) return false;
         if (req.method === 'OPTIONS') {
             res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Allow-Headers': 'Content-Type' });
             res.end();
@@ -663,7 +664,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             if (!targetUrl) { res.writeHead(400); res.end('Non-fetchable URL'); return true; }
 
             rawFetch(targetUrl, (err, status, headers, body) => {
-                if (err) { devErr('/__rh_sources fetch', err); try { res.writeHead(502); res.end('Fetch failed: ' + err.message); } catch(_){} return; }
+                if (err) { devErr('sources fetch', err); try { res.writeHead(502); res.end('Fetch failed: ' + err.message); } catch(_){} return; }
                 const ct = headers['content-type'] || 'text/plain';
                 compressAndSend(req, res, 200, {
                     'Content-Type': ct,
@@ -672,7 +673,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 }, body);
             });
         } catch (e) {
-            devErr('/__rh_sources', e);
+            devErr('sources', e);
             try { res.writeHead(500); res.end('Error: ' + e.message); } catch(_){}
         }
         return true;
@@ -682,7 +683,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // POST { url, session } → fetches raw HTML, injects <base> + bridge script.
     // Used by the IFRAME_PROXY client-side fallback when hammerhead-processed iframes fail.
     proxyServer.addToOnRequestPipeline((req, res) => {
-        if (!req.url || !req.url.includes('/__rh_raw')) return false;
+        if (!_urlMatchesEither(req.url, PROXY_PATHS.raw, PROXY_PATHS.rawLegacy)) return false;
 
         if (req.method === 'OPTIONS') {
             res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' });
@@ -695,14 +696,14 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         req.on('data', chunk => { body += chunk; if (body.length > 4096) body = body.substring(0, 4096); });
         req.on('end', () => {
             let targetUrl, sessionId;
-            try { const p = JSON.parse(body); targetUrl = p.url; sessionId = p.session; } catch (e) { devErr('/__rh_raw parse', e); res.writeHead(400); res.end(); return; }
+            try { const p = JSON.parse(body); targetUrl = p.url; sessionId = p.session; } catch (e) { devErr('raw parse', e); res.writeHead(400); res.end(); return; }
             if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) { res.writeHead(400); res.end(); return; }
 
             const serverInfo = proxyServer.getServerInfo(req);
             const proxyOrigin = `${serverInfo.protocol}//${serverInfo.hostname}${serverInfo.port == 443 || serverInfo.port == 80 ? '' : ':' + serverInfo.port}`;
 
             rawFetch(targetUrl, (err, status, headers, buf) => {
-                if (err) { devErr('/__rh_raw fetch ' + targetUrl, err); try { if (!res.headersSent) { res.writeHead(502); res.end(); } } catch(_){} return; }
+                if (err) { devErr('raw fetch ' + targetUrl, err); try { if (!res.headersSent) { res.writeHead(502); res.end(); } } catch(_){} return; }
                 let html = buf.toString('utf-8');
                 html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']content-security-policy["'][^>]*>/gi, '');
                 html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');

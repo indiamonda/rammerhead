@@ -1,3 +1,6 @@
+// IMPORTANT: must run before any testcafe-hammerhead require so that
+// session/injectables.js sees the rewritten /_a/... paths instead of /hammerhead.js etc.
+const _serviceRoutePatch = require('../util/patchServiceRoutes');
 const http = require('http');
 const https = require('https');
 const stream = require('stream');
@@ -507,6 +510,10 @@ class RammerheadProxy extends Proxy {
                 res.end('Internal Server Error');
             }
         };
+        // Generic CDN-shaped path is the primary; the legacy `/api/shuffleDict`
+        // and `/rammerhead/api/shuffleDict` aliases are kept so older client
+        // bundles (and any cached page) keep working.
+        this.GET(_serviceRoutePatch.PROXY_PATHS.shuffleDict, shuffleDictHandler);
         this.GET('/api/shuffleDict', shuffleDictHandler);
         this.GET('/rammerhead/api/shuffleDict', shuffleDictHandler);
     }
@@ -633,31 +640,47 @@ class RammerheadProxy extends Proxy {
      * @param {StaticContent | (req: http.IncomingMessage, res: http.ServerResponse) => void} handler
      */
     GET(route, handler) {
-        if (route === '/hammerhead.js') {
-            handler.content = fs.readFileSync(
-                path.join(__dirname, '../client/hammerhead' + (process.env.DEVELOPMENT ? '.js' : '.min.js'))
-            );
+        const NEW = _serviceRoutePatch.NEW_PATHS;
+        const OLD = _serviceRoutePatch.OLD_PATHS;
+        const ext = process.env.DEVELOPMENT ? '.js' : '.min.js';
+        // Map any of (new path | legacy path) to a local bundle file. We also
+        // string-rewrite the served bundle so its hardcoded /task.js etc. become
+        // the renamed paths.
+        const BUNDLE_MAP = {
+            [NEW.hammerhead]: 'hammerhead',
+            [NEW.workerHammerhead]: 'worker-hammerhead',
+            [NEW.transportWorker]: 'transport-worker',
+            [OLD.hammerhead]: 'hammerhead',
+            [OLD.workerHammerhead]: 'worker-hammerhead',
+            [OLD.transportWorker]: 'transport-worker',
+        };
+        const bundleName = BUNDLE_MAP[route];
+        if (bundleName) {
+            const raw = fs.readFileSync(path.join(__dirname, '../client/' + bundleName + ext), 'utf8');
+            handler.content = Buffer.from(_serviceRoutePatch.rewriteBundlePaths(raw), 'utf8');
         }
-        if (route === '/worker-hammerhead.js') {
-            handler.content = fs.readFileSync(
-                path.join(__dirname, '../client/worker-hammerhead' + (process.env.DEVELOPMENT ? '.js' : '.min.js'))
-            );
-        }
-        if (route === '/transport-worker.js') {
-            handler.content = fs.readFileSync(
-                path.join(__dirname, '../client/transport-worker' + (process.env.DEVELOPMENT ? '.js' : '.min.js'))
-            );
-        }
-        // Special handling for style.css - ensure handler function is used, not cached content
         if (route === '/style.css' && typeof handler === 'function') {
-            // Wrap the handler to ensure it's always called fresh
             const originalHandler = handler;
             handler = (req, res) => {
-                // Force fresh read - bypass any caching
                 return originalHandler(req, res);
             };
         }
         super.GET(route, handler);
+        // Register a back-compat alias so any legacy client code or stale cached
+        // page that still references /hammerhead.js / /task.js / etc. keeps working.
+        // We do this for the three renamed asset bundles (hammerhead has the most
+        // hardcoded refs); the other paths (task/iframe-task/messaging) get
+        // re-registered automatically by hammerhead since service-routes is mutated
+        // before proxy/index.js's _registerServiceRoutes runs.
+        const ALIAS_MAP = {
+            [NEW.hammerhead]: OLD.hammerhead,
+            [NEW.workerHammerhead]: OLD.workerHammerhead,
+            [NEW.transportWorker]: OLD.transportWorker,
+        };
+        const alias = ALIAS_MAP[route];
+        if (alias && alias !== route) {
+            super.GET(alias, handler);
+        }
     }
 
     // the following is to fix hamerhead's typescript definitions

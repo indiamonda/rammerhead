@@ -146,9 +146,23 @@ var setError, api, sessionIdsStore, loadSettings, renderSessionTable;
             });
         },
         shuffleDict(id, callback) {
-            get('/api/shuffleDict?id=' + encodeURIComponent(id), function (res) {
-                callback(JSON.parse(res));
-            });
+            const qs = '?id=' + encodeURIComponent(id);
+            const tryFetch = (path, onSuccess, onFail) => {
+                const r = new XMLHttpRequest();
+                let url = path + qs;
+                const pwd = getPassword();
+                if (pwd) url += '&pwd=' + pwd;
+                r.open('GET', url, true);
+                r.onerror = onFail;
+                r.onload = () => (r.status === 200 ? onSuccess(r.responseText) : onFail());
+                r.send();
+            };
+            tryFetch('/_a/sd',
+                (res) => callback(JSON.parse(res)),
+                () => tryFetch('/api/shuffleDict',
+                    (res) => callback(JSON.parse(res)),
+                    () => setError('Cannot fetch shuffle dictionary'))
+            );
         }
     };
 

@@ -448,6 +448,26 @@ const ANTIDETECT_SCRIPT = [
         'if(typeof tgt==="string"&&tgt!=="*"&&cur&&tgt.indexOf(cur)!==0){tgt="*"}',
         'return _oPM2.call(self,msg,tgt)};',
     '}catch(e){}',
+    // Browser extensions (SingleFile, AdBlock, password managers, ...) inject content scripts
+    // into every page including proxied ones. When their background page is gone or filtered,
+    // chrome.runtime.sendMessage()/connect() rejects with one of a small set of canned messages
+    // ("Could not establish connection. Receiving end does not exist." /
+    //  "The message port closed before a response was received." /
+    //  "Extension context invalidated."). The extensions almost never .catch() these, so the
+    // browser logs them as "Uncaught (in promise)" on every navigation, polluting the user\'s
+    // console and confusing them into thinking the proxy is broken. Swallow them at the
+    // unhandledrejection layer — we never produce these strings ourselves, so this filter is
+    // 100% safe for page code.
+    'try{var _rhExtRe=/Could not establish connection|Receiving end does not exist|message port closed|Extension context invalidated/i;',
+    'window.addEventListener("unhandledrejection",function(e){',
+        'try{var r=e.reason;var m=r&&(r.message||r.toString&&r.toString())||(typeof r==="string"?r:"");',
+        'if(m&&_rhExtRe.test(m)){e.preventDefault();if(e.stopImmediatePropagation)try{e.stopImmediatePropagation()}catch(_){}}}catch(_){}',
+    '},true);',
+    'window.addEventListener("error",function(e){',
+        'try{var m=e&&(e.message||(e.error&&e.error.message))||"";',
+        'if(m&&_rhExtRe.test(m)){e.preventDefault();if(e.stopImmediatePropagation)try{e.stopImmediatePropagation()}catch(_){}}}catch(_){}',
+    '},true);',
+    '}catch(e){}',
     '})();</script>',
 ].join('\n');
 
@@ -488,10 +508,10 @@ _oC.countReset=function(l){_cCounts[l||"default"]=0};
 var _origClear=_oC.clear;_oC.clear=function(){try{if(_origClear)_origClear.call(_oC)}catch(e){}
 window.__rhQ.length=0;if(window.__rhPanel)try{window.__rhPanel.clear()}catch(e){}};
 window.console=_oC;
-window.addEventListener("error",function(e){var msg=e.error?(e.error.stack||e.error.message):e.message;
+window.addEventListener("error",function(e){if(e.defaultPrevented)return;var msg=e.error?(e.error.stack||e.error.message):e.message;
 var entry={l:"error",raw:["[Uncaught] "+(msg||"Unknown error")],t:Date.now(),d:0};
 window.__rhQ.push(entry);if(window.__rhPanel)try{window.__rhPanel.log(entry)}catch(e2){}});
-window.addEventListener("unhandledrejection",function(e){var r=e.reason;
+window.addEventListener("unhandledrejection",function(e){if(e.defaultPrevented)return;var r=e.reason;
 var entry={l:"error",raw:["[Promise] "+(r&&r.stack?r.stack:String(r))],t:Date.now(),d:0};
 window.__rhQ.push(entry);if(window.__rhPanel)try{window.__rhPanel.log(entry)}catch(e2){}});
 if(typeof fetch==="function"){var _oF=fetch;window.fetch=function(){var a=arguments,u="",m="GET",rh={},st=Date.now();
@@ -534,7 +554,7 @@ try{document.querySelectorAll("link[rel*=icon]").forEach(function(e){_addSrc(e.h
 try{document.querySelectorAll("video source[src],audio source[src]").forEach(function(e){_addSrc(e.src,"media")})}catch(e){}
 try{document.querySelectorAll("link[as=font],link[rel=preload][href*=font]").forEach(function(e){_addSrc(e.href,"font")})}catch(e){}}
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_scanDOM);else _scanDOM();
-var _s=document.createElement("script");_s.src="/__rh_devtools.js";_s.defer=true;
+var _s=document.createElement("script");_s.src="/_a/d.js";_s.defer=true;_s.onerror=function(){var _f=document.createElement("script");_f.src="/__rh_devtools.js";_f.defer=true;document.head.appendChild(_f)};
 if(document.head)document.head.appendChild(_s);
 else document.addEventListener("DOMContentLoaded",function(){document.head.appendChild(_s)});
 })()</script>`;
@@ -794,8 +814,8 @@ function px(u){return _SP+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
 function isProto(u){return typeof u==='string'&&u.length>2&&u.charCodeAt(0)===47&&u.charCodeAt(1)===47&&u.charCodeAt(2)!==47}
-// Is this a proxy-internal route (e.g. /__rh_console, /<sid>/...)? Don't rewrite those.
-function _isProxyInternal(p){return p==='/'||p.indexOf('/__rh_')===0||p.indexOf('/'+S+'/')===0||/^\\/[a-f0-9]{32}(\\/|!|$)/i.test(p)}
+// Is this a proxy-internal route (e.g. /_a/cl, /__rh_console, /<sid>/...)? Don't rewrite those.
+function _isProxyInternal(p){return p==='/'||p.indexOf('/__rh_')===0||p.indexOf('/_a/')===0||p.indexOf('/'+S+'/')===0||/^\\/[a-f0-9]{32}(\\/|!|$)/i.test(p)}
 function rw(u){if(!u||typeof u!=='string')return u;u=u.trim();
 if(u.indexOf(_SP)===0)return u;
 if(u.indexOf(_OP)===0){

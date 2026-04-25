@@ -5,6 +5,7 @@ const config = require('../config');
 const StrShuffler = require('../util/StrShuffler');
 const RammerheadSession = require('../classes/RammerheadSession');
 const sessionAffinity = require('../util/sessionAffinity');
+const { PROXY_PATHS } = require('../util/patchServiceRoutes');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -68,7 +69,10 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/favicon.png', serveCached('favicon.png', 'image/png'));
     proxyServer.GET('/embedded-styles.css', serveCached('embedded-styles.css', 'text/css'));
     proxyServer.GET('/manifest.json', serveCached('manifest.json', 'application/json'));
-    proxyServer.GET('/__rh_devtools.js', serveCached('devtools.js', 'application/javascript'));
+    // Devtools script: served under a generic CDN-shaped path; legacy alias kept so
+    // pages cached against the old URL keep working until they re-render.
+    proxyServer.GET(PROXY_PATHS.devtoolsJs, serveCached('devtools.js', 'application/javascript'));
+    proxyServer.GET(PROXY_PATHS.devtoolsJsLegacy, serveCached('devtools.js', 'application/javascript'));
 
     // Lightweight health check for Fly.io/Render (avoids loading full index.html)
     proxyServer.GET('/health', (req, res) => {

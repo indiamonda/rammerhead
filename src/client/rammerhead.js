@@ -210,16 +210,25 @@
             console.warn('cannot get session id from url');
             return;
         }
-        const apiPath = location.pathname.indexOf('/rammerhead/') === 0 ? '/rammerhead/api/shuffleDict' : '/api/shuffleDict';
-        request.open('GET', apiPath + '?id=' + sessionId, false);
+        const isPrefixed = location.pathname.indexOf('/rammerhead/') === 0;
+        const newPath = (isPrefixed ? '/rammerhead' : '') + '/_a/sd';
+        const oldPath = (isPrefixed ? '/rammerhead' : '') + '/api/shuffleDict';
+        request.open('GET', newPath + '?id=' + sessionId, false);
         request.send();
-        if (request.status !== 200) {
+        let resp = request;
+        if (resp.status !== 200) {
+            const r2 = new XMLHttpRequest();
+            r2.open('GET', oldPath + '?id=' + sessionId, false);
+            r2.send();
+            resp = r2;
+        }
+        if (resp.status !== 200) {
             console.warn(
-                `received a non 200 status code while trying to fetch shuffleDict:\nstatus: ${request.status}\nresponse: ${request.responseText}`
+                `received a non 200 status code while trying to fetch shuffleDict:\nstatus: ${resp.status}\nresponse: ${resp.responseText}`
             );
             return;
         }
-        const shuffleDict = JSON.parse(request.responseText);
+        const shuffleDict = JSON.parse(resp.responseText);
         if (!shuffleDict) return;
 
         // pasting entire thing here "because lazy" - m28
