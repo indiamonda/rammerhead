@@ -153,7 +153,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         if (raw.indexOf('raw!') === 0) { rawPrefix = 'raw!'; raw = raw.slice(4); }
         if (/^https?:\/\//i.test(raw) || /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}/.test(raw)) {
             if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
-            try { var u = new URL(raw); if (u.pathname === '' || u.pathname === '/') raw = u.origin + '/'; } catch (_) {}
+            // Only normalize bare origins (e.g. "https://example.com" -> "https://example.com/").
+            // Previously this also fired when pathname was just "/" regardless of search/hash,
+            // which silently dropped the query string of search URLs like
+            // "https://duckduckgo.com/?q=hello", causing the homepage to load instead of
+            // the search results page. Guard against that by requiring no search/hash too.
+            try { var u = new URL(raw); if ((u.pathname === '' || u.pathname === '/') && !u.search && !u.hash) raw = u.origin + '/'; } catch (_) {}
         } else {
             raw = 'https://www.google.com/search?q=' + encodeURIComponent(raw);
         }

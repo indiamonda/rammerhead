@@ -497,7 +497,7 @@
             let _dtScope = 'inner';
             let _dtHeight = parseInt(localStorage.getItem('devtoolsHeight')) || 350;
 
-            const _RH_INTERNAL_RE = /\/__rh_|\/task\.js|\/iframe-task\.js|hammerhead\.js|\/storages\/|!sw\.js/;
+            const _RH_INTERNAL_RE = /\/__rh_|\/_a\/|\/task\.js|\/iframe-task\.js|hammerhead\.js|\/storages\/|!sw\.js/;
             function _isProxyInternal(url) {
                 if (!url) return false;
                 return _RH_INTERNAL_RE.test(url);

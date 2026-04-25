@@ -8,6 +8,16 @@
 
 const getSessionId = require('./getSessionId');
 const StrShuffler = require('./StrShuffler');
+const { NEW_PATHS, OLD_PATHS } = require('./patchServiceRoutes');
+
+// Hammerhead task scripts are served under both their renamed paths (e.g. /_a/t.js)
+// and their legacy /task.js / /iframe-task.js aliases. injectBrowserLikeHeaders has
+// to early-return for ALL of those, otherwise the pipeline mangles the Referer that
+// hammerhead needs to warm the session and unshuffle the URL.
+const TASK_SCRIPT_PATHS = new Set([
+    NEW_PATHS.task, NEW_PATHS.iframeTask,
+    OLD_PATHS.task, OLD_PATHS.iframeTask,
+]);
 
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -480,7 +490,7 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     try {
         pathname = decodeURIComponent(pathname);
     } catch (_) {}
-    if (pathname === '/task.js' || pathname === '/iframe-task.js') return;
+    if (TASK_SCRIPT_PATHS.has(pathname)) return;
 
     const dest = req.headers['sec-fetch-dest'];
     const mode = req.headers['sec-fetch-mode'];
