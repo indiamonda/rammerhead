@@ -800,6 +800,7 @@ if(uu.indexOf(O)===0&&uu.indexOf(_OP+S+'/')!==0){uu=pxRel(uu.substring(O.length)
 if(uu!==u.url)try{u=new Request(uu,u)}catch(e){}}
 return oF.call(this,u,o).then(function(r){
 try{if(r.url&&r.url.indexOf(_SP)===0){Object.defineProperty(r,'url',{value:r.url.substring(_SP.length),configurable:true})}}catch(e){}
+try{if(r.headers&&r.headers.has('x-remix-reload-document')){var h2=new Headers();r.headers.forEach(function(v,k){if(k!=='x-remix-reload-document')h2.append(k,v)});r=new Response(r.body,{status:r.status,statusText:r.statusText,headers:h2})}}catch(e){}
 return r})};
 var XP=XMLHttpRequest.prototype,oX=XP.open;
 XP.open=function(m,u){if(typeof u==='string'){arguments[1]=rw(u)}return oX.apply(this,arguments)};

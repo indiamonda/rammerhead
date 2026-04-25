@@ -33,3 +33,8 @@ transforms.forcedResponseTransforms['access-control-expose-headers'] = (src) => 
     if (src) return src;
     return '*';
 };
+
+// Strip x-remix-reload-document: React Router / Remix uses this header to force
+// a full document reload. Through the proxy, the /__manifest route always returns
+// this header (ChatGPT, etc.), causing an infinite refresh loop.
+transforms.responseTransforms['x-remix-reload-document'] = () => void 0;
