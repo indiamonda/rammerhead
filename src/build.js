@@ -98,6 +98,58 @@ fs.writeFileSync(
             /MessageSandbox\._parseMessageJSONData = function \(str\) \{\s*if \(!settings\$1\.nativeAutomation\)\s*return parse\$1\(str\);\s*try \{/,
             'MessageSandbox._parseMessageJSONData = function (str) {\n        try {'
         )
+        // Replace handleUrlsSet (srcset parser) with a WHATWG-compliant version.
+        // Stock hammerhead does `url.split(',')` which mangles URLs that legitimately
+        // contain commas — e.g. Cloudflare's `/cdn-cgi/image/q=78,scq=50,width=94,...`
+        // image-resize URLs that poki.com (and many cf-cached sites) use in srcset.
+        // The proper algorithm: a URL is a non-whitespace run; commas inside it are
+        // part of the URL. The candidate-terminating comma comes AFTER the optional
+        // descriptor (` 1x`, ` 2x`, ` 100w`, etc.).
+        .replace(
+            /function handleUrlsSet\(handler, url\) \{[\s\S]*?return replacedUrls\.join\(','\);\s*\}/,
+            `function handleUrlsSet(handler, url) {
+                var args = [];
+                for (var _i = 2; _i < arguments.length; _i++) args[_i - 2] = arguments[_i];
+                if (!url || typeof url !== 'string') return url;
+                var n = url.length, i = 0, candidates = [];
+                function _ws(cc){return cc===0x20||cc===0x09||cc===0x0A||cc===0x0C||cc===0x0D}
+                while (i < n) {
+                    while (i < n && _ws(url.charCodeAt(i))) i++;
+                    if (i >= n) break;
+                    var us = i;
+                    while (i < n && !_ws(url.charCodeAt(i))) i++;
+                    var u = url.substring(us, i);
+                    var tc = 0;
+                    while (u.length && u.charCodeAt(u.length - 1) === 0x2C) { u = u.slice(0, -1); tc++; }
+                    if (!u) continue;
+                    if (tc > 0) { candidates.push({ u: u, d: '' }); continue; }
+                    while (i < n && _ws(url.charCodeAt(i))) i++;
+                    var ds = i, depth = 0;
+                    while (i < n) {
+                        var cc = url.charCodeAt(i);
+                        if (cc === 0x28) depth++;
+                        else if (cc === 0x29 && depth) depth--;
+                        else if (cc === 0x2C && depth === 0) break;
+                        i++;
+                    }
+                    var d = url.substring(ds, i).replace(/^\\s+|\\s+$/g, '');
+                    if (!d && u.indexOf(',') !== -1) {
+                        var parts = u.split(',');
+                        for (var k = 0; k < parts.length; k++) { var t = parts[k].replace(/^\\s+|\\s+$/g, ''); if (t) candidates.push({ u: t, d: '' }); }
+                    } else {
+                        candidates.push({ u: u, d: d });
+                    }
+                    if (i < n && url.charCodeAt(i) === 0x2C) i++;
+                }
+                if (!candidates.length) return url;
+                var out = [];
+                for (var j = 0; j < candidates.length; j++) {
+                    var rep = handler.apply(void 0, [candidates[j].u].concat(args));
+                    out.push(candidates[j].d ? rep + ' ' + candidates[j].d : rep);
+                }
+                return out.join(', ');
+            }`
+        )
 );
 
 // fix the

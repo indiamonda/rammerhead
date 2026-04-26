@@ -18,6 +18,7 @@
 
 const headerModule = require('testcafe-hammerhead/lib/processing/script/header');
 const stylesheetProcessor = require('testcafe-hammerhead/lib/processing/resources/stylesheet');
+const processingMode = require('./processingMode');
 
 const FALLBACK = [
     'if(typeof __set$!=="function"){',
@@ -139,9 +140,6 @@ const CF_SKIP_RE = new RegExp([
     // Generic
     'captcha\\.js',
 ].join('|'), 'i');
-// Domains using "lite" page processing — skip AST rewriting for their scripts too.
-const LITE_DOMAIN_RE = /chatgpt\.com|chat\.openai\.com|oaistatic\.com|oaiusercontent\.com|claude\.ai|claudeusercontent\.com|anthropic\.com|poki\.com|poki-cdn\.com|bilibili\.com|bilibili\.cn|hdslb\.com|bilivideo|biliapi|szbdyd\.com|discord\.com|discordapp\.com|discord\.gg|github\.com|githubassets\.com|githubusercontent\.com|doubao\.com|volccdn\.com|volces\.com|volcengine\.com|ibytedtos\.com|duckduckgo\.com|qianwen\.com|tongyi\.aliyun\.com|alicdn\.com|itch\.io|itch\.zone|hwcdn\.net|gimkit\.com|turbowarp\.org|turbowarp\.xyz|deepseek\.com|deepseek\.ai|jmail\.world|mk48\.io/i;
-
 const scriptProcessor = require('testcafe-hammerhead/lib/processing/resources/script');
 const _origShouldProcess = scriptProcessor.shouldProcessResource.bind(scriptProcessor);
 scriptProcessor.shouldProcessResource = function (ctx) {
@@ -180,8 +178,8 @@ scriptProcessor.shouldProcessResource = function (ctx) {
 //   /fonts/...          Generic fonts folders
 //   /images/...         Generic images folders
 // ---------------------------------------------------------------------------
-const LITE_PATH_LITERAL_RE = /(["'])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"'`\n\r\s<>]+)(["'])/g;
-const LITE_IMPORT_DYNAMIC_RE = /(import\(\s*["'])(\/[^"'`\n\r]+)(["']\s*[,)])/g;
+const LITE_PATH_LITERAL_RE = /(["'`])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"'`\n\r\s<>]*)(["'`])/g;
+const LITE_IMPORT_DYNAMIC_RE = /(import\(\s*["'`])(\/[^"'`\n\r]+)(["'`]\s*[,)])/g;
 
 function _liteRewriteJs(script, ctx) {
     if (!script || typeof script !== 'string') return script;
@@ -275,7 +273,7 @@ function _stripProxyOriginFromScript(script, ctx) {
 }
 
 scriptProcessor.processResource = async function patchedProcessResource(script, ctx, charset, urlReplacer) {
-    if (ctx && ctx.dest && ctx.dest.host && LITE_DOMAIN_RE.test(ctx.dest.host)) {
+    if (processingMode.isMarkedLiteHost(ctx)) {
         return _stripProxyOriginFromScript(_liteRewriteJs(script, ctx), ctx);
     }
     const proto = Object.getPrototypeOf(this);

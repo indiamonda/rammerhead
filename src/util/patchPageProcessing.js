@@ -10,6 +10,7 @@
  */
 
 const pageProcessor = require('testcafe-hammerhead/lib/processing/resources/page');
+const processingMode = require('./processingMode');
 
 // ---------------------------------------------------------------------------
 // AD BLOCKER — client-side cosmetic filter + popup/redirect suppressor.
@@ -698,83 +699,6 @@ function _stripProxyOriginFromBody(body, ctx) {
     return out;
 }
 
-// Domains whose JS-heavy SPAs break under Hammerhead's full AST rewriting.
-// These get "lite" processing: runtime scripts are injected but inline JS
-// is NOT instrumented, preventing React/Next.js hydration mismatches.
-const LITE_DOMAINS_EXACT = new Set([
-    'chatgpt.com',
-    'chat.openai.com',
-    'claude.ai',
-    'poki.com',
-    'bilibili.com',
-    'doubao.com',
-    'discord.com',
-    'github.com',
-    'duckduckgo.com',
-    'qianwen.com',
-    'gimkit.com',
-    'turbowarp.org',
-    'chat.deepseek.com',
-    'deepseek.com',
-    'jmail.world',
-    'mk48.io',
-]);
-const LITE_DOMAINS_SUFFIX = [
-    '.chatgpt.com',
-    '.openai.com',
-    '.oaistatic.com',
-    '.oaiusercontent.com',
-    '.claude.ai',
-    '.anthropic.com',
-    '.claudeusercontent.com',
-    '.poki.com',
-    '.poki-cdn.com',
-    '.bilibili.com',
-    '.bilibili.cn',
-    '.hdslb.com',
-    '.bilivideo.com',
-    '.bilivideo.cn',
-    '.biliapi.net',
-    '.biliapi.com',
-    '.szbdyd.com',
-    '.doubao.com',
-    '.discord.com',
-    '.discordapp.com',
-    '.discord.gg',
-    '.github.com',
-    '.github.io',
-    '.githubassets.com',
-    '.githubusercontent.com',
-    '.aliyun.com',
-    '.alicdn.com',
-    '.duckduckgo.com',
-    '.qianwen.com',
-    '.tongyi.aliyun.com',
-    '.volccdn.com',
-    '.volces.com',
-    '.volcengine.com',
-    '.ibytedtos.com',
-    '.itch.io',
-    '.itch.zone',
-    '.hwcdn.net',
-    '.gimkit.com',
-    '.turbowarp.org',
-    '.turbowarp.xyz',
-    '.deepseek.com',
-    '.deepseek.ai',
-    '.jmail.world',
-    '.mk48.io',
-];
-function _needsLiteProcessing(ctx) {
-    if (!ctx || !ctx.dest) return false;
-    const host = (ctx.dest.host || '').toLowerCase().replace(/:\d+$/, '');
-    if (LITE_DOMAINS_EXACT.has(host)) return true;
-    for (let i = 0; i < LITE_DOMAINS_SUFFIX.length; i++) {
-        if (host.endsWith(LITE_DOMAINS_SUFFIX[i])) return true;
-    }
-    return false;
-}
-
 // Generic bot-challenge detection. Full hammerhead AST rewriting breaks the
 // obfuscated JS in challenge pages (AWS WAF, Cloudflare, DataDome, Kasada, etc.).
 // When we detect a challenge response we force lite processing so the browser can
@@ -856,23 +780,32 @@ function _liteProcess(html, ctx, inject) {
     // Rewrite paths in ALL inline scripts — both module imports and JSON data
     // like __reactRouterManifest which contains "/cdn/assets/..." paths that
     // React Router uses for dynamic import() (which can't be monkey-patched).
+    //
+    // CRITICAL: each rewrite must skip paths that are already prefixed with
+    // "/<sid>/" — otherwise step 1 (asset-path) prefixes a "/cdn/X" import
+    // specifier, then step 4 (`from "/path"`) sees "/<sid>/origin/cdn/X" and
+    // prefixes it AGAIN, producing "/<sid>/origin/<sid>/origin/cdn/X" which
+    // 404s. (Reproed on chatgpt.com static module imports — the doubling
+    // hits any script that uses `import ... from "/cdn/..."`.)
     if (origin) {
+        const _sidPrefix = '/' + sid + '/';
+        const _isAlreadyProxied = (p) => p.indexOf(_sidPrefix) === 0;
         html = html.replace(
             /(<script(?:[^>]*)>)([\s\S]*?)(<\/script>)/gi,
             (_m, open, body, close) => {
                 if (/type\s*=\s*["']application\/ld\+json["']/i.test(open)) return _m;
                 // Rewrite relative asset paths in string literals that dynamic import() or
                 // framework routers use (can't be intercepted by the bridge script)
-                body = body.replace(/(["'])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"']+)(["'])/g,
-                    (_m2, q1, path, q2) => q1 + relPrefix + origin + path + q2);
+                body = body.replace(/(["'`])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"'`]*)(["'`])/g,
+                    (_m2, q1, path, q2) => _isAlreadyProxied(path) ? _m2 : q1 + relPrefix + origin + path + q2);
                 // Rewrite import()/from/import statements in ALL scripts
-                body = body.replace(/(import\(\s*["'])(\/[^"']+)(["']\s*\))/g,
-                    (_m2, pre, path, post) => pre + relPrefix + origin + path + post);
+                body = body.replace(/(import\(\s*["'`])(\/[^"'`]+)(["'`]\s*\))/g,
+                    (_m2, pre, path, post) => _isAlreadyProxied(path) ? _m2 : pre + relPrefix + origin + path + post);
                 if (/type\s*=\s*["']module["']/i.test(open)) {
                     body = body.replace(/((?:^|[\s;,{(])import\s*["'])(\/[^"']+)(["'])/gm,
-                        (_m2, pre, path, post) => pre + relPrefix + origin + path + post);
+                        (_m2, pre, path, post) => _isAlreadyProxied(path) ? _m2 : pre + relPrefix + origin + path + post);
                     body = body.replace(/(from\s*["'])(\/[^"']+)(["'])/g,
-                        (_m2, pre, path, post) => pre + relPrefix + origin + path + post);
+                        (_m2, pre, path, post) => _isAlreadyProxied(path) ? _m2 : pre + relPrefix + origin + path + post);
                 }
                 return open + body + close;
             }
@@ -896,11 +829,32 @@ try{document.cookie='__rh_sess=; Max-Age=0; path=/'}catch(e){}
 // Some SPAs (React Router, Remix, Next.js) call location.reload() when a dynamic
 // import fails. If we have a bug that makes those imports keep failing, the page
 // loops at multiple reloads/sec and pegs both the user's CPU and our server.
-// We track recent reload timestamps in sessionStorage and, after seeing 4 reloads
+// We track recent reload timestamps in sessionStorage and, after seeing N reloads
 // within 6 seconds, we no-op location.reload/replace/assign for 30 seconds. The
 // user can still navigate manually; we just stop the runaway loop.
+//
+// Challenge-aware threshold: AWS WAF / Cloudflare / DataDome / etc. legitimately
+// reload 2-3 times in quick succession to build challenge confidence (each reload
+// the challenge JS sends a higher-quality token). A normal 4-in-6s threshold
+// trips on challenges and blocks the page mid-solve, causing "max challenge
+// attempts reached". Detect challenge SDK markers and use a much higher
+// threshold (15 reloads in 30s) so genuine WAF flows complete; once we leave
+// the challenge page (no markers) the strict threshold returns automatically.
 var _RH_RL_KEY='__rh_rl_'+S;var _RH_RL_BLOCK_KEY='__rh_rl_block_'+S;
 var _rhBlocked=false;
+function _rhIsChallengePage(){try{
+  if(typeof window.AwsWafIntegration!=='undefined')return true;
+  if(window.gokuProps)return true;
+  if(window.cf_chl_opt||window.__CF$cv$params||window.captcha_settings)return true;
+  if(window.dataDomeOptions||window._cfa)return true;
+  var html=document.documentElement&&document.documentElement.outerHTML||'';
+  if(html.length<150000){
+    if(/awswaf\.com|aws-waf-token|AwsWafIntegration/i.test(html))return true;
+    if(/challenges\.cloudflare\.com|cdn-cgi\/challenge-platform|turnstile/i.test(html))return true;
+    if(/datadome|captcha-delivery/i.test(html))return true;
+    if(/perimeterx|px-captcha|human-challenge/i.test(html))return true;
+  }
+}catch(e){}return false}
 try{
   var ss=window.sessionStorage;
   if(ss){
@@ -908,15 +862,18 @@ try{
     var blockUntil=parseInt(ss.getItem(_RH_RL_BLOCK_KEY)||'0',10)||0;
     if(blockUntil&&now<blockUntil){_rhBlocked=true}
     else{
+      var _rhChallenge=_rhIsChallengePage();
+      var _rhWindow=_rhChallenge?30000:6000;
+      var _rhMax=_rhChallenge?15:4;
       var raw=ss.getItem(_RH_RL_KEY)||'[]';var arr=[];
       try{arr=JSON.parse(raw);if(!Array.isArray(arr))arr=[]}catch(e){arr=[]}
       arr.push(now);
-      arr=arr.filter(function(t){return now-t<6000});
-      if(arr.length>=4){
+      arr=arr.filter(function(t){return now-t<_rhWindow});
+      if(arr.length>=_rhMax){
         ss.setItem(_RH_RL_BLOCK_KEY,String(now+30000));
         ss.removeItem(_RH_RL_KEY);
         _rhBlocked=true;
-        try{console.warn('[nav] reload-loop detected ('+arr.length+' reloads in 6s); blocking reloads for 30s')}catch(e){}
+        try{console.warn('[nav] reload-loop detected ('+arr.length+' reloads in '+(_rhWindow/1000)+'s); blocking reloads for 30s')}catch(e){}
       }else{
         ss.setItem(_RH_RL_KEY,JSON.stringify(arr));
       }
@@ -1094,27 +1051,26 @@ a=_oGA.call(el,'poster');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)_sSA.call(el
 a=_oGA.call(el,'srcset');if(a&&a.indexOf(_OP)!==0){n=a.replace(/((?:https?:)?\\/\\/[^\\s,]+)/gi,function(u){return rw(u)});
 if(n!==a)_sSA.call(el,'srcset',n)}
 }catch(e){}}
-// Host-aware throttling: dense-SPA hosts (e.g. bilibili) add thousands of feed-card
-// subtrees per scroll. The deep querySelectorAll pass on every mutation is what makes
-// the page unresponsive; on those hosts we skip the descent and only fix the directly
-// added node(s). The setAttribute/property override above still catches late src/href
-// assignments on inner descendants when the site actually touches them.
-var _HEAVY_SPA=/(^|\\.)bilibili\\.(com|cn)$|(^|\\.)hdslb\\.com$|(^|\\.)doubao\\.com$|(^|\\.)qianwen\\.com$|(^|\\.)tongyi\\.aliyun\\.com$|(^|\\.)chatgpt\\.com$|(^|\\.)claude\\.ai$/i;
-var _SKIP_DEEP=false;try{_SKIP_DEEP=_HEAVY_SPA.test(location.hostname||'')}catch(e){}
-function fixTree(n){fixEl(n);if(_SKIP_DEEP)return;
+// Throttle behaviour adaptively: do a deep scan once on initial document mount, and
+// switch to a cheap "fix the added node only" path during MutationObserver bursts.
+// The setAttribute/property override above already catches late src/href assignments
+// on descendants whenever the site actually touches them, so the deep traversal on
+// every mutation is unnecessary work that makes dense-SPA pages (large feed lists,
+// chat threads, video grids) unresponsive without giving any extra coverage.
+var _RW_TAGS=/^(?:IFRAME|SCRIPT|IMG|LINK|A|FORM|SOURCE|VIDEO|AUDIO|EMBED|OBJECT|AREA)$/;
+function fixTreeDeep(n){fixEl(n);
 try{var els=n.querySelectorAll('iframe,script,img,link,a,form,source,video,audio,embed,object,area');
 for(var i=0;i<els.length;i++)fixEl(els[i])}catch(e){}}
-var _pendQ=[],_pendRaf=0,_pendMax=_SKIP_DEEP?150:500,_pendSlice=_SKIP_DEEP?2:4;
+var _pendQ=[],_pendRaf=0,_pendMax=300,_pendSlice=3;
 function _flushPend(){_pendRaf=0;var t0=performance.now();
-while(_pendQ.length){var nd=_pendQ.shift();try{fixTree(nd)}catch(e){}if(performance.now()-t0>_pendSlice)break}
+while(_pendQ.length){var nd=_pendQ.shift();try{fixEl(nd)}catch(e){}if(performance.now()-t0>_pendSlice)break}
 if(_pendQ.length)_pendRaf=requestAnimationFrame(_flushPend)}
 function startObs(){var r=document.documentElement;if(!r){document.addEventListener('DOMContentLoaded',startObs);return}
-fixTree(r);
+fixTreeDeep(r);
 new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){var m=ml[i];
 if(m.type==='childList'){for(var j=0;j<m.addedNodes.length;j++){var nd=m.addedNodes[j];
 if(nd.nodeType!==1||_pendQ.length>=_pendMax)continue;
-// On heavy SPAs, only enqueue nodes that have or could have rewritable attrs; skip pure text/plain div wrappers.
-if(_SKIP_DEEP){var tg=nd.tagName;if(tg!=='IFRAME'&&tg!=='SCRIPT'&&tg!=='IMG'&&tg!=='LINK'&&tg!=='A'&&tg!=='FORM'&&tg!=='SOURCE'&&tg!=='VIDEO'&&tg!=='AUDIO'&&tg!=='EMBED'&&tg!=='OBJECT'&&tg!=='AREA')continue}
+var tg=nd.tagName;if(tg&&!_RW_TAGS.test(tg))continue;
 _pendQ.push(nd)}}}
 if(_pendQ.length&&!_pendRaf)_pendRaf=requestAnimationFrame(_flushPend);
 }).observe(r,{childList:true,subtree:true})}
@@ -1152,14 +1108,21 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
         html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
     }
 
-    // Use lite processing for complex SPAs that break under full instrumentation
-    if (typeof html === 'string' && _needsLiteProcessing(ctx) && !isSrcdoc) {
+    // Use lite processing for complex SPAs whose HTML shape suggests that full
+    // AST instrumentation is likely to break hydration/chunk loading. The host
+    // is remembered per session so external JS from the same app gets the same
+    // string-only script treatment without carrying a source-code domain list.
+    if (typeof html === 'string' && !isSrcdoc && (
+        processingMode.isMarkedLiteHost(ctx) || processingMode.htmlSuggestsLiteMode(html)
+    )) {
+        processingMode.markLiteHost(ctx);
         return _liteProcess(html, ctx, inject);
     }
 
     // Bot-challenge pages (AWS WAF, Cloudflare, DataDome, etc.): use lite processing
     // so the browser can execute the challenge JS natively and auto-solve.
     if (typeof html === 'string' && _isChallengeResponse(html, ctx) && !isSrcdoc) {
+        processingMode.markLiteHost(ctx);
         return _liteProcess(html, ctx, inject);
     }
 
@@ -1187,5 +1150,141 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
     }
     if (typeof result !== 'string') return result;
     result = _stripProxyOriginFromBody(result, ctx);
+    result = _rewriteMissedAttrs(result, ctx);
+    result = _rewriteJsonScriptUrls(result, ctx);
     return result.replace(/<head[^>]*>/i, '$&' + inject);
 };
+
+// Hammerhead's HTML rewriter doesn't know about a handful of less-common URL-
+// bearing attributes that modern apps still rely on. We sweep the rendered
+// HTML once before injection and prefix-rewrite any same-origin/relative URL
+// values that survived. The two most-impactful misses are SVG sprite refs:
+//
+//   <svg><use href="/cdn/assets/sprites-core-...svg#id"></use></svg>
+//   <svg><use xlink:href="/icons.svg#id"></use></svg>
+//
+// (chatgpt.com renders every UI icon with a <use href> against an SVG sprite
+// sheet — without rewriting, every glyph 404s.)
+//
+// Constraints to keep this generic:
+//   * only rewrite attributes whose value is a same-origin path ("/...") or
+//     a fully-qualified destination URL — never absolute URLs already pointing
+//     at the proxy (the `/<sid>/` and `/_a/` checks below).
+//   * leave fragment-only refs ("#foo") alone — they target nodes inside the
+//     same document.
+//   * leave hashless data: / blob: / mailto: / javascript: alone (`isExt`
+//     check below).
+function _rewriteMissedAttrs(html, ctx) {
+    if (!html || typeof html !== 'string') return html;
+    const sid = ctx && ctx.session && ctx.session.id;
+    const dest = ctx && ctx.dest;
+    if (!sid || !dest || !dest.host) return html;
+    const origin = (dest.protocol || 'https:') + '//' + dest.host;
+    const sidPrefix = '/' + sid + '/';
+
+    function rewriteValue(v) {
+        if (!v || typeof v !== 'string') return v;
+        if (v.charAt(0) === '#') return v;
+        if (v.indexOf(sidPrefix) === 0) return v;
+        if (v.indexOf('/_a/') === 0) return v;
+        if (/^[a-z]+:/i.test(v) && !/^https?:/i.test(v)) return v;
+        if (/^https?:/i.test(v)) {
+            try { return _PATH_PREFIX + sidPrefix + v; } catch (_) { return v; }
+        }
+        if (v.charAt(0) === '/' && v.charAt(1) !== '/') {
+            const hashIdx = v.indexOf('#');
+            const path = hashIdx >= 0 ? v.slice(0, hashIdx) : v;
+            const hash = hashIdx >= 0 ? v.slice(hashIdx) : '';
+            return _PATH_PREFIX + sidPrefix + origin + path + hash;
+        }
+        return v;
+    }
+
+    return html.replace(
+        /<use\b([^>]*?)\s(href|xlink:href)\s*=\s*(["'])([^"']*)\3/gi,
+        (full, attrs, attr, q, val) => {
+            const out = rewriteValue(val);
+            if (out === val) return full;
+            return '<use' + attrs + ' ' + attr + '=' + q + out + q;
+        }
+    );
+}
+
+// Hammerhead's AST script rewriter only operates on JavaScript code; it leaves
+// `<script type="application/json">` payloads untouched. SPA frameworks (Remix,
+// Next.js' App Router, Nuxt 3, SvelteKit, qwik, Astro islands, …) embed a
+// route/manifest blob in such a script and call `import("/cdn/assets/<file>")`
+// or `<link rel="modulepreload" href="…">` from JS at runtime — those URLs
+// then 404 because the proxy never saw them. We post-process every JSON-typed
+// script and rewrite same-origin URL strings to their proxied form.
+//
+// The implementation parses the JSON when possible (so we handle nested
+// objects/arrays correctly), and falls back to a regex sweep when the body
+// isn't valid JSON (HTML-encoded characters etc.). Both code paths are
+// idempotent: paths already starting with `/<sid>/` are skipped.
+function _rewriteJsonScriptUrls(html, ctx) {
+    if (!html || typeof html !== 'string') return html;
+    const sid = ctx && ctx.session && ctx.session.id;
+    const dest = ctx && ctx.dest;
+    if (!sid || !dest || !dest.host) return html;
+
+    const origin = (dest.protocol || 'https:') + '//' + dest.host;
+    const sidPrefix = '/' + sid + '/';
+    const proxiedPrefix = _PATH_PREFIX + sidPrefix + origin;
+
+    function rewriteString(s) {
+        if (typeof s !== 'string') return s;
+        if (!s) return s;
+        if (s.indexOf(sidPrefix) === 0) return s;
+        if (s.indexOf(_PATH_PREFIX + sidPrefix) === 0) return s;
+        if (s.indexOf('/_a/') === 0) return s;
+        if (s.charAt(0) === '/' && s.charAt(1) !== '/') {
+            return proxiedPrefix + s;
+        }
+        if (/^https?:\/\//i.test(s)) {
+            try {
+                const u = new URL(s);
+                if (u.host === dest.host) return _PATH_PREFIX + sidPrefix + s;
+            } catch (_) {}
+        }
+        return s;
+    }
+
+    function walk(v) {
+        if (Array.isArray(v)) {
+            for (let i = 0; i < v.length; i++) v[i] = walk(v[i]);
+            return v;
+        }
+        if (v && typeof v === 'object') {
+            for (const k in v) {
+                if (Object.prototype.hasOwnProperty.call(v, k)) v[k] = walk(v[k]);
+            }
+            return v;
+        }
+        if (typeof v === 'string') return rewriteString(v);
+        return v;
+    }
+
+    return html.replace(
+        /(<script\b[^>]*?\btype\s*=\s*["']application\/(?:[a-z0-9.+-]*\+)?json["'][^>]*>)([\s\S]*?)(<\/script>)/gi,
+        (_m, open, body, close) => {
+            if (/\bld\+json\b/i.test(open)) return _m;
+            const trimmed = body.trim();
+            if (!trimmed) return _m;
+            try {
+                const parsed = JSON.parse(trimmed);
+                const rewritten = walk(parsed);
+                return open + JSON.stringify(rewritten) + close;
+            } catch (_) {
+                const rewrittenBody = body.replace(
+                    /"((?:\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"\\\s]+))"/g,
+                    (m, path) => {
+                        if (path.indexOf(sidPrefix) === 0 || path.indexOf(_PATH_PREFIX + sidPrefix) === 0) return m;
+                        return '"' + proxiedPrefix + path + '"';
+                    }
+                );
+                return open + rewrittenBody + close;
+            }
+        }
+    );
+}

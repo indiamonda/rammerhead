@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 
 const { NEW_PATHS, OLD_PATHS, PROXY_PATHS } = require('./patchServiceRoutes');
+const { sendErrorPage } = require('./errorPages');
 
 const forbiddenRoutes = [
     OLD_PATHS.hammerhead, OLD_PATHS.task, OLD_PATHS.iframeTask,
@@ -83,8 +84,7 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
             try {
                 const entry = getCachedFile(pathToFile, contentType);
                 if (!entry) {
-                    res.writeHead(404);
-                    res.end('Not Found');
+                    sendErrorPage(req, res, 404, { detail: req.url });
                     return;
                 }
 
@@ -113,8 +113,7 @@ function addStaticFilesToProxy(proxy, staticDir, rootPath = '/', shouldIgnoreFil
                 if (req.method !== 'HEAD') res.end(body);
                 else res.end();
             } catch (error) {
-                res.writeHead(500);
-                res.end('Internal Server Error');
+                sendErrorPage(req, res, 500, { detail: error && error.message });
             }
         };
 

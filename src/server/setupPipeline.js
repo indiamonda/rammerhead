@@ -7,6 +7,7 @@ const { injectBrowserLikeHeaders } = require('../util/browserLikeHeaders');
 const sessionAffinity = require('../util/sessionAffinity');
 const adBlocker = require('../util/adBlocker');
 const { NEW_PATHS, OLD_PATHS, PROXY_PATHS } = require('../util/patchServiceRoutes');
+const { sendErrorPage } = require('../util/errorPages');
 const fs = require('fs');
 const path = require('path');
 
@@ -644,7 +645,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             if (req.headers['accept']) extraHeaders['Accept'] = req.headers['accept'];
 
             rawFetch(targetUrl, (err, status, headers, respBody) => {
-                if (err) { devErr('rawFetch ' + targetUrl, err); try { if (!res.headersSent) { res.writeHead(502); res.end('Raw proxy error: ' + err.message); } } catch(_){} return; }
+                if (err) { devErr('rawFetch ' + targetUrl, err); sendErrorPage(req, res, 502, { detail: 'Raw proxy error: ' + err.message }); return; }
                 const ct = (headers['content-type'] || '').toLowerCase();
                 const isHtml = ct.includes('text/html') || ct.includes('application/xhtml');
 
@@ -728,13 +729,13 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         try {
             const parsed = new URL(req.url, 'http://localhost');
             const rawParam = parsed.searchParams.get('url');
-            if (!rawParam) { res.writeHead(400); res.end('Missing url param'); return true; }
+            if (!rawParam) { sendErrorPage(req, res, 400, { detail: 'Missing url param' }); return true; }
 
             const targetUrl = _extractRealUrl(rawParam);
-            if (!targetUrl) { res.writeHead(400); res.end('Non-fetchable URL'); return true; }
+            if (!targetUrl) { sendErrorPage(req, res, 400, { detail: 'Non-fetchable URL' }); return true; }
 
             rawFetch(targetUrl, (err, status, headers, body) => {
-                if (err) { devErr('sources fetch', err); try { res.writeHead(502); res.end('Fetch failed: ' + err.message); } catch(_){} return; }
+                if (err) { devErr('sources fetch', err); sendErrorPage(req, res, 502, { detail: 'Fetch failed: ' + err.message }); return; }
                 const ct = headers['content-type'] || 'text/plain';
                 compressAndSend(req, res, 200, {
                     'Content-Type': ct,
@@ -744,7 +745,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             });
         } catch (e) {
             devErr('sources', e);
-            try { res.writeHead(500); res.end('Error: ' + e.message); } catch(_){}
+            sendErrorPage(req, res, 500, { detail: e && e.message });
         }
         return true;
     }, true);
@@ -760,20 +761,20 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             res.end();
             return true;
         }
-        if (req.method !== 'POST') { res.writeHead(405); res.end(); return true; }
+        if (req.method !== 'POST') { sendErrorPage(req, res, 405, { detail: 'Only POST is allowed on this endpoint' }); return true; }
 
         let body = '';
         req.on('data', chunk => { body += chunk; if (body.length > 4096) body = body.substring(0, 4096); });
         req.on('end', () => {
             let targetUrl, sessionId;
-            try { const p = JSON.parse(body); targetUrl = p.url; sessionId = p.session; } catch (e) { devErr('raw parse', e); res.writeHead(400); res.end(); return; }
-            if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) { res.writeHead(400); res.end(); return; }
+            try { const p = JSON.parse(body); targetUrl = p.url; sessionId = p.session; } catch (e) { devErr('raw parse', e); sendErrorPage(req, res, 400, { detail: 'Invalid JSON body' }); return; }
+            if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) { sendErrorPage(req, res, 400, { detail: 'Missing or invalid url field' }); return; }
 
             const serverInfo = proxyServer.getServerInfo(req);
             const proxyOrigin = `${serverInfo.protocol}//${serverInfo.hostname}${serverInfo.port == 443 || serverInfo.port == 80 ? '' : ':' + serverInfo.port}`;
 
             rawFetch(targetUrl, (err, status, headers, buf) => {
-                if (err) { devErr('raw fetch ' + targetUrl, err); try { if (!res.headersSent) { res.writeHead(502); res.end(); } } catch(_){} return; }
+                if (err) { devErr('raw fetch ' + targetUrl, err); sendErrorPage(req, res, 502, { detail: err && err.message }); return; }
                 let html = buf.toString('utf-8');
                 html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']content-security-policy["'][^>]*>/gi, '');
                 html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
@@ -997,8 +998,10 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             const session = sessionId && sessionStore.get(sessionId);
             // Never-expiring sessions bypass IP restriction
             if (session && !session.data.neverExpire && session.data.restrictIP && session.data.restrictIP !== config.getIP(req)) {
-                res.writeHead(403);
-                res.end('Sessions must come from the same IP');
+                sendErrorPage(req, res, 403, {
+                    description: 'This session is locked to a different IP address. Open a new session to continue.',
+                    detail: 'Sessions must come from the same IP'
+                });
                 return true;
             }
         }

@@ -1,6 +1,7 @@
 const generateId = require('../util/generateId');
 const URLPath = require('../util/URLPath');
 const httpResponse = require('../util/httpResponse');
+const { sendErrorPage } = require('../util/errorPages');
 const config = require('../config');
 const StrShuffler = require('../util/StrShuffler');
 const RammerheadSession = require('../classes/RammerheadSession');
@@ -48,7 +49,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         return (req, res) => {
             try {
                 const entry = _getCached(filePath, contentType);
-                if (!entry) { res.writeHead(404); res.end('Not Found'); return; }
+                if (!entry) { sendErrorPage(req, res, 404, { detail: req.url }); return; }
                 if (req.headers['if-none-match'] === entry.etag) { res.writeHead(304); res.end(); return; }
                 const ae = (req.headers['accept-encoding'] || '').toLowerCase();
                 const useGz = ae.includes('gzip') && entry.gz;
@@ -62,7 +63,9 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 if (useGz) { hdrs['Content-Encoding'] = 'gzip'; hdrs['Vary'] = 'Accept-Encoding'; }
                 res.writeHead(200, hdrs);
                 if (req.method !== 'HEAD') res.end(body); else res.end();
-            } catch (e) { res.writeHead(500); res.end('Internal Server Error'); }
+            } catch (e) {
+                sendErrorPage(req, res, 500, { detail: e && e.message });
+            }
         };
     }
     proxyServer.GET('/styles.css', serveCached('style.css', 'text/css'));
@@ -128,7 +131,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         let { id, httpProxy, enableShuffling } = new URLPath(req.url).getParams();
 
         if (!id || !sessionStore.has(id)) {
-            return httpResponse.badRequest(logger, req, res, config.getIP(req), 'not found');
+            return httpResponse.notFound(logger, req, res, config.getIP(req), 'session not found');
         }
 
         const session = sessionStore.get(id);
@@ -156,8 +159,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         const { id } = new URLPath(req.url).getParams();
 
         if (!id || !sessionStore.has(id)) {
-            res.end('not found');
-            return;
+            return httpResponse.notFound(logger, req, res, config.getIP(req), 'session not found');
         }
 
         sessionStore.delete(id);
@@ -240,10 +242,10 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         res.end(COVER_HTML);
     }
 
-    function _serveRealUI(res) {
-        if (!config.publicDir) { res.writeHead(404); res.end('Not Found'); return; }
+    function _serveRealUI(req, res) {
+        if (!config.publicDir) { sendErrorPage(req, res, 404, { detail: req.url }); return; }
         const indexPath = path.join(config.publicDir, 'index.html');
-        if (!fs.existsSync(indexPath)) { res.writeHead(404); res.end('Not Found'); return; }
+        if (!fs.existsSync(indexPath)) { sendErrorPage(req, res, 404, { detail: req.url }); return; }
         res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
         res.end(fs.readFileSync(indexPath));
     }
@@ -276,7 +278,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             const pathname = req.url.split('?')[0];
 
             if (_stealthPortal) {
-                if (_isPortalPath(pathname)) { _serveRealUI(res); return; }
+                if (_isPortalPath(pathname)) { _serveRealUI(req, res); return; }
                 if (STEALTH_COVERED_PATHS.has(pathname)) { _serveCover(res); return; }
                 return; // not ours; let pipeline / other handlers see it
             }

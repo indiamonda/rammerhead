@@ -25,9 +25,12 @@ require('../util/patchTlsFingerprint');
 require('../util/patchScriptProcessing');
 require('../util/patchSameOriginPolicy');
 require('../util/patchResponseHeaders');
+require('../util/patchSrcsetParser');
 require('../util/patchPageProcessing');
 require('../util/patchUrlRewrites');
 require('../util/patchDestinationRequest');
+require('../util/patchHammerheadErrorResponses');
+const { sendErrorPage } = require('../util/errorPages');
 let addJSDiskCache = function (jsCache) {
     require('../util/addJSDiskCache')(jsCache);
     // modification only works once
@@ -374,6 +377,10 @@ class RammerheadProxy extends Proxy {
         const isWebsocket = res instanceof stream.Duplex;
 
         if (!isWebsocket) {
+            // Tag res with the matching req so hammerhead's respond404/respond500
+            // helpers (which only receive res) can do content-negotiation. See
+            // patchHammerheadErrorResponses.js for the consuming side.
+            res._rhReq = req;
             // strip server headers
             const originalWriteHead = res.writeHead;
             const self = this;
@@ -531,8 +538,7 @@ class RammerheadProxy extends Proxy {
                 res.end(JSON.stringify(shuffleDict));
             } catch (e) {
                 this.logger.error(`(shuffleDict) ${e.message}`);
-                res.writeHead(500, { 'Content-Type': 'text/plain' });
-                res.end('Internal Server Error');
+                sendErrorPage(req, res, 500, { detail: e && e.message });
             }
         };
         // Generic CDN-shaped path is the primary; the legacy `/api/shuffleDict`
@@ -548,8 +554,10 @@ class RammerheadProxy extends Proxy {
     _setupLocalStorageServiceRoutes(disableSync) {
         this.POST('/syncLocalStorage', async (req, res) => {
             if (disableSync) {
-                res.writeHead(404);
-                res.end('server disabled localStorage sync');
+                sendErrorPage(req, res, 404, {
+                    description: 'localStorage syncing is disabled on this server.',
+                    detail: 'server disabled localStorage sync'
+                });
                 return;
             }
             const badRequest = (msg) => httpResponse.badRequest(this.logger, req, res, this.loggerGetIP(req), msg);
