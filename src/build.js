@@ -83,6 +83,21 @@ fs.writeFileSync(
             'data.type !== MessageType.Service && isWindow(target)',
             '$& && data.type?.startsWith("hammerhead|")'
         )
+        // Make _parseMessageJSONData NEVER throw on non-JSON postMessage payloads.
+        //
+        // Twitch (Kasada KPSDK), Discord (some preload scripts), Cloudflare Turnstile,
+        // bytedance bdms, etc. send postMessage strings that aren't JSON — e.g.
+        // "KPSDK:MC:A...". Stock hammerhead only try/catches when nativeAutomation is on,
+        // so in our (proxy) case it just calls JSON.parse(str), which throws and propagates
+        // as the noisy "Uncaught SyntaxError: Unexpected token 'K', \"KPSDK:MC:A\"... is not
+        // valid JSON" flooding the page console and breaking some message handlers downstream.
+        // Drop the `if (!nativeAutomation)` early-return so the try/catch fallback (which already
+        // exists in the source) always wraps the parse and surfaces the raw string as a User
+        // message instead.
+        .replace(
+            /MessageSandbox\._parseMessageJSONData = function \(str\) \{\s*if \(!settings\$1\.nativeAutomation\)\s*return parse\$1\(str\);\s*try \{/,
+            'MessageSandbox._parseMessageJSONData = function (str) {\n        try {'
+        )
 );
 
 // fix the

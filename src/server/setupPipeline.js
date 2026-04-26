@@ -846,8 +846,16 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     }, true);
 
     // Inject browser-like headers on proxied requests to bypass 403 (Discord, Poki, etc.)
-    // Pass sessionStore for Referer/Origin spoofing when URL is shuffled
-    proxyServer.addToOnRequestPipeline((req, _res, _serverInfo, isRoute) => {
+    // Pass sessionStore for Referer/Origin spoofing when URL is shuffled.
+    //
+    // CRITICAL: skip on WebSocket upgrades. The upgrade handshake has tightly-bound
+    // Connection/Upgrade headers that this middleware otherwise rewrites — replacing
+    // `Connection: Upgrade` with `Connection: keep-alive` causes the destination
+    // server to terminate the connection, which surfaces as the silent
+    // "WebSocket connection failed" error every WS-using site (Twitch, Discord
+    // gateway, jchat, Douyin captcha, ...) was hitting.
+    proxyServer.addToOnRequestPipeline((req, _res, _serverInfo, isRoute, isWebsocket) => {
+        if (isWebsocket) return false;
         injectBrowserLikeHeaders(req, isRoute, sessionStore);
         return false;
     }, true);

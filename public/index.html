@@ -2289,7 +2289,24 @@
                             const favLink = iframeDoc.querySelector('link[rel="icon"]') || iframeDoc.querySelector('link[rel="shortcut icon"]');
                             const favHref = favLink?.getAttribute('href');
                             if (favHref) {
-                                const favUrl = favHref.startsWith('http') || favHref.startsWith('data:') ? favHref : new URL(favHref, iframeWindow.location.href).href;
+                                // Resolve the favicon URL against the *destination* URL
+                                // (normalizedUrl), NOT the iframe's location.href. The iframe's
+                                // URL is the PROXY URL (https://rammerhead.fly.dev/<sid>/<dest>),
+                                // so resolving an absolute path like "/assets/icons/favicon-128.png"
+                                // against it produced "https://rammerhead.fly.dev/assets/icons/
+                                // favicon-128.png" — a 404 against rammerhead's static dir. We
+                                // then rewrite to the proxied form so the browser fetches it via
+                                // the proxy (right Referer, no CORB / mixed-content issues, no
+                                // hotlink-rejection from the destination).
+                                let favUrl = favHref;
+                                if (favHref.startsWith('data:')) {
+                                    favUrl = favHref;
+                                } else {
+                                    try {
+                                        const abs = new URL(favHref, normalizedUrl).href;
+                                        favUrl = `${basePath}/${sessionId}/${abs}`;
+                                    } catch (_) {}
+                                }
                                 updateTabFavicon(tabId, favUrl);
                             }
                             

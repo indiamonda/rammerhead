@@ -485,6 +485,23 @@ function _isCaptchaDest(destOrigin, url) {
 function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     if (!req?.headers) return;
     if (!isRoute && !isProxiedRequest(req)) return;
+
+    // CRITICAL: WebSocket upgrade requests must NEVER have their headers rewritten by this
+    // function. We force-set `connection: keep-alive` in DOCUMENT_HEADERS, which would
+    // overwrite the client's `Connection: Upgrade`, causing the destination server to see
+    // a plain HTTP/1.1 GET instead of a WS handshake → silent connection close → every
+    // websocket-using site (Twitch chat, Discord gateway, jchat, Douyin, etc.) breaks
+    // with "WebSocket connection failed" and no other diagnostic. Detect by either the
+    // standard upgrade headers or the hammerhead `!w` URL flag (covers cases where the
+    // browser's `Upgrade: websocket` was preserved by Hammerhead's outbound rewriter).
+    const upgradeHdr = (req.headers['upgrade'] || '').toLowerCase();
+    const connectionHdr = (req.headers['connection'] || '').toLowerCase();
+    const isWsUpgrade =
+        upgradeHdr === 'websocket' ||
+        connectionHdr.split(',').some(p => p.trim() === 'upgrade') ||
+        /\/[a-f0-9]{32}!w(?:[!/?]|$)/i.test(req.url || '');
+    if (isWsUpgrade) return;
+
     // Don't overwrite Referer/Origin for hammerhead task scripts — pipeline and hammerhead need the real referer (proxy URL with session id) to warm session and unshuffle
     let pathname = (req.url || '').split('?')[0];
     try {
