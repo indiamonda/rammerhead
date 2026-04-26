@@ -867,13 +867,22 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return false;
     }, true);
 
-    // task.js / iframe-task.js are served as routes (isRoute=true) so the warm-up above is skipped; warm session from Referer so addUrlShuffling can unshuffle and hammerhead doesn't 500
+    // task.js / iframe-task.js are served as routes (isRoute=true) so the warm-up above is skipped;
+    // warm session from Referer so hammerhead's _onTaskScriptRequest can find the session in
+    // openSessions and serve a real task script (otherwise it 500s and the client sandbox never
+    // initializes, leaving sandbox.document=null → _onBodyCreated crashes with "Cannot read
+    // properties of null (reading 'body')" on every proxied page).
+    //
+    // CRITICAL: After Tier-1.1 rename, hammerhead serves these scripts at NEW_PATHS.task /
+    // NEW_PATHS.iframeTask (e.g. /_a/t.js, /_a/i.js). The legacy paths are also accepted as
+    // a back-compat alias.
+    const TASK_PATHS = new Set([NEW_PATHS.task, NEW_PATHS.iframeTask, OLD_PATHS.task, OLD_PATHS.iframeTask]);
     proxyServer.addToOnRequestPipeline((req, _res, _serverInfo) => {
         let pathname = (req.url || '').split('?')[0];
         try {
             pathname = decodeURIComponent(pathname);
         } catch (_) {}
-        if (pathname !== '/task.js' && pathname !== '/iframe-task.js') return false;
+        if (!TASK_PATHS.has(pathname)) return false;
         const sessionId = getSessionId(req.headers?.referer || '');
         if (!sessionId || !sessionStore.has(sessionId)) return false;
         if (proxyServer.openSessions.get(sessionId)) return false;
