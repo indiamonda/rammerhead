@@ -231,10 +231,18 @@
         const shuffleDict = JSON.parse(resp.responseText);
         if (!shuffleDict) return;
 
-        // pasting entire thing here "because lazy" - m28
+        // Mirror of src/util/StrShuffler.js. The v2 length-prefixed format
+        // (`_rh1<5hex>:<body>`) lets the unshuffler know exactly where the
+        // shuffled portion ends so any text appended by in-page JS (e.g.
+        // `proxyUrl + "/chunk-name"`) survives the round trip without being
+        // mangled by the position-dependent cipher.
         const mod = (n, m) => ((n % m) + m) % m;
         const baseDictionary = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
         const shuffledIndicator = '_rhs';
+        const shuffledIndicatorV2 = '_rh1';
+        const LEN_DIGITS = 5;
+        const SEPARATOR = ':';
+        const MAX_LEN = (1 << (LEN_DIGITS * 4)) - 1;
         const generateDictionary = function () {
             let str = '';
             const split = baseDictionary.split('');
@@ -248,7 +256,8 @@
                 this.dictionary = dictionary;
             }
             shuffle(str) {
-                if (str.startsWith(shuffledIndicator)) {
+                if (typeof str !== 'string') return str;
+                if (str.startsWith(shuffledIndicatorV2) || str.startsWith(shuffledIndicator)) {
                     return str;
                 }
                 let shuffledStr = '';
@@ -265,23 +274,21 @@
                         shuffledStr += this.dictionary.charAt(mod(idx + i, baseDictionary.length));
                     }
                 }
-                return shuffledIndicator + shuffledStr;
-            }
-            unshuffle(str) {
-                if (!str.startsWith(shuffledIndicator)) {
-                    return str;
+                if (shuffledStr.length > MAX_LEN) {
+                    return shuffledIndicator + shuffledStr;
                 }
-
-                str = str.slice(shuffledIndicator.length);
-
+                const lenHex = shuffledStr.length.toString(16).padStart(LEN_DIGITS, '0');
+                return shuffledIndicatorV2 + lenHex + SEPARATOR + shuffledStr;
+            }
+            _unshuffleBody(body) {
                 let unshuffledStr = '';
-                for (let i = 0; i < str.length; i++) {
-                    const char = str.charAt(i);
+                for (let i = 0; i < body.length; i++) {
+                    const char = body.charAt(i);
                     const idx = this.dictionary.indexOf(char);
-                    if (char === '%' && str.length - i >= 3) {
+                    if (char === '%' && body.length - i >= 3) {
                         unshuffledStr += char;
-                        unshuffledStr += str.charAt(++i);
-                        unshuffledStr += str.charAt(++i);
+                        unshuffledStr += body.charAt(++i);
+                        unshuffledStr += body.charAt(++i);
                     } else if (idx === -1) {
                         unshuffledStr += char;
                     } else {
@@ -289,6 +296,24 @@
                     }
                 }
                 return unshuffledStr;
+            }
+            unshuffle(str) {
+                if (typeof str !== 'string') return str;
+                if (str.startsWith(shuffledIndicatorV2)) {
+                    const headerLen = shuffledIndicatorV2.length + LEN_DIGITS + SEPARATOR.length;
+                    if (str.length < headerLen) return str;
+                    const lenHex = str.substr(shuffledIndicatorV2.length, LEN_DIGITS);
+                    if (!/^[0-9a-f]{5}$/i.test(lenHex)) return str;
+                    if (str.charAt(shuffledIndicatorV2.length + LEN_DIGITS) !== SEPARATOR) return str;
+                    const len = parseInt(lenHex, 16);
+                    const bodyStart = headerLen;
+                    const bodyEnd = bodyStart + len;
+                    return this._unshuffleBody(str.substring(bodyStart, bodyEnd)) + str.substring(bodyEnd);
+                }
+                if (str.startsWith(shuffledIndicator)) {
+                    return this._unshuffleBody(str.slice(shuffledIndicator.length));
+                }
+                return str;
             }
         }
 

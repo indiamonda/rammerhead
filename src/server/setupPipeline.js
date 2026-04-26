@@ -280,8 +280,8 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     }
 
     // Extract the real destination URL from a proxied request. Handles unshuffled
-    // (`/<sid>/https://...`) and shuffled (`/<sid>!a!1!s*host/_rhs...`) URL forms.
-    // Returns null when the URL can't be mapped to a destination.
+    // (`/<sid>/https://...`) and shuffled (legacy `_rhs...` or v2 `_rh1...`) URL
+    // forms. Returns null when the URL can't be mapped to a destination.
     const _PROXY_DEST_RE = /^(?:\/rammerhead)?\/([a-f0-9]{32})(?:(?:![^/]+)*)\/(.+?)(?:\?|$)/i;
     function _extractDestForAdBlock(reqUrl) {
         if (!reqUrl) return null;
@@ -296,7 +296,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         if (/^https?:\/\//i.test(destPart)) return destPart + query;
 
         // Shuffled: unshuffle with session's dict
-        if (destPart.startsWith(StrShuffler.shuffledIndicator)) {
+        if (StrShuffler.isShuffled(destPart)) {
             const session = sessionStore.get(sessionId) || proxyServer.openSessions.get(sessionId);
             if (session && session.shuffleDict) {
                 try {
@@ -504,7 +504,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
 
         if (session.shuffleDict) {
             const pathMatch = referer.match(/\/[a-z0-9]{32}(?:![^/]*)?\/(.+?)(?:\?|$)/i);
-            if (pathMatch && pathMatch[1].startsWith(StrShuffler.shuffledIndicator)) {
+            if (pathMatch && StrShuffler.isShuffled(pathMatch[1])) {
                 try {
                     const shuffler = new StrShuffler(session.shuffleDict);
                     const unshuffled = shuffler.unshuffle(pathMatch[1]);
@@ -907,7 +907,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             const m = referer.match(REFERER_DEST_RE);
             if (m) {
                 const [, prefix, destPart, suffix] = m;
-                if (destPart.startsWith(StrShuffler.shuffledIndicator)) {
+                if (StrShuffler.isShuffled(destPart)) {
                     try {
                         const shuffler = new StrShuffler(session.shuffleDict);
                         const unshuffled = shuffler.unshuffle(destPart);

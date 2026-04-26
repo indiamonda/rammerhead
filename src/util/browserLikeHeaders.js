@@ -311,11 +311,11 @@ const CDN_REFERER_MAP = [
     [/\.?gimkit\.com$/i, 'https://www.gimkit.com'],
 ];
 
-// Match both unshuffled (https://...) and shuffled (_rhs...) proxy URLs (indicator is _rhs, no tilde).
-// Optional /rammerhead prefix for reverse-proxy deployments.
+// Match unshuffled (https://...) and shuffled (legacy `_rhs...` or v2 `_rh1...`)
+// proxy URLs. Optional /rammerhead prefix for reverse-proxy deployments.
 // Allow hammerhead-style metadata segments after the session id, e.g.:
-//   /<id>!s!utf-8/_rhs... or /<id>!a!1!s*host/_rhs...
-const PROXY_REQUEST_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(?:https?:\/\/[^/]+|_rhs)/i;
+//   /<id>!s!utf-8/_rhs... or /<id>!a!1!s*host/_rh1...
+const PROXY_REQUEST_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(?:https?:\/\/[^/]+|_rh[s1])/i;
 const UNSHUFFLED_ORIGIN_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(https?:\/\/[^/]+)/i;
 
 /**
@@ -336,7 +336,7 @@ function getDestinationOrigin(url, sessionStore) {
     const destPartMatch = pathOnly.match(new RegExp(`^(?:\\/rammerhead)?\\/[a-z0-9]{32}(?:(?:![^\\/]+)*)\\/(.+)$`, 'i'));
     if (!destPartMatch) return null;
     let destPart = destPartMatch[1];
-    if (!destPart.startsWith(StrShuffler.shuffledIndicator)) return null;
+    if (!StrShuffler.isShuffled(destPart)) return null;
 
     try {
         const shuffler = new StrShuffler(session.shuffleDict);
@@ -375,7 +375,7 @@ function getRefererFullUrl(referer, sessionStore) {
     const pathMatch = referer.match(/(?:\/rammerhead)?\/[a-z0-9]{32}(?:(?:![^\/\?]+)*)\/(.+?)(?:\?|$)/i);
     if (!pathMatch) return null;
     let destPart = pathMatch[1];
-    if (destPart.startsWith(StrShuffler.shuffledIndicator)) {
+    if (StrShuffler.isShuffled(destPart)) {
         try {
             const shuffler = new StrShuffler(session.shuffleDict);
             destPart = shuffler.unshuffle(destPart);

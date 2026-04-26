@@ -195,9 +195,16 @@
 
             // ============================================
             // URL Shuffler (client-side mirror of server StrShuffler)
+            // Supports both legacy `_rhs<body>` and v2 `_rh1<5hex>:<body>` formats.
+            // The length-prefixed v2 format preserves text appended after the
+            // shuffled portion (e.g. when in-page JS does `proxyUrl + "/chunk"`).
             // ============================================
             const _shufflerBaseDictionary = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
             const _shuffledIndicator = '_rhs';
+            const _shuffledIndicatorV2 = '_rh1';
+            const _SHUF_LEN_DIGITS = 5;
+            const _SHUF_SEP = ':';
+            const _SHUF_MAX_LEN = (1 << (_SHUF_LEN_DIGITS * 4)) - 1;
             const _mod = (n, m) => ((n % m) + m) % m;
 
             class StrShuffler {
@@ -205,7 +212,8 @@
                     this.dictionary = dictionary;
                 }
                 shuffle(str) {
-                    if (str.startsWith(_shuffledIndicator)) return str;
+                    if (typeof str !== 'string') return str;
+                    if (str.startsWith(_shuffledIndicatorV2) || str.startsWith(_shuffledIndicator)) return str;
                     let out = '';
                     for (let i = 0; i < str.length; i++) {
                         const ch = str.charAt(i);
@@ -218,17 +226,17 @@
                             out += this.dictionary.charAt(_mod(idx + i, _shufflerBaseDictionary.length));
                         }
                     }
-                    return _shuffledIndicator + out;
+                    if (out.length > _SHUF_MAX_LEN) return _shuffledIndicator + out;
+                    const lenHex = out.length.toString(16).padStart(_SHUF_LEN_DIGITS, '0');
+                    return _shuffledIndicatorV2 + lenHex + _SHUF_SEP + out;
                 }
-                unshuffle(str) {
-                    if (!str.startsWith(_shuffledIndicator)) return str;
-                    str = str.slice(_shuffledIndicator.length);
+                _unshuffleBody(body) {
                     let out = '';
-                    for (let i = 0; i < str.length; i++) {
-                        const ch = str.charAt(i);
+                    for (let i = 0; i < body.length; i++) {
+                        const ch = body.charAt(i);
                         const idx = this.dictionary.indexOf(ch);
-                        if (ch === '%' && str.length - i >= 3) {
-                            out += ch; out += str.charAt(++i); out += str.charAt(++i);
+                        if (ch === '%' && body.length - i >= 3) {
+                            out += ch; out += body.charAt(++i); out += body.charAt(++i);
                         } else if (idx === -1) {
                             out += ch;
                         } else {
@@ -236,6 +244,24 @@
                         }
                     }
                     return out;
+                }
+                unshuffle(str) {
+                    if (typeof str !== 'string') return str;
+                    if (str.startsWith(_shuffledIndicatorV2)) {
+                        const headerLen = _shuffledIndicatorV2.length + _SHUF_LEN_DIGITS + _SHUF_SEP.length;
+                        if (str.length < headerLen) return str;
+                        const lenHex = str.substr(_shuffledIndicatorV2.length, _SHUF_LEN_DIGITS);
+                        if (!/^[0-9a-f]{5}$/i.test(lenHex)) return str;
+                        if (str.charAt(_shuffledIndicatorV2.length + _SHUF_LEN_DIGITS) !== _SHUF_SEP) return str;
+                        const len = parseInt(lenHex, 16);
+                        const bodyStart = headerLen;
+                        const bodyEnd = bodyStart + len;
+                        return this._unshuffleBody(str.substring(bodyStart, bodyEnd)) + str.substring(bodyEnd);
+                    }
+                    if (str.startsWith(_shuffledIndicator)) {
+                        return this._unshuffleBody(str.slice(_shuffledIndicator.length));
+                    }
+                    return str;
                 }
             }
 
@@ -261,13 +287,15 @@
 
             /**
              * If the string is a shuffled URL (from path or parseProxyUrl), return the real URL.
-             * Handles both "_rhs..." and raw shuffled form like "xVV2v://..." (no _rhs prefix).
+             * Handles both `_rhs<body>`, `_rh1<5hex>:<body>`, and raw shuffled
+             * legacy form like `xVV2v://...` (no indicator prefix).
              */
             function ensureUnshuffled(candidate) {
                 if (!candidate || typeof candidate !== 'string') return candidate;
                 if (candidate.startsWith('http://') || candidate.startsWith('https://')) return candidate;
                 if (!_shuffler) return null;
-                var toUnshuffle = candidate.startsWith(_shuffledIndicator) ? candidate : (_shuffledIndicator + candidate);
+                var startsWithIndicator = candidate.startsWith(_shuffledIndicatorV2) || candidate.startsWith(_shuffledIndicator);
+                var toUnshuffle = startsWithIndicator ? candidate : (_shuffledIndicator + candidate);
                 try {
                     var real = _shuffler.unshuffle(toUnshuffle);
                     return (real && (real.startsWith('http://') || real.startsWith('https://'))) ? real : null;
@@ -301,7 +329,8 @@
                         var urlPart = match[2];
                         var unshuffled = ensureUnshuffled(urlPart);
                         if (unshuffled) return unshuffled;
-                        if (!urlPart.startsWith(_shuffledIndicator)) return urlPart.startsWith('http') ? urlPart : null;
+                        var hasIndicator = urlPart.startsWith(_shuffledIndicatorV2) || urlPart.startsWith(_shuffledIndicator);
+                        if (!hasIndicator) return urlPart.startsWith('http') ? urlPart : null;
                     }
                 } catch (_) {}
                 try {

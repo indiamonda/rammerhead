@@ -5,6 +5,10 @@ var setError, api, sessionIdsStore, loadSettings, renderSessionTable;
     const mod = (n, m) => ((n % m) + m) % m;
     const baseDictionary = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
     const shuffledIndicator = '_rhs';
+    const shuffledIndicatorV2 = '_rh1';
+    const SHUF_LEN_DIGITS = 5;
+    const SHUF_SEP = ':';
+    const SHUF_MAX_LEN = (1 << (SHUF_LEN_DIGITS * 4)) - 1;
     const generateDictionary = function () {
         let str = '';
         const split = baseDictionary.split('');
@@ -18,7 +22,8 @@ var setError, api, sessionIdsStore, loadSettings, renderSessionTable;
             this.dictionary = dictionary;
         }
         shuffle(str) {
-            if (str.startsWith(shuffledIndicator)) {
+            if (typeof str !== 'string') return str;
+            if (str.startsWith(shuffledIndicatorV2) || str.startsWith(shuffledIndicator)) {
                 return str;
             }
             let shuffledStr = '';
@@ -35,23 +40,19 @@ var setError, api, sessionIdsStore, loadSettings, renderSessionTable;
                     shuffledStr += this.dictionary.charAt(mod(idx + i, baseDictionary.length));
                 }
             }
-            return shuffledIndicator + shuffledStr;
+            if (shuffledStr.length > SHUF_MAX_LEN) return shuffledIndicator + shuffledStr;
+            const lenHex = shuffledStr.length.toString(16).padStart(SHUF_LEN_DIGITS, '0');
+            return shuffledIndicatorV2 + lenHex + SHUF_SEP + shuffledStr;
         }
-        unshuffle(str) {
-            if (!str.startsWith(shuffledIndicator)) {
-                return str;
-            }
-
-            str = str.slice(shuffledIndicator.length);
-
+        _unshuffleBody(body) {
             let unshuffledStr = '';
-            for (let i = 0; i < str.length; i++) {
-                const char = str.charAt(i);
+            for (let i = 0; i < body.length; i++) {
+                const char = body.charAt(i);
                 const idx = this.dictionary.indexOf(char);
-                if (char === '%' && str.length - i >= 3) {
+                if (char === '%' && body.length - i >= 3) {
                     unshuffledStr += char;
-                    unshuffledStr += str.charAt(++i);
-                    unshuffledStr += str.charAt(++i);
+                    unshuffledStr += body.charAt(++i);
+                    unshuffledStr += body.charAt(++i);
                 } else if (idx === -1) {
                     unshuffledStr += char;
                 } else {
@@ -59,6 +60,24 @@ var setError, api, sessionIdsStore, loadSettings, renderSessionTable;
                 }
             }
             return unshuffledStr;
+        }
+        unshuffle(str) {
+            if (typeof str !== 'string') return str;
+            if (str.startsWith(shuffledIndicatorV2)) {
+                const headerLen = shuffledIndicatorV2.length + SHUF_LEN_DIGITS + SHUF_SEP.length;
+                if (str.length < headerLen) return str;
+                const lenHex = str.substr(shuffledIndicatorV2.length, SHUF_LEN_DIGITS);
+                if (!/^[0-9a-f]{5}$/i.test(lenHex)) return str;
+                if (str.charAt(shuffledIndicatorV2.length + SHUF_LEN_DIGITS) !== SHUF_SEP) return str;
+                const len = parseInt(lenHex, 16);
+                const bodyStart = headerLen;
+                const bodyEnd = bodyStart + len;
+                return this._unshuffleBody(str.substring(bodyStart, bodyEnd)) + str.substring(bodyEnd);
+            }
+            if (str.startsWith(shuffledIndicator)) {
+                return this._unshuffleBody(str.slice(shuffledIndicator.length));
+            }
+            return str;
         }
     }
 
