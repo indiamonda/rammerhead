@@ -184,17 +184,105 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         }
         return '';
     };
+
+    // Pluggable URL path style. When `config.pathStyle` is configured (e.g.
+    // "cdn-cgi/p"), every URL we emit for a new/proxied session must include
+    // the prefix so the user-visible URL bar (and any URL-pattern filter)
+    // sees a CDN-shaped path instead of `/<sid>/<destination>`. See
+    // src/server/setupPipeline.js for the matching incoming-strip logic.
+    const _pathStyle = (config.pathStyle || '').replace(/^\/+|\/+$/g, '');
+    const _pathPrefix = _pathStyle ? '/' + _pathStyle : '';
     
-    // Route handler - serve public/index.html for root paths
+    // ── Homepage stealth-mode ──────────────────────────────────────────────
+    // When config.stealthPortal (or env STEALTH_PORTAL) is set, the bare origin
+    // and well-known landing paths return a generic "service is up" cover page
+    // so that scanners crawling https://<host>/ see nothing identifiable. The
+    // real proxy UI is reachable only at /<token> (and /rammerhead/<token>).
+    // Existing /<sessionId>/<destination> share links are unaffected because
+    // session IDs (32-char hex) are routed by hammerhead's session pipeline,
+    // not by this handler.
+    const _stealthPortal = (config.stealthPortal || '').trim() || null;
+    // Pure-HTML cover page. No JS, no fonts, no external resources, no proxy/
+    // unblock/session keywords. Looks like a brand-new domain placeholder.
+    const COVER_HTML = [
+        '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">',
+        '<meta name="viewport" content="width=device-width,initial-scale=1">',
+        '<meta name="robots" content="noindex,nofollow">',
+        '<title>Welcome</title>',
+        '<style>',
+        ':root{--bg:#fafafa;--fg:#1a1a1a;--mu:#666;--ac:#2563eb}',
+        '@media (prefers-color-scheme:dark){:root{--bg:#0a0a0a;--fg:#e5e5e5;--mu:#888}}',
+        '*{box-sizing:border-box}',
+        'html,body{margin:0;padding:0;height:100%}',
+        'body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background:var(--bg);color:var(--fg)}',
+        'main{min-height:100vh;display:grid;place-items:center;padding:24px}',
+        '.c{max-width:480px;text-align:center}',
+        'h1{font-size:32px;margin:0 0 12px;font-weight:600}',
+        'p{color:var(--mu);margin:0 0 16px}',
+        '.dot{display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;margin-right:8px;vertical-align:middle}',
+        '</style></head><body><main><section class="c">',
+        '<h1>Welcome</h1>',
+        '<p><span class="dot"></span> Service is available.</p>',
+        '<p>This page is intentionally blank.</p>',
+        '</section></main></body></html>',
+    ].join('');
+
+    function _serveCover(res) {
+        res.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Content-Length': Buffer.byteLength(COVER_HTML),
+            'Cache-Control': 'public, max-age=3600',
+            'X-Robots-Tag': 'noindex, nofollow',
+        });
+        res.end(COVER_HTML);
+    }
+
+    function _serveRealUI(res) {
+        if (!config.publicDir) { res.writeHead(404); res.end('Not Found'); return; }
+        const indexPath = path.join(config.publicDir, 'index.html');
+        if (!fs.existsSync(indexPath)) { res.writeHead(404); res.end('Not Found'); return; }
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+        res.end(fs.readFileSync(indexPath));
+    }
+
+    // Hosts the real proxy UI under /<token> (and base-path-prefixed equivalents).
+    // We use exact path matching against the configured token so a typo doesn't
+    // leak the cover page through.
+    function _isPortalPath(pathname) {
+        if (!_stealthPortal) return false;
+        const t = _stealthPortal;
+        return (
+            pathname === '/' + t ||
+            pathname === '/' + t + '/' ||
+            pathname === '/rammerhead/' + t ||
+            pathname === '/rammerhead/' + t + '/'
+        );
+    }
+
+    // Paths that should serve the cover page (instead of the real UI) when
+    // stealth-mode is enabled. Covers both the bare origin and the
+    // well-known landing paths an indexer might probe.
+    const STEALTH_COVERED_PATHS = new Set([
+        '/', '/index.html', '/index.htm',
+        '/rammerhead', '/rammerhead/', '/rammerhead/index.html', '/rammerhead/index.htm',
+    ]);
+
+    // Route handler — serves cover OR real UI depending on stealth-mode + path.
     const handleRoot = (req, res) => {
         try {
             const pathname = req.url.split('?')[0];
-            // Only handle root paths
-            if (pathname !== '/' && pathname !== '/rammerhead' && pathname !== '/rammerhead/') {
-                return; // Let other handlers process this
+
+            if (_stealthPortal) {
+                if (_isPortalPath(pathname)) { _serveRealUI(res); return; }
+                if (STEALTH_COVERED_PATHS.has(pathname)) { _serveCover(res); return; }
+                return; // not ours; let pipeline / other handlers see it
             }
-            
-            // Serve public/index.html (browser interface)
+
+            // Stealth disabled: original behaviour — bare origin + base-path
+            // alias serve the proxy UI directly.
+            if (pathname !== '/' && pathname !== '/rammerhead' && pathname !== '/rammerhead/') {
+                return;
+            }
             if (config.publicDir) {
                 const indexPath = path.join(config.publicDir, 'index.html');
                 if (fs.existsSync(indexPath)) {
@@ -285,7 +373,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
 
             const shuffler = new StrShuffler(session.shuffleDict);
             const shuffledUrl = shuffler.shuffle(normalizedTarget);
-            const proxiedUrl = (basePath ? basePath + '/' : '/') + id + '/' + shuffledUrl;
+            const proxiedUrl = (basePath || '') + _pathPrefix + '/' + id + '/' + shuffledUrl;
             
             jsonResponse(res, 200, { proxiedUrl, sessionId: id });
         } catch (error) {
@@ -298,6 +386,22 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/', handleRoot);
     proxyServer.GET('/rammerhead', handleRoot);
     proxyServer.GET('/rammerhead/', handleRoot);
+
+    // When stealth-mode is on, override the well-known landing paths
+    // (/index.html, /rammerhead/index.html, ...) so addStaticDirToProxy's
+    // automatic /index.html route can't leak the real UI, and register the
+    // secret portal path that DOES serve the real UI.
+    if (_stealthPortal) {
+        proxyServer.GET('/index.html', handleRoot);
+        proxyServer.GET('/index.htm', handleRoot);
+        proxyServer.GET('/rammerhead/index.html', handleRoot);
+        proxyServer.GET('/rammerhead/index.htm', handleRoot);
+        proxyServer.GET('/' + _stealthPortal, handleRoot);
+        proxyServer.GET('/' + _stealthPortal + '/', handleRoot);
+        proxyServer.GET('/rammerhead/' + _stealthPortal, handleRoot);
+        proxyServer.GET('/rammerhead/' + _stealthPortal + '/', handleRoot);
+        logger.info(`Stealth-mode portal enabled. Real UI: /${_stealthPortal}`);
+    }
     
     // Route to ensure/create session
     proxyServer.GET('/ensuresession', handleEnsureSession);
@@ -334,7 +438,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             const shuffler = new StrShuffler(session.shuffleDict);
             const shuffledUrl = shuffler.shuffle(normalizedTarget);
             const basePath = getBasePath(req);
-            const proxiedUrl = (basePath ? basePath + '/' : '/') + id + '/' + shuffledUrl;
+            const proxiedUrl = (basePath || '') + _pathPrefix + '/' + id + '/' + shuffledUrl;
             
             jsonResponse(res, 200, { url: proxiedUrl, sessionId: id });
         } catch (error) {

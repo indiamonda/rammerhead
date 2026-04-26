@@ -45,14 +45,29 @@ const OLD_PATHS = Object.freeze({
     workerHammerhead: '/worker-hammerhead.js',
 });
 
+// Hammerhead tags every script / stylesheet / charset element it injects into a
+// proxied page with a class like `script-hammerhead-shadow-ui`. That's a giveaway
+// for any anti-proxy detector that runs `document.querySelector('[class*=hammerhead]')`.
+// Rename the postfix to a generic, utility-class-looking string that blends in.
+//
+// IMPORTANT: This is the SHARED suffix used by both the server (page.js / self-removing-scripts.js)
+// AND the client bundle (hammerhead.js, which uses it to ignore its own DOM nodes).
+// We mutate the server-side `shadow-ui/class-name` module below, and `rewriteBundlePaths`
+// string-substitutes the OLD postfix → NEW postfix in the served client bundles so
+// both halves stay in sync.
+const SHADOW_UI_POSTFIX_OLD = '-hammerhead-shadow-ui';
+const SHADOW_UI_POSTFIX_NEW = '-_a-ui';
+
 // Other proxy-internal paths that get inspected/blocklisted. Kept here so
 // setupRoutes.js, setupPipeline.js, and injected scripts use one source of truth.
 const PROXY_PATHS = Object.freeze({
+    rammerheadJs: '/_a/r.js',        // was /rammerhead.js (injected as <script src=> on every proxied page)
     devtoolsJs: '/_a/d.js',          // was /__rh_devtools.js
     console: '/_a/cl',               // was /__rh_console
     raw: '/_a/rw',                   // was /__rh_raw
     sources: '/_a/sr',               // was /__rh_sources
     shuffleDict: '/_a/sd',           // was /api/shuffleDict
+    rammerheadJsLegacy: '/rammerhead.js',
     devtoolsJsLegacy: '/__rh_devtools.js',
     consoleLegacy: '/__rh_console',
     rawLegacy: '/__rh_raw',
@@ -65,6 +80,18 @@ const PROXY_PATHS = Object.freeze({
 //   r.default.hammerhead    // returns '/_a/c.js'
 // gets the new value because Node caches the resolved module object.
 Object.assign(serviceRoutes, NEW_PATHS);
+
+// Same trick for the shadow-ui class-name module: mutate its exports BEFORE any
+// other testcafe-hammerhead module requires it, so server-side page processing
+// and self-removing-scripts.js set the renamed class on injected elements, and
+// the find-by-class lookup in page.js still works (we read and write the same value).
+const shadowUiClassName = require('testcafe-hammerhead/lib/shadow-ui/class-name');
+const _suiPostfix = SHADOW_UI_POSTFIX_NEW;
+shadowUiClassName.postfix = _suiPostfix;
+shadowUiClassName.charset = 'charset' + _suiPostfix;
+shadowUiClassName.script = 'script' + _suiPostfix;
+shadowUiClassName.selfRemovingScript = 'self-removing-script' + _suiPostfix;
+shadowUiClassName.uiStylesheet = 'ui-stylesheet' + _suiPostfix;
 
 // Hammerhead's `_registerServiceRoutes` calls `load_client_script(serviceRoutes.hammerhead, ...)`
 // to read the underlying client bundle file from `lib/client/<name>`. After our rename,
@@ -99,10 +126,15 @@ module.exports = {
     NEW_PATHS,
     OLD_PATHS,
     PROXY_PATHS,
+    SHADOW_UI_POSTFIX_OLD,
+    SHADOW_UI_POSTFIX_NEW,
     /**
-     * Rewrite hardcoded old paths inside a JS bundle string. Used when serving
-     * the patched hammerhead/worker/transport bundles so internal code that does
-     * fetch('/task.js') still resolves under the new name.
+     * Rewrite hardcoded old paths AND the brand-y shadow-ui class postfix inside
+     * a JS bundle string. Used when serving the patched hammerhead/worker/transport
+     * bundles so internal code that does fetch('/task.js') still resolves under
+     * the new name, and so client-side hammerhead can still recognize its own
+     * shadow-ui elements (we renamed the postfix on the server, the client bundle
+     * has the old value baked in at build time, so both halves must agree).
      */
     rewriteBundlePaths(content) {
         if (typeof content !== 'string') content = content.toString('utf8');
@@ -116,6 +148,11 @@ module.exports = {
             // longer string. Use a global word-boundary-ish split.
             out = out.split(oldP).join(newP);
         }
+        // Replace the brand-y shadow-ui postfix everywhere it appears in the bundle.
+        // Hammerhead uses both the bare postfix (`-hammerhead-shadow-ui`) and the
+        // composite class names (`script-hammerhead-shadow-ui`, `ui-stylesheet-hammerhead-shadow-ui`,
+        // ...). A single split-join on the postfix substring covers all of them.
+        out = out.split(SHADOW_UI_POSTFIX_OLD).join(SHADOW_UI_POSTFIX_NEW);
         return out;
     },
 };

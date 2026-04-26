@@ -2239,12 +2239,12 @@
                                                 body: JSON.stringify(batch),
                                                 keepalive: true
                                             }).catch(function(){
-                                                fetch('/__rh_console', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify(batch),
-                                                    keepalive: true
-                                                }).catch(function(){});
+                                            fetch('/__rh_console', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify(batch),
+                                                keepalive: true
+                                            }).catch(function(){});
                                             });
                                         }
                                         // Network requests

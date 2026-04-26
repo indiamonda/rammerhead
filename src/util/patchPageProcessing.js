@@ -77,7 +77,10 @@ const AD_CSS_RULES = [
     '[class*="leaderboard-ad"], [class*="MPUholder"], [class*="dfp-ad"]',
 ].join('');
 const AD_BLOCKER_SCRIPT = [
-    '<style id="__rh_ab_css">',
+    // Element IDs are deliberately kept vague (no `__rh_*` brand prefix) so
+    // a Smart Agent can't `document.getElementById('__rh_ab_css')` and
+    // immediately fingerprint the proxy.
+    '<style id="_a_css">',
     // Hide ad containers. !important so sites can\'t override.
     AD_CSS_RULES,
     '{display:none!important;visibility:hidden!important;height:0!important;width:0!important;min-height:0!important;min-width:0!important;max-height:0!important;max-width:0!important;pointer-events:none!important;}',
@@ -85,13 +88,13 @@ const AD_BLOCKER_SCRIPT = [
     '.ad-showing video.html5-main-video{display:none!important;}',
     '.ad-showing .ytp-chrome-bottom, .ad-showing .ytp-ad-skip-button-modern, .ad-showing .ytp-ad-skip-button-slot{display:none!important;}',
     '</style>',
-    '<script id="__rh_ab_js">',
+    '<script id="_a_js">',
     '(function(){',
     'if(typeof window==="undefined"||window.__rhABinit)return;window.__rhABinit=1;',
     'var _off=false;',
     'try{_off=localStorage.getItem("adBlockerEnabled")==="0"}catch(e){}',
     'if(!_off){try{_off=document.cookie.indexOf("__rh_ab=0")!==-1}catch(e){}}',
-    'if(_off){try{var cs=document.getElementById("__rh_ab_css");if(cs)cs.remove()}catch(e){}return}',
+    'if(_off){try{var cs=document.getElementById("_a_css");if(cs)cs.remove()}catch(e){}return}',
     // --- POPUP / POPUNDER GUARD ---
     // Block ad popups while still allowing legitimate cross-origin popups (Discord invite
     // links, OAuth flows, share buttons). Decision tree inside the window.open override:
@@ -148,7 +151,7 @@ const AD_BLOCKER_SCRIPT = [
     'try{',
     // Signal 1: known ad-network host -> always block (even if user-initiated)
     'if(typeof u==="string"&&_AD_HOST_RE.test(u)){',
-    'try{console.debug("[rh-adblock] blocked ad popup:",u)}catch(e){}',
+    'try{console.debug("[ab] blocked ad popup:",u)}catch(e){}',
     'return null}',
     'var gestureAge=Date.now()-_lastUserTs;',
     // Signal 2: recent gesture on a real user-control (Discord "Join", share buttons, OAuth) -> allow
@@ -156,14 +159,14 @@ const AD_BLOCKER_SCRIPT = [
     'return _oOpen.apply(this,arguments)}',
     // Signal 3: no gesture at all (timer-fired popunder) -> block
     'if(gestureAge>2500){',
-    'try{console.debug("[rh-adblock] blocked untrusted popup:",u)}catch(e){}',
+    'try{console.debug("[ab] blocked untrusted popup:",u)}catch(e){}',
     'return null}',
     // Signal 4: gesture happened on non-user-control element (document-level onclick popunder).
     // For cross-origin popups this is the "first-click popunder" pattern (motorsnag/popcash/etc).
     'if(typeof u==="string"&&u){',
     'var _uHost="";try{_uHost=new URL(u,location.href).hostname}catch(e){}',
     'if(_uHost&&_myHost&&_uHost!==_myHost){',
-    'try{console.debug("[rh-adblock] blocked first-click popunder:",u)}catch(e){}',
+    'try{console.debug("[ab] blocked first-click popunder:",u)}catch(e){}',
     'return null}}',
     // Otherwise (same-origin popup, even without user-control) -> allow
     'return _oOpen.apply(this,arguments);',
@@ -193,23 +196,23 @@ const AD_BLOCKER_SCRIPT = [
     // Intercept location.assign / replace methods
     'function _installLocGuard(){try{',
     'var _loc=window.location;if(!_loc||_loc.__rhLocGuard)return;',
-    'try{var _oAssign=_loc.assign.bind(_loc);_loc.assign=function(u){if(_isAdRedirect(u)){try{console.debug("[rh-adblock] blocked location.assign:",u)}catch(e){}return}return _oAssign(u)}}catch(e){}',
-    'try{var _oReplace=_loc.replace.bind(_loc);_loc.replace=function(u){if(_isAdRedirect(u)){try{console.debug("[rh-adblock] blocked location.replace:",u)}catch(e){}return}return _oReplace(u)}}catch(e){}',
+    'try{var _oAssign=_loc.assign.bind(_loc);_loc.assign=function(u){if(_isAdRedirect(u)){try{console.debug("[ab] blocked location.assign:",u)}catch(e){}return}return _oAssign(u)}}catch(e){}',
+    'try{var _oReplace=_loc.replace.bind(_loc);_loc.replace=function(u){if(_isAdRedirect(u)){try{console.debug("[ab] blocked location.replace:",u)}catch(e){}return}return _oReplace(u)}}catch(e){}',
     // Intercept location.href setter on this Location instance (may be hammerhead-wrapped Location)
     'try{var _hrefDesc=Object.getOwnPropertyDescriptor(_loc.__proto__||Location.prototype,"href");',
     'if(_hrefDesc&&_hrefDesc.set){',
     'var _oHrefSet=_hrefDesc.set,_oHrefGet=_hrefDesc.get;',
-    'Object.defineProperty(_loc,"href",{configurable:true,get:function(){return _oHrefGet.call(this)},set:function(v){if(_isAdRedirect(v)){try{console.debug("[rh-adblock] blocked location.href=:",v)}catch(e){}return}return _oHrefSet.call(this,v)}})}}catch(e){}',
+    'Object.defineProperty(_loc,"href",{configurable:true,get:function(){return _oHrefGet.call(this)},set:function(v){if(_isAdRedirect(v)){try{console.debug("[ab] blocked location.href=:",v)}catch(e){}return}return _oHrefSet.call(this,v)}})}}catch(e){}',
     // Intercept window.location = "..." (setter on Window.prototype). Hammerhead wraps this;
     // wrapping again here adds our guard on top of theirs.
     'try{var _wlDesc=Object.getOwnPropertyDescriptor(Window.prototype,"location")||Object.getOwnPropertyDescriptor(window,"location");',
     'if(_wlDesc&&_wlDesc.set){',
     'var _oWLSet=_wlDesc.set,_oWLGet=_wlDesc.get;',
-    'try{Object.defineProperty(window,"location",{configurable:true,get:function(){return _oWLGet?_oWLGet.call(this):_loc},set:function(v){if(_isAdRedirect(v)){try{console.debug("[rh-adblock] blocked window.location=:",v)}catch(e){}return}return _oWLSet.call(this,v)}})}catch(e){}}}catch(e){}',
+    'try{Object.defineProperty(window,"location",{configurable:true,get:function(){return _oWLGet?_oWLGet.call(this):_loc},set:function(v){if(_isAdRedirect(v)){try{console.debug("[ab] blocked window.location=:",v)}catch(e){}return}return _oWLSet.call(this,v)}})}catch(e){}}}catch(e){}',
     // document.location setter
     'try{var _dlDesc=Object.getOwnPropertyDescriptor(Document.prototype,"location")||Object.getOwnPropertyDescriptor(document,"location");',
     'if(_dlDesc&&_dlDesc.set){var _oDLSet=_dlDesc.set,_oDLGet=_dlDesc.get;',
-    'try{Object.defineProperty(document,"location",{configurable:true,get:function(){return _oDLGet?_oDLGet.call(this):_loc},set:function(v){if(_isAdRedirect(v)){try{console.debug("[rh-adblock] blocked document.location=:",v)}catch(e){}return}return _oDLSet.call(this,v)}})}catch(e){}}}catch(e){}',
+    'try{Object.defineProperty(document,"location",{configurable:true,get:function(){return _oDLGet?_oDLGet.call(this):_loc},set:function(v){if(_isAdRedirect(v)){try{console.debug("[ab] blocked document.location=:",v)}catch(e){}return}return _oDLSet.call(this,v)}})}catch(e){}}}catch(e){}',
     '_loc.__rhLocGuard=true;',
     '}catch(e){}}',
     // Install now AND after hammerhead init so our guard sits on top
@@ -220,7 +223,7 @@ const AD_BLOCKER_SCRIPT = [
     // Guard window.open-style programmatic form submissions that some popunder networks
     // use to bypass window.open checks (form.target="_blank", form.action=adUrl, form.submit()).
     'try{var _oFormSubmit=HTMLFormElement.prototype.submit;',
-    'HTMLFormElement.prototype.submit=function(){try{var a=this.action||"";var t=(this.target||"").toLowerCase();if(_isAdRedirect(a)&&(t==="_blank"||t==="_new"||t==="_top"||t==="")){try{console.debug("[rh-adblock] blocked form.submit ad:",a)}catch(e){}return}}catch(e){}return _oFormSubmit.apply(this,arguments)};}catch(e){}',
+    'HTMLFormElement.prototype.submit=function(){try{var a=this.action||"";var t=(this.target||"").toLowerCase();if(_isAdRedirect(a)&&(t==="_blank"||t==="_new"||t==="_top"||t==="")){try{console.debug("[ab] blocked form.submit ad:",a)}catch(e){}return}}catch(e){}return _oFormSubmit.apply(this,arguments)};}catch(e){}',
     '}catch(e){}',
     // --- META-REFRESH STRIPPING ---
     // Remove <meta http-equiv="refresh" content="0; url=..."> that redirects to ads.
@@ -231,7 +234,7 @@ const AD_BLOCKER_SCRIPT = [
     'var c=m.getAttribute("content")||"";',
     'var um=c.match(/url\\s*=\\s*([^;]+)/i);',
     'if(um&&_blockedHosts&&_blockedHosts.test(um[1])){',
-    'try{console.debug("[rh-adblock] stripped meta-refresh:",um[1]);m.remove()}catch(e){}}}}',
+    'try{console.debug("[ab] stripped meta-refresh:",um[1]);m.remove()}catch(e){}}}}',
     'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_stripMetaRefresh);',
     'else _stripMetaRefresh();',
     '}catch(e){}',
@@ -367,7 +370,7 @@ const AD_BLOCKER_SCRIPT = [
     '"[class*=\\"consent-banner\\"]","[id*=\\"consent-banner\\"]",',
     '"[class*=\\"gdpr-notice\\"]","[id*=\\"gdpr-notice\\"]"',
     '].join(",");',
-    'var _s=document.createElement("style");_s.id="__rh_consent_css";',
+    'var _s=document.createElement("style");_s.id="_c_css";',
     '_s.textContent=_CONSENT_SEL+"{display:none!important;visibility:hidden!important;pointer-events:none!important;opacity:0!important;}"+',
     // Restore scroll when CMPs lock the body
     '"html,body{overflow:visible!important;}html.no-scroll,body.no-scroll,body.modal-open,html.modal-open,body.is-locked,body.overlay-open,body.stop-scroll,body.fixed-body,body.lock-scroll,html.lock-scroll,body.scroll-lock,html.scroll-lock{overflow:auto!important;position:static!important;}";',
@@ -400,6 +403,28 @@ const AD_BLOCKER_SCRIPT = [
 const ANTIDETECT_SCRIPT = [
     '<script>',
     '(function(){',
+    // ── Anti-Smart-Agent DOM hardening ──────────────────────────────────────
+    // Lightspeed Smart Agent (and similar JS-based content scanners) inspect
+    // the proxied page from inside. The strongest fingerprint they have is
+    // an unusual `window` keyset: any property that starts with a known proxy
+    // prefix (`__rh*`) immediately gives us away.
+    //
+    // We pre-declare every name we plan to write as a NON-ENUMERABLE data
+    // property up front. Later assignments via simple `=` keep the existing
+    // descriptor's `enumerable:false` (per the spec — `[[Set]]` on an existing
+    // data property only updates `[[Value]]`), so `Object.keys(window)` /
+    // `for...in` / JSON.stringify(window) reveal nothing. Direct access via
+    // `window.__rhQ` still works, so devtools.js + the inject scripts remain
+    // unchanged. A determined scanner using `Reflect.ownKeys` or
+    // `Object.getOwnPropertyNames` could still see them, but that's a much
+    // rarer probe and worth defending against in tier 2.
+    'try{["__rhAD","__rhABinit","__rhC","__rhQ","__rhNet","__rhSrc","__rhPanel",',
+    '"__rhListeners","__rhTimerCount","__rhPerf","__rhDestUrl","__rhDevTools"].forEach(function(n){',
+        'try{var d=Object.getOwnPropertyDescriptor(window,n);',
+        'if(!d){Object.defineProperty(window,n,{value:undefined,configurable:true,writable:true,enumerable:false})}',
+        'else if(d.enumerable){Object.defineProperty(window,n,{value:d.value,configurable:true,writable:d.writable!==false,enumerable:false})}',
+        '}catch(_){}',
+    '})}catch(e){}',
     'if(typeof window==="undefined"||window.__rhAD)return;window.__rhAD=1;',
     'try{Object.defineProperty(navigator,"webdriver",{get:function(){return undefined},configurable:true})}catch(e){}',
     'try{if(!navigator.plugins||!navigator.plugins.length){',
@@ -598,6 +623,81 @@ function _fixCfChallengeUrls(html, ctx) {
 
 const origProcess = pageProcessor.processResource.bind(pageProcessor);
 
+/**
+ * Domain-leak hardening for Hammerhead-processed bodies.
+ *
+ * Hammerhead's `getProxyUrl` always emits ABSOLUTE URLs of the form
+ * `<proxy-origin>/<sid>/<destination>` — i.e. the proxy's hostname is hard-coded
+ * into every rewritten attribute and inline-script string. This makes a content
+ * scanner's job trivial: grep for "rammerhead.fly.dev" (or whatever our deployed
+ * hostname is) and you fingerprint the proxy.
+ *
+ * After Hammerhead's processor runs we sweep its output and rewrite every
+ * occurrence of "<proxy-origin>/<sid>/" → "/<sid>/" — a DOMAIN-RELATIVE path.
+ * Browsers resolve domain-relative URLs against `document.baseURI`, which is
+ * itself the proxy origin, so the rewrite is functionally a no-op. The served
+ * bytes, however, no longer contain the proxy hostname literally.
+ *
+ * We deliberately scope the rewrite to "<proxy-origin>/<sid>/" (not bare
+ * "<proxy-origin>") to avoid touching unrelated proxy-internal asset URLs and
+ * script literals that don't belong to the proxied page.
+ */
+// Read the configured URL path-style once. When non-empty (e.g. "cdn-cgi/p"),
+// every domain-relative proxy URL in the served body gets prefixed with it,
+// turning `/<sid>/<dest>` into `/cdn-cgi/p/<sid>/<dest>` so the URL bar (and
+// any URL-pattern filter) sees a CDN-shaped path instead of the tell-tale
+// 32-char hex session ID. See config.js for the full rationale.
+const _PATH_STYLE = (require('../config').pathStyle || '').replace(/^\/+|\/+$/g, '');
+const _PATH_PREFIX = _PATH_STYLE ? '/' + _PATH_STYLE : '';
+
+function _stripProxyOriginFromBody(body, ctx) {
+    if (!body || typeof body !== 'string') return body;
+    const sid = ctx && ctx.session && ctx.session.id;
+    if (!sid) return body;
+
+    const serverInfo = ctx.serverInfo || {};
+    const protocol = serverInfo.protocol || 'http:';
+    const hostname = serverInfo.hostname || 'localhost';
+    const port = serverInfo.port;
+    const portPart = port == 443 || port == 80 || !port ? '' : ':' + port;
+    const origins = new Set();
+    origins.add(protocol + '//' + hostname + portPart);
+    origins.add('http://' + hostname + portPart);
+    origins.add('https://' + hostname + portPart);
+    if (ctx.req && ctx.req.headers) {
+        const hostHdr = ctx.req.headers['host'] || ctx.req.headers[':authority'];
+        if (hostHdr) {
+            origins.add('http://' + hostHdr);
+            origins.add('https://' + hostHdr);
+            origins.add('//' + hostHdr);
+        }
+        const origHdr = ctx.req.headers['x-forwarded-host'];
+        if (origHdr) {
+            const proto = ctx.req.headers['x-forwarded-proto'] || 'https';
+            origins.add(proto + '://' + origHdr);
+        }
+    }
+
+    const sidEsc = sid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    let out = body;
+    for (const o of origins) {
+        if (!o) continue;
+        const oEsc = o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Match the proxy origin in two safe contexts:
+        //   1. before "/<sid>" — the rewritten proxy URLs for the destination
+        //   2. before "/_a/"   — proxy-internal asset paths Hammerhead injects
+        //      into <script>/<link> tags (hammerhead.js, transport, task,
+        //      rammerhead.js, console, ad-blocker, etc.)
+        // Every match is followed by a path that resolves to the proxy itself,
+        // so domain-relative URLs are functionally identical to absolute ones.
+        // Replacement is _PATH_PREFIX (default "") so configured pathStyle gets
+        // injected in one pass: <origin>/<sid>/ → /<prefix>/<sid>/.
+        const re = new RegExp(oEsc + '(?=/(?:' + sidEsc + '|_a/))', 'g');
+        out = out.replace(re, _PATH_PREFIX);
+    }
+    return out;
+}
+
 // Domains whose JS-heavy SPAs break under Hammerhead's full AST rewriting.
 // These get "lite" processing: runtime scripts are injected but inline JS
 // is NOT instrumented, preventing React/Next.js hydration mismatches.
@@ -722,26 +822,33 @@ function _liteProcess(html, ctx, inject) {
     const hostname = serverInfo.hostname || 'localhost';
     const proxyOrigin = protocol + '//' + hostname + (proxyPort == 443 || proxyPort == 80 ? '' : ':' + proxyPort);
     const sid = sessionId || '';
-    const proxyPrefix = proxyOrigin + '/' + sid + '/';
+    // Domain-leak hardening: emit DOMAIN-RELATIVE prefixes ("/<sid>/...") instead of
+    // ABSOLUTE prefixes ("https://<proxy-host>/<sid>/..."). Browsers resolve these
+    // against the page's own origin (which IS the proxy origin), so the URLs are
+    // functionally identical but the served HTML never contains the proxy hostname
+    // as a literal string. \`proxyOrigin\` is still used below for the
+    // "is this URL already proxied?" detection — a runtime comparison that never
+    // appears in the served bytes.
+    const relPrefix = '/' + sid + '/';
 
     // Single-pass rewrite for href/src/action/poster/data attributes, srcset, and CSS url()
     const ATTR_AND_URL_RE = /((?:href|src|action|poster|data)\s*=\s*["'])(\/\/[^"']+|\/(?!\/)[^"']*|https?:\/\/[^"']+)(["'])|(srcset\s*=\s*")([^"]*)(")|(url\(\s*['"]?)((?:https?:)?\/\/[^'")]+)(['"]?\s*\))/gi;
     html = html.replace(ATTR_AND_URL_RE, (_m, aPre, aUrl, aPost, ssPre, ssVal, ssPost, uPre, uUrl, uPost) => {
         if (aPre) {
-            if (aUrl.startsWith('//')) return aPre + proxyPrefix + 'https:' + aUrl + aPost;
-            if (/^https?:\/\//i.test(aUrl)) return aUrl.startsWith(proxyOrigin) ? _m : aPre + proxyPrefix + aUrl + aPost;
-            if (origin && aUrl.startsWith('/')) return aPre + proxyPrefix + origin + aUrl + aPost;
+            if (aUrl.startsWith('//')) return aPre + relPrefix + 'https:' + aUrl + aPost;
+            if (/^https?:\/\//i.test(aUrl)) return aUrl.startsWith(proxyOrigin) ? _m : aPre + relPrefix + aUrl + aPost;
+            if (origin && aUrl.startsWith('/')) return aPre + relPrefix + origin + aUrl + aPost;
             return _m;
         }
         if (ssPre) return ssPre + ssVal.replace(/((?:https?:)?\/\/[^\s,]+)/gi, u => {
             if (u.startsWith(proxyOrigin)) return u;
-            if (u.startsWith('//')) return proxyPrefix + 'https:' + u;
-            return proxyPrefix + u;
+            if (u.startsWith('//')) return relPrefix + 'https:' + u;
+            return relPrefix + u;
         }) + ssPost;
         if (uPre) {
             if (uUrl.startsWith(proxyOrigin)) return _m;
-            if (uUrl.startsWith('//')) return uPre + proxyPrefix + 'https:' + uUrl + uPost;
-            return uPre + proxyPrefix + uUrl + uPost;
+            if (uUrl.startsWith('//')) return uPre + relPrefix + 'https:' + uUrl + uPost;
+            return uPre + relPrefix + uUrl + uPost;
         }
         return _m;
     });
@@ -757,15 +864,15 @@ function _liteProcess(html, ctx, inject) {
                 // Rewrite relative asset paths in string literals that dynamic import() or
                 // framework routers use (can't be intercepted by the bridge script)
                 body = body.replace(/(["'])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"']+)(["'])/g,
-                    (_m2, q1, path, q2) => q1 + proxyPrefix + origin + path + q2);
+                    (_m2, q1, path, q2) => q1 + relPrefix + origin + path + q2);
                 // Rewrite import()/from/import statements in ALL scripts
                 body = body.replace(/(import\(\s*["'])(\/[^"']+)(["']\s*\))/g,
-                    (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
+                    (_m2, pre, path, post) => pre + relPrefix + origin + path + post);
                 if (/type\s*=\s*["']module["']/i.test(open)) {
                     body = body.replace(/((?:^|[\s;,{(])import\s*["'])(\/[^"']+)(["'])/gm,
-                        (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
+                        (_m2, pre, path, post) => pre + relPrefix + origin + path + post);
                     body = body.replace(/(from\s*["'])(\/[^"']+)(["'])/g,
-                        (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
+                        (_m2, pre, path, post) => pre + relPrefix + origin + path + post);
                 }
                 return open + body + close;
             }
@@ -775,7 +882,13 @@ function _liteProcess(html, ctx, inject) {
     const destUrl = ctx.dest.url || (origin + (ctx.dest.partAfterHost || '/'));
 
     const bridge = `<script>(function(){
-var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sid)},D=${JSON.stringify(destUrl)};
+// Domain-leak hardening: derive the proxy origin from \`location\` at runtime instead
+// of embedding it as a literal string. This prevents content-scanners that grep the
+// proxied page source for "rammerhead.fly.dev" / our deployed hostname from finding
+// a hit. Functionally identical because every browser already exposes location.origin
+// matching the proxy's origin (which is where the page is being served from).
+var O=(typeof location!=='undefined'&&location.origin)||(location.protocol+'//'+location.host);
+var S=${JSON.stringify(sid)},D=${JSON.stringify(destUrl)};
 var _OP=O+'/';var _SP=_OP+S+'/';var _oGA=Element.prototype.getAttribute;var _sSA=Element.prototype.setAttribute;
 // Clear any legacy __rh_sess cookie (removed to prevent cross-destination header leaks).
 try{document.cookie='__rh_sess=; Max-Age=0; path=/'}catch(e){}
@@ -803,7 +916,7 @@ try{
         ss.setItem(_RH_RL_BLOCK_KEY,String(now+30000));
         ss.removeItem(_RH_RL_KEY);
         _rhBlocked=true;
-        try{console.warn('[rammerhead] reload-loop detected ('+arr.length+' reloads in 6s); blocking reloads for 30s')}catch(e){}
+        try{console.warn('[nav] reload-loop detected ('+arr.length+' reloads in 6s); blocking reloads for 30s')}catch(e){}
       }else{
         ss.setItem(_RH_RL_KEY,JSON.stringify(arr));
       }
@@ -831,7 +944,7 @@ function isRel(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='
 function pxRel(u){return O+'/'+S+'/'+DO+u}
 function _destFromPath(p){var sp='/'+S+'/';if(!p||p.indexOf(sp)!==0)return null;var r=p.substring(sp.length);if(/^https?:\\/\\//i.test(r))return r;return null}
 var _rl=window.location,_rr=_rl.replace.bind(_rl),_ra=_rl.assign.bind(_rl),_rrl=_rl.reload.bind(_rl);
-function _rhSafeNav(fn,arg){if(_rhBlocked){try{console.warn('[rammerhead] navigation blocked (reload-loop guard active)')}catch(e){}return}return fn(arg)}
+function _rhSafeNav(fn,arg){if(_rhBlocked){try{console.warn('[nav] navigation blocked (reload-loop guard active)')}catch(e){}return}return fn(arg)}
 var lp={href:{get:function(){return du.href},set:function(v){_rhSafeNav(_rr,rw(v)||v)}},
 hostname:{get:function(){return du.hostname}},host:{get:function(){return du.host}},
 origin:{get:function(){return du.origin}},protocol:{get:function(){return du.protocol}},
@@ -841,7 +954,7 @@ hash:{get:function(){return du.hash},set:function(v){du.hash=v}},
 port:{get:function(){return du.port}},
 assign:{value:function(u){_rhSafeNav(_ra,rw(u)||u)}},
 replace:{value:function(u){_rhSafeNav(_rr,rw(u)||u)}},
-reload:{value:function(){if(_rhBlocked){try{console.warn('[rammerhead] reload blocked (reload-loop guard active)')}catch(e){}return}return _rrl.apply(_rl,arguments)}},
+reload:{value:function(){if(_rhBlocked){try{console.warn('[nav] reload blocked (reload-loop guard active)')}catch(e){}return}return _rrl.apply(_rl,arguments)}},
 toString:{value:function(){return du.href}}};
 var _locCache=null,_locHref='';
 try{Object.defineProperty(window,'location',{configurable:true,enumerable:true,
@@ -1073,5 +1186,6 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
         throw e;
     }
     if (typeof result !== 'string') return result;
+    result = _stripProxyOriginFromBody(result, ctx);
     return result.replace(/<head[^>]*>/i, '$&' + inject);
 };

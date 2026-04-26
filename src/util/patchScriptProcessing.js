@@ -17,6 +17,7 @@
  */
 
 const headerModule = require('testcafe-hammerhead/lib/processing/script/header');
+const stylesheetProcessor = require('testcafe-hammerhead/lib/processing/resources/stylesheet');
 
 const FALLBACK = [
     'if(typeof __set$!=="function"){',
@@ -191,25 +192,24 @@ function _liteRewriteJs(script, ctx) {
     if (!dHost) return script;
     const origin = proto + '//' + dHost;
 
-    const serverInfo = ctx.serverInfo || {};
-    const proxyPort = serverInfo.port || '';
-    const protocol = serverInfo.protocol || 'http:';
-    const hostname = serverInfo.hostname || 'localhost';
-    const proxyOrigin =
-        protocol + '//' + hostname + (proxyPort == 443 || proxyPort == 80 ? '' : ':' + proxyPort);
     const sid = (ctx.session && ctx.session.id) || '';
     if (!sid) return script;
-    const proxyPrefix = proxyOrigin + '/' + sid + '/';
+    // Domain-leak hardening: emit a DOMAIN-RELATIVE prefix ("/<sid>/...") rather than
+    // ABSOLUTE ("https://<proxy-host>/<sid>/..."). Browsers resolve relative URLs in
+    // import() / fetch / asset literals against the importer's URL, which is itself
+    // proxy-origin-rooted, so the result is functionally identical — but the served
+    // JS bytes never contain the proxy hostname as a literal string.
+    const relPrefix = '/' + sid + '/';
 
     let result = script;
     result = result.replace(LITE_PATH_LITERAL_RE, (_m, q1, p, q2) => {
         // Skip already-proxied paths
         if (p.indexOf('/' + sid + '/') === 0) return _m;
-        return q1 + proxyPrefix + origin + p + q2;
+        return q1 + relPrefix + origin + p + q2;
     });
     result = result.replace(LITE_IMPORT_DYNAMIC_RE, (_m, pre, p, post) => {
         if (p.indexOf('/' + sid + '/') === 0) return _m;
-        return pre + proxyPrefix + origin + p + post;
+        return pre + relPrefix + origin + p + post;
     });
     return result;
 }
@@ -217,15 +217,75 @@ function _liteRewriteJs(script, ctx) {
 // Install instance-level processResource that handles lite domains. We use
 // Object.getPrototypeOf at call time so we always delegate to whatever sits on
 // the prototype now (addJSDiskCache replaces it later when the proxy is built).
+// Domain-leak hardening for Hammerhead-rewritten JS bodies.
+//
+// Hammerhead's script processor calls getProxyUrl(...) on every URL literal
+// it finds, which produces ABSOLUTE strings like
+//   "https://<proxy-host>/<sid>/<destination>"
+// We sweep the rewritten script and replace each occurrence of
+//   "<proxy-origin>/<sid>/" → "/<sid>/"
+// — a domain-relative path. Browsers resolve relative URLs against the
+// importing script's URL (also proxy-origin-rooted), so behaviour is
+// unchanged. The served bytes simply no longer contain the proxy hostname.
+// Same path-style prefix used in patchPageProcessing.js. When set, the strip
+// pass replaces the proxy origin with the prefix in one shot:
+//   <proxy-origin>/<sid>/   →   /<pathStyle>/<sid>/
+const _PATH_STYLE = (require('../config').pathStyle || '').replace(/^\/+|\/+$/g, '');
+const _PATH_PREFIX = _PATH_STYLE ? '/' + _PATH_STYLE : '';
+
+function _stripProxyOriginFromScript(script, ctx) {
+    if (!script || typeof script !== 'string') return script;
+    const sid = ctx && ctx.session && ctx.session.id;
+    if (!sid) return script;
+
+    const serverInfo = ctx.serverInfo || {};
+    const protocol = serverInfo.protocol || 'http:';
+    const hostname = serverInfo.hostname || 'localhost';
+    const port = serverInfo.port;
+    const portPart = port == 443 || port == 80 || !port ? '' : ':' + port;
+    const origins = new Set();
+    origins.add(protocol + '//' + hostname + portPart);
+    origins.add('http://' + hostname + portPart);
+    origins.add('https://' + hostname + portPart);
+    if (ctx.req && ctx.req.headers) {
+        const hostHdr = ctx.req.headers['host'] || ctx.req.headers[':authority'];
+        if (hostHdr) {
+            origins.add('http://' + hostHdr);
+            origins.add('https://' + hostHdr);
+        }
+        const fwdHost = ctx.req.headers['x-forwarded-host'];
+        if (fwdHost) {
+            const fwdProto = ctx.req.headers['x-forwarded-proto'] || 'https';
+            origins.add(fwdProto + '://' + fwdHost);
+        }
+    }
+    const sidEsc = sid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    let out = script;
+    for (const o of origins) {
+        if (!o) continue;
+        const oEsc = o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Match the proxy origin only before "/<sid>" or "/_a/" so we never
+        // touch unrelated absolute strings inside the body. Replacement is
+        // _PATH_PREFIX (default "") which also injects the configured
+        // pathStyle in one pass.
+        const re = new RegExp(oEsc + '(?=/(?:' + sidEsc + '|_a/))', 'g');
+        out = out.replace(re, _PATH_PREFIX);
+    }
+    return out;
+}
+
 scriptProcessor.processResource = async function patchedProcessResource(script, ctx, charset, urlReplacer) {
     if (ctx && ctx.dest && ctx.dest.host && LITE_DOMAIN_RE.test(ctx.dest.host)) {
-        return _liteRewriteJs(script, ctx);
+        return _stripProxyOriginFromScript(_liteRewriteJs(script, ctx), ctx);
     }
     const proto = Object.getPrototypeOf(this);
+    let result;
     if (proto && typeof proto.processResource === 'function') {
-        return proto.processResource.call(this, script, ctx, charset, urlReplacer);
+        result = await proto.processResource.call(this, script, ctx, charset, urlReplacer);
+    } else {
+        result = script;
     }
-    return script;
+    return _stripProxyOriginFromScript(result, ctx);
 };
 
 const END_HEADER = headerModule.SCRIPT_PROCESSING_END_HEADER_COMMENT;
@@ -237,4 +297,18 @@ headerModule.add = function patchedAdd(code, isStrictMode, swScopeHeaderValue, n
         result = result.replace(END_HEADER, END_HEADER + '\n' + FALLBACK + '\n' + IFRAME_PROXY + '\n');
     }
     return result;
+};
+
+// Domain-leak hardening for stylesheets. Hammerhead's CSS rewriter turns
+// `url(/foo.png)` into `url(https://<proxy-host>/<sid>/<dest>/foo.png)`, again
+// embedding the proxy hostname literally. We strip the leading proxy origin so
+// the served CSS uses domain-relative URLs that the browser resolves against
+// the page (and thus the proxy) origin transparently.
+const _origStylesheetProcess = stylesheetProcessor.processResource.bind(stylesheetProcessor);
+stylesheetProcessor.processResource = function patchedStylesheetProcessResource(css, ctx, charset, urlReplacer) {
+    const out = _origStylesheetProcess(css, ctx, charset, urlReplacer);
+    if (out && typeof out.then === 'function') {
+        return out.then(r => _stripProxyOriginFromScript(r, ctx));
+    }
+    return _stripProxyOriginFromScript(out, ctx);
 };

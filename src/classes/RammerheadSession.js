@@ -2,6 +2,7 @@ const { Session } = require('testcafe-hammerhead');
 const UploadStorage = require('testcafe-hammerhead/lib/upload/storage');
 const generateId = require('../util/generateId');
 const StrShuffler = require('../util/StrShuffler');
+const { PROXY_PATHS } = require('../util/patchServiceRoutes');
 
 // disable UploadStorage, a testcafe testing feature we do not need
 const emptyFunc = () => {};
@@ -65,7 +66,7 @@ class RammerheadSession extends Session {
         }
 
         this.injectable.scripts.push(...prependScripts);
-        this.injectable.scripts.push('/rammerhead.js');
+        this.injectable.scripts.push(PROXY_PATHS.rammerheadJs);
 
         this.id = id;
         this.shuffleDict = disableShuffling ? null : StrShuffler.generateDictionary();

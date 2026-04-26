@@ -110,9 +110,14 @@ function printConsoleMessage(entry) {
 
 // Apparatus-style bridge script: lightweight URL interception without JS rewriting.
 // Injected into raw-mode pages so fetch/XHR/dynamic elements route through the proxy.
-function buildBridgeScript(proxyOrigin, sessionId, targetUrl) {
+//
+// Note: proxyOrigin parameter is intentionally unused now. We derive O from
+// location.origin at runtime so the proxy hostname is never embedded as a string
+// literal in served HTML (anti-fingerprinting). The arg stays for API stability.
+function buildBridgeScript(_proxyOrigin, sessionId, targetUrl) {
     return `<script>(function(){
-var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sessionId)},D=${JSON.stringify(targetUrl || '')};
+var O=(typeof location!=='undefined'&&location.origin)||(location.protocol+'//'+location.host);
+var S=${JSON.stringify(sessionId)},D=${JSON.stringify(targetUrl || '')};
 // Clear any legacy __rh_sess cookie (removed to prevent cross-destination header leaks).
 try{document.cookie='__rh_sess=; Max-Age=0; path=/'}catch(e){}
 function px(u){return O+'/'+S+'/'+u}
@@ -224,6 +229,33 @@ function rawFetch(url, callback, hops, options) {
 module.exports = function setupPipeline(proxyServer, sessionStore) {
     const stream = require('stream');
     const StrShuffler = require('../util/StrShuffler');
+
+    // ── Pluggable URL path style ─────────────────────────────────────────────
+    // When `config.pathStyle` is non-empty (e.g. "cdn-cgi/p"), session URLs
+    // arrive as `/<pathStyle>/<sid>/<dest>`. Strip the prefix at the very top
+    // of the request pipeline so the rest of Hammerhead never has to know it
+    // exists; outgoing URL attributes get the prefix re-injected by
+    // `_stripProxyOriginFromBody` (in patchPageProcessing.js) so the served
+    // HTML refers to the prefixed form. See config.js for the full rationale.
+    //
+    // Edge case: we accept the bare `/<sid>/<dest>` form too. Hammerhead's
+    // client-side getProxyUrl can't see the configured prefix and so emits
+    // bare URLs in runtime fetch/XHR rewrites; rejecting them would break
+    // proxied SPAs. The prefix is therefore a "decorative" stealth feature
+    // that wins on initial navigation and rewritten attribute URLs.
+    const _pathStyle = (require('../config').pathStyle || '').replace(/^\/+|\/+$/g, '');
+    const _pathPrefix = _pathStyle ? '/' + _pathStyle : '';
+    if (_pathPrefix) {
+        proxyServer.addToOnRequestPipeline((req) => {
+            const u = req.url;
+            if (u && (u === _pathPrefix || u.startsWith(_pathPrefix + '/') || u.startsWith(_pathPrefix + '?'))) {
+                const before = u;
+                req.url = u.slice(_pathPrefix.length) || '/';
+                if (process.env.PATH_STYLE_DEBUG) console.error('[pathStrip]', before, '->', req.url);
+            }
+            return false;
+        }, true); // beginning=true → runs before every other handler
+    }
 
     // Extract the real destination URL from a proxied request. Handles unshuffled
     // (`/<sid>/https://...`) and shuffled (`/<sid>!a!1!s*host/_rhs...`) URL forms.
@@ -469,11 +501,27 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Referer header covers >99% of real subresource rescues; anything without a Referer
     // that we can't identify via URL/Referer now gracefully 404s instead of being mis-routed.
 
+    // Paths handled by setupRoutes' homepage logic (cover page + stealth portal).
+    // These must not enter relative-path rescue or they'll be misinterpreted as
+    // sub-resources of whatever site the user was last on.
+    const _stealthPortal = (require('../config').stealthPortal || '').trim() || null;
+    const HOMEPAGE_PATHS = new Set([
+        '/', '/index.html', '/index.htm',
+        '/rammerhead', '/rammerhead/', '/rammerhead/index.html', '/rammerhead/index.htm',
+    ]);
+    if (_stealthPortal) {
+        HOMEPAGE_PATHS.add('/' + _stealthPortal);
+        HOMEPAGE_PATHS.add('/' + _stealthPortal + '/');
+        HOMEPAGE_PATHS.add('/rammerhead/' + _stealthPortal);
+        HOMEPAGE_PATHS.add('/rammerhead/' + _stealthPortal + '/');
+    }
+
     proxyServer.addToOnRequestPipeline((req, res) => {
         const url = req.url || '';
         if (!url.startsWith('/')) return false;
         if (KNOWN_ROUTE_RE.test(url)) return false;
-        if (url === '/' || url === '/rammerhead' || url === '/rammerhead/') return false;
+        const pathOnly = url.split('?')[0];
+        if (HOMEPAGE_PATHS.has(pathOnly)) return false;
 
         const referer = req.headers['referer'] || '';
         const info = _extractOriginFromReferer(referer);
@@ -766,7 +814,10 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         if (!targetMachine || targetMachine === sessionAffinity.FLY_MACHINE_ID) return false;
         res.writeHead(307, {
             'Fly-Replay': `instance=${targetMachine}`,
-            'Set-Cookie': `rh_sid=${sessionId}; Path=/; Max-Age=3600; SameSite=Lax`
+            // Cookie name is generic ("affinity routing") so it doesn't broadcast "rammerhead"
+            // when a user inspects their cookie jar. Functionally only used for Fly multi-machine
+            // sticky routing — never read back by us.
+            'Set-Cookie': `_aff=${sessionId}; Path=/; Max-Age=3600; SameSite=Lax`
         });
         res.end();
         return true;

@@ -202,6 +202,26 @@ class RammerheadProxy extends Proxy {
             'x-dns-prefetch-control': () => undefined,
             'x-content-type-options': () => undefined,
             'x-xss-protection': () => undefined,
+            // De-fingerprint: defensive strips so nothing in the response wire
+            // names the proxy. Hammerhead/Node don't set these by default but a
+            // reverse-proxy upstream (Fly's edge, a future middleware, etc.) could.
+            'x-powered-by': () => undefined,
+            'x-rammerhead': () => undefined,
+            'x-rammerhead-version': () => undefined,
+            'x-hammerhead': () => undefined,
+            // `Server` from origin (e.g. `cloudflare`, `nginx`) is forwarded as-is
+            // because the user *wants* to look like the destination. Only strip if
+            // the value names us.
+            'server': (src) => {
+                if (typeof src === 'string' && /rammerhead|hammerhead|testcafe/i.test(src)) return undefined;
+                return src;
+            },
+            // `Via` proxies are usually transparent middleboxes; pass through unless
+            // the value names us.
+            'via': (src) => {
+                if (typeof src === 'string' && /rammerhead|hammerhead/i.test(src)) return undefined;
+                return src;
+            },
         };
 
         this.getServerInfo = getServerInfo;
@@ -473,12 +493,17 @@ class RammerheadProxy extends Proxy {
      * @private
      */
     _setupRammerheadServiceRoutes() {
-        this.GET('/rammerhead.js', {
+        const rammerheadClientHandler = {
             content: fs.readFileSync(
                 path.join(__dirname, '../client/rammerhead' + (process.env.DEVELOPMENT ? '.js' : '.min.js'))
             ),
             contentType: 'application/x-javascript'
-        });
+        };
+        // Generic CDN-shaped path is the primary; the legacy /rammerhead.js alias
+        // stays so any cached page or older client that still references the old
+        // path keeps working.
+        this.GET(_serviceRoutePatch.PROXY_PATHS.rammerheadJs, rammerheadClientHandler);
+        this.GET(_serviceRoutePatch.PROXY_PATHS.rammerheadJsLegacy, rammerheadClientHandler);
         const shuffleDictHandler = (req, res) => {
             try {
                 const params = new URLPath(req.url || '').getParams();

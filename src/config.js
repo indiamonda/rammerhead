@@ -25,6 +25,44 @@ module.exports = {
     crossDomainPort: isCloudDeployment ? null : 8081,
     publicDir: path.join(__dirname, '../public'), // set to null to disable
 
+    // Homepage stealth-mode. When set to a non-empty string (e.g. "g8K2m4xQ"),
+    // the bare origin and well-known landing paths (/, /index.html, /rammerhead,
+    // /rammerhead/, /rammerhead/index.html) serve an innocuous cover page instead
+    // of the proxy UI. The real UI is reachable ONLY at `/${stealthPortal}` (and
+    // `/${stealthPortal}/`, `/rammerhead/${stealthPortal}`, etc.). Existing
+    // session links `/<sessionId>/<destination>` continue to work as before, so
+    // share links you've already given out aren't broken.
+    //
+    // When unset/empty, behaviour is unchanged: the bare origin serves the proxy UI.
+    stealthPortal: process.env.STEALTH_PORTAL || null,
+
+    // Pluggable URL path style. When set to a non-empty string (e.g. "cdn-cgi/p"),
+    // session URLs take the form `/<pathStyle>/<sessionId>/<destination>` instead
+    // of the default `/<sessionId>/<destination>`. The prefix is meant to make
+    // proxy URLs look like benign CDN/static-asset paths so that URL-pattern
+    // filters (e.g. Lightspeed) can't fingerprint the proxy by the leading
+    // 32-char hex segment.
+    //
+    // The string may contain slashes (e.g. "cdn-cgi/p", "static/v1") but should
+    // NOT begin or end with one. Recognised across all proxy traffic:
+    //   • Incoming request URLs that start with `/${pathStyle}/` are stripped
+    //     before Hammerhead's pipeline parses them.
+    //   • All proxy-emitted URLs in served HTML/JS get the prefix injected, so
+    //     the user-visible URL bar shows `/${pathStyle}/<sessionId>/<dest>`.
+    //   • The bare `/<sessionId>/<dest>` form continues to work as well — that
+    //     keeps Hammerhead's client-side runtime URL helpers (which can't see
+    //     the configured prefix) functional. As a result, this is a "decorative"
+    //     stealth feature that wins on initial navigation and rewritten link
+    //     attributes; in-page JS-driven fetches/XHR may still emit the bare form.
+    //
+    // CHANGING THIS VALUE INVALIDATES old share links: a link generated with the
+    // previous prefix may not work after the change because served-page URL
+    // attributes (and therefore newly-clicked links) won't have the new prefix.
+    // Treat it as a one-shot configuration before going live.
+    //
+    // When unset/empty, behaviour is unchanged.
+    pathStyle: process.env.PATH_STYLE || '',
+
     // enable or disable multithreading
     enableWorkers,
     workers: os.cpus().length,
