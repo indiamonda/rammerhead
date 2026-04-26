@@ -278,8 +278,28 @@ scriptProcessor.processResource = async function patchedProcessResource(script, 
     }
     const proto = Object.getPrototypeOf(this);
     let result;
+    // If the AST rewriter throws on a single asset (esotope codegen bug,
+    // unknown ESTree extension, OOM, …) we must NOT propagate — Hammerhead
+    // turns the throw into a 500 for that script and the rest of the page
+    // (fonts, images, sub-bundles) cascade-fails. Fall back to the
+    // string-only `_liteRewriteJs` rewriter which never parses the source,
+    // so at minimum the script still loads. Hammerhead's runtime
+    // (`hammerhead.js`) intercepts XHR/fetch/postMessage at the browser
+    // level, so client-side URL interception still works for most APIs.
     if (proto && typeof proto.processResource === 'function') {
-        result = await proto.processResource.call(this, script, ctx, charset, urlReplacer);
+        try {
+            result = await proto.processResource.call(this, script, ctx, charset, urlReplacer);
+        } catch (err) {
+            const url = (ctx && ctx.dest && ctx.dest.url) || '<unknown>';
+            try {
+                if (ctx && ctx.session && ctx.session.logger && ctx.session.logger.warn) {
+                    ctx.session.logger.warn(`script rewrite failed for ${url}: ${err && err.message}; falling back to lite rewrite`);
+                } else {
+                    console.warn(`[rh] script rewrite failed for ${url}: ${err && err.message}; falling back to lite rewrite`);
+                }
+            } catch (_) { /* logger best-effort */ }
+            result = _liteRewriteJs(script, ctx);
+        }
     } else {
         result = script;
     }

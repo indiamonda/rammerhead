@@ -22,6 +22,7 @@ require('../util/addMoreErrorGuards');
 require('../util/addUrlShuffling');
 require('../util/patchAsyncResourceProcessor');
 require('../util/patchTlsFingerprint');
+require('../util/patchEsotopeCodegen');
 require('../util/patchScriptProcessing');
 require('../util/patchSameOriginPolicy');
 require('../util/patchResponseHeaders');
