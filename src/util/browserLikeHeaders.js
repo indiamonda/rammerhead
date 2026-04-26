@@ -460,10 +460,56 @@ function isProxiedRequest(req) {
     return PROXY_REQUEST_RE.test(req.url.split('?')[0]);
 }
 
-// hCaptcha + reCAPTCHA endpoints validate the Referer against the site-key binding and
-// are extremely sensitive to header mutation. We preserve whatever the client sent and
-// only enforce Chrome-like ordering at the end.
-const CAPTCHA_HOST_RE = /(^|\.)(hcaptcha\.com|newassets\.hcaptcha\.com|js\.hcaptcha\.com|imgs\.hcaptcha\.com|recaptcha\.net|google\.com\/recaptcha|gstatic\.com\/recaptcha)$/i;
+// Challenge / captcha endpoints validate Referer/Origin against the site-key binding
+// (or, in WAF cases, against the issuing origin) and are extremely sensitive to header
+// mutation. We preserve whatever the client sent and only enforce Chrome-like ordering
+// at the end.
+//
+// Coverage rationale:
+//   - hCaptcha, reCAPTCHA  — classic site-key validation (Referer must match origin
+//     where the sitekey was issued).
+//   - Cloudflare Turnstile / cdn-cgi challenge platform — Cloudflare's bot-management
+//     and Turnstile widget (`challenges.cloudflare.com`, `cdn-cgi/challenge-platform`).
+//   - AWS WAF — token exchange (`*.token.awswaf.com`, `captcha.awswaf.com`,
+//     `tls.awswaf.com`) and the integration scripts (`*.awswaf.com`).
+//   - DataDome — captcha-delivery.com (geo., js., c., img.) + `dd.fcdn.com`.
+//   - PerimeterX (now HUMAN) — `*.perimeterx.net`, `*.px-cdn.net`, `*.humansecurity.com`.
+//   - Kasada — `*.kpsdk.com` (script + token).
+//   - Douyin / TikTok captcha — `verify.douyin.com`, `verify-sg.byteoversea.com`,
+//     `verification-va.byteoversea.com`, `vcs.snssdk.com`, `lf-cdn-tos.bytescm.com`
+//     (the captcha image CDN).
+//
+// We DON'T proxy-cleanse Referer/Origin for any of these so the third-party iframe
+// receives the original page-origin and validates correctly.
+const CAPTCHA_HOST_RE = new RegExp(
+    '(^|\\.)(' +
+        // hCaptcha
+        'hcaptcha\\.com|newassets\\.hcaptcha\\.com|js\\.hcaptcha\\.com|imgs\\.hcaptcha\\.com|' +
+        // reCAPTCHA (subdomains; the URL-path check below covers /recaptcha/* on
+        // google.com / gstatic.com).
+        'recaptcha\\.net|' +
+        // Cloudflare Turnstile + bot-management
+        'challenges\\.cloudflare\\.com|cloudflareinsights\\.com|' +
+        // AWS WAF
+        'awswaf\\.com|' +
+        // DataDome
+        'captcha-delivery\\.com|datadome\\.co|dd\\.fcdn\\.com|' +
+        // PerimeterX / HUMAN
+        'perimeterx\\.net|px-cdn\\.net|px-cloud\\.net|humansecurity\\.com|' +
+        // Kasada
+        'kpsdk\\.com|kpsdk\\.io|' +
+        // Douyin / TikTok captcha + verification
+        'verify\\.douyin\\.com|static-verify\\.douyin\\.com|' +
+        'verify-sg\\.byteoversea\\.com|verification-va\\.byteoversea\\.com|' +
+        'vcs\\.snssdk\\.com|lf-cdn-tos\\.bytescm\\.com' +
+    ')$',
+    'i'
+);
+// URL-path heuristics. Used both for endpoints we can't enumerate by host alone
+// (e.g. Cloudflare's `/cdn-cgi/challenge-platform/...` lives on the *protected*
+// origin, not on `challenges.cloudflare.com`) and for captcha widgets that use
+// path-based segregation (reCAPTCHA on google.com).
+const CAPTCHA_PATH_RE = /\/recaptcha\/|\/cdn-cgi\/challenge-platform\/|\/cdn-cgi\/turnstile\/|\/turnstile\/v0\/|\/aws-waf-token|\/captcha\/(?:get|verify)|\/verify\/get_verify\/|\/captcha-delivery\//i;
 function _isCaptchaDest(destOrigin, url) {
     try {
         if (destOrigin) {
@@ -473,7 +519,7 @@ function _isCaptchaDest(destOrigin, url) {
     } catch (_) {
         // URL parse may fail on malformed origins — treat as "not captcha".
     }
-    if (typeof url === 'string' && /\/recaptcha\//.test(url)) return true;
+    if (typeof url === 'string' && CAPTCHA_PATH_RE.test(url)) return true;
     return false;
 }
 
@@ -630,4 +676,9 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     _reorderHeaders(req.headers, isDoc ? CHROME_DOC_ORDER : CHROME_SUB_ORDER);
 }
 
-module.exports = { injectBrowserLikeHeaders, getDestinationOrigin };
+module.exports = {
+    injectBrowserLikeHeaders,
+    getDestinationOrigin,
+    CAPTCHA_HOST_RE,
+    CAPTCHA_PATH_RE,
+};

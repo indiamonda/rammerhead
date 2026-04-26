@@ -11,6 +11,7 @@
 
 const pageProcessor = require('testcafe-hammerhead/lib/processing/resources/page');
 const processingMode = require('./processingMode');
+const { CAPTCHA_HOST_RE, CAPTCHA_PATH_RE } = require('./browserLikeHeaders');
 
 // ---------------------------------------------------------------------------
 // AD BLOCKER — client-side cosmetic filter + popup/redirect suppressor.
@@ -699,6 +700,28 @@ function _stripProxyOriginFromBody(body, ctx) {
     return out;
 }
 
+// Host/path-based challenge detection: when the *destination* of a page request is
+// itself a challenge SDK endpoint (e.g. `challenges.cloudflare.com/turnstile/...`,
+// `*.token.awswaf.com`, `*.captcha-delivery.com`), the response body is the
+// challenge widget itself — full AST rewriting on it almost always corrupts the
+// obfuscated solver. Same goes for Cloudflare's `/cdn-cgi/challenge-platform/...`
+// (served from the protected origin, not from `challenges.cloudflare.com`) and
+// reCAPTCHA's `/recaptcha/...` paths.
+//
+// This is a strict superset of `_isChallengeResponse(html, ctx)` for the case
+// where we know it's a challenge from the URL alone — we don't need to inspect
+// the body.
+function _isChallengeFrame(ctx) {
+    if (!ctx || !ctx.dest) return false;
+    const host = (ctx.dest.host || '').toLowerCase().replace(/:\d+$/, '');
+    if (host && CAPTCHA_HOST_RE.test(host)) return true;
+    const url = ctx.dest.url || '';
+    if (url && CAPTCHA_PATH_RE.test(url)) return true;
+    // partAfterHost is the path-only form when ctx.dest.url isn't available
+    if (ctx.dest.partAfterHost && CAPTCHA_PATH_RE.test(ctx.dest.partAfterHost)) return true;
+    return false;
+}
+
 // Generic bot-challenge detection. Full hammerhead AST rewriting breaks the
 // obfuscated JS in challenge pages (AWS WAF, Cloudflare, DataDome, Kasada, etc.).
 // When we detect a challenge response we force lite processing so the browser can
@@ -1106,6 +1129,18 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
         // Strip integrity/nonce for full processing too
         html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
         html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
+    }
+
+    // Challenge-iframe early-return: when the destination *is* the challenge SDK
+    // (Cloudflare Turnstile / AWS WAF token endpoint / DataDome / hCaptcha /
+    // reCAPTCHA / etc.), the response body IS the obfuscated solver. Touching it
+    // with the AST rewriter — or even our own _liteProcess regex pass — virtually
+    // always corrupts the crypto/canvas fingerprinting routines. We drop the
+    // injected DevTools script and pass the body through unmodified so the
+    // widget runs as the origin shipped it.
+    if (typeof html === 'string' && !isSrcdoc && _isChallengeFrame(ctx)) {
+        processingMode.markLiteHost(ctx);
+        return html;
     }
 
     // Use lite processing for complex SPAs whose HTML shape suggests that full

@@ -92,6 +92,15 @@ if (wreq) {
             headers,
             browser: BROWSER_PROFILE,
             redirect: 'manual',
+            // CRITICAL: Disable wreq-js's automatic decompression. We're acting as a
+            // proxy — the downstream pipeline (Hammerhead's `decodeContent` for
+            // processed resources, the browser itself for fonts/images/etc.)
+            // already knows how to handle Content-Encoding. If we let wreq-js
+            // decompress here, we'd forward decompressed bytes alongside the
+            // original `Content-Encoding: br|gzip|zstd` header, and the browser
+            // would try to decompress decompressed data → ERR_CONTENT_DECODING_FAILED
+            // or "Size of decompressed WOFF 2.0 is less than compressed size".
+            compress: false,
         };
         if (body && method !== 'GET' && method !== 'HEAD') {
             fetchOpts.body = body;

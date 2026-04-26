@@ -2,13 +2,35 @@ const RequestPipelineContext = require('testcafe-hammerhead/lib/request-pipeline
 const StrShuffler = require('./StrShuffler');
 const getSessionId = require('./getSessionId');
 
+const SHUFFLED_INDICATOR_RE = /_rh1[0-9a-f]{5}:|_rhs/i;
+
+/**
+ * Recover the shuffled URL form from a path that may have been re-encoded by an
+ * upstream proxy (e.g. Fly's edge turning `://` into `%3A%2F%2F`). Critically,
+ * we MUST NOT decode `%XX` triplets that already live inside the shuffled body
+ * — StrShuffler's cipher is position-dependent and treats every `%XX` triplet
+ * as opaque, so decoding would shift cipher positions and produce a wrong
+ * destination URL (e.g. `_Rectangle%201%20(3).svg` -> `_Rectangle 3 (7).wzk`).
+ *
+ * Strategy: only decode if the URL doesn't already contain a recognizable
+ * shuffler indicator. If a single percent-decode pass surfaces the indicator,
+ * use the decoded form; otherwise leave the URL untouched.
+ */
 function safeDecodeUrl(url) {
     if (!url || typeof url !== 'string') return url;
+
+    if (SHUFFLED_INDICATOR_RE.test(url)) {
+        return url;
+    }
+
+    let decoded;
     try {
-        return decodeURIComponent(url);
+        decoded = decodeURIComponent(url);
     } catch (_) {
         return url;
     }
+
+    return SHUFFLED_INDICATOR_RE.test(decoded) ? decoded : url;
 }
 
 const replaceUrl = (url, replacer) => {
@@ -22,7 +44,11 @@ const replaceUrl = (url, replacer) => {
 const BUILTIN_HEADERS = require('testcafe-hammerhead/lib/request-pipeline/builtin-header-names');
 const _dispatch = RequestPipelineContext.prototype.dispatch;
 RequestPipelineContext.prototype.dispatch = function (openSessions) {
-    // Decode path so percent-encoded :// (%3A%2F%2F) from Fly/proxies matches shuffled URLs
+    // Conservatively recover URLs where an upstream proxy percent-encoded the
+    // shuffler header separator. We never decode `%XX` already inside the
+    // shuffled body — StrShuffler is a position-dependent cipher that treats
+    // those triplets as opaque, and decoding them shifts cipher positions and
+    // produces wrong destination URLs.
     const rawUrl = this.req.url;
     this.req.url = safeDecodeUrl(rawUrl) || rawUrl;
     let sessionId = getSessionId(this.req.url);

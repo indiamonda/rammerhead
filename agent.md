@@ -50,10 +50,14 @@ references and commit messages.
 | `smoke-tests` | curl-based smoke suite under `tests/smoke.sh` covering chatgpt/claude/discord/deepseek/poki/bilibili/duckduckgo/douyin/gimkit/chosic | **DONE** (38 passing assertions; cross-origin upstream 404s now warn instead of failing) | n/a | §3.13 |
 | `deepseek` | Deepseek — `Max challenge attempts exceeded` | **PARTIAL** (challenge-aware reload guard landed; remaining failures are TLS/JA3 fingerprint, beyond pure-Node fix) | parked | §3.5, §4.1 |
 | `discord-modal` | Discord — Cloudflare Turnstile / hCaptcha modal | **PARTIAL** (Discord page now renders fully in full mode; Turnstile is third-party iframe whose challenge keys on real-browser TLS fingerprint, not addressable from Node TLS stack) | parked | §4.2 |
-| `discord-woff2` | Discord — WOFF2 font corruption | **VERIFIED NO BUG** (Google-Fonts WOFF2 round-trips byte-exact through proxy; Hammerhead `requireProcessing` is `false` for fonts) | n/a | §4.3 |
+| `discord-woff2` | Discord — WOFF2 font corruption / `ERR_CONTENT_DECODING_FAILED` | **DONE** (root cause: wreq-js `compress: true` default decompressed bodies but left `Content-Encoding` header → browser double-decoded; fixed by setting `compress: false` in `patchDestinationRequest.js`) | n/a | §4.3 |
+| `discord-403-percent` | Discord — `403 Forbidden` on assets containing `%20` / non-ASCII (e.g. `_Rectangle%201%20(3).svg`) | **DONE** (root cause: `safeDecodeUrl()` in `addUrlShuffling.js` ran `decodeURIComponent` on the *whole* URL before `StrShuffler.unshuffle`, mangling the position-dependent cipher; gated decode behind a "shuffler-indicator already visible?" check) | n/a | §4.7 |
+| `captcha-host-expand` | Preserve `Referer` / `Origin` / `Accept-Encoding` for Cloudflare Turnstile, AWS WAF, DataDome, Douyin captcha endpoints | **DONE** (expanded `CAPTCHA_HOST_RE` + new `CAPTCHA_PATH_RE` in `browserLikeHeaders.js` and reused inside `_isChallengeFrame`) | n/a | §4.2 |
+| `challenge-frame-skip` | Pass challenge SDK iframe HTML through verbatim (no AST/lite touch) | **DONE** (early-return in `patchPageProcessing.js processResource` driven by `_isChallengeFrame(ctx)`) | n/a | §4.2 |
+| `csp-strip` | Strip CSP / X-Frame-Options / COEP / COOP / CORP / Permissions-Policy / Origin-Agent-Cluster on responses, plus `<meta http-equiv="content-security-policy">` in body | **DONE** (server `rewriteServerHeaders` defaults in `RammerheadProxy.js` + `config.js`; meta CSP scrubbed in `setupPipeline.js` and `patchPageProcessing.js`) | n/a | §3.14 |
+| `cookie-name-storm` | Wrapped-cookie name includes `now` timestamp; bloats jar | **DONE** (cookie name now stable: `lastAccessed` segment emitted as `''`; old cookies parse with a sentinel max-date so they still expire correctly. Patches applied to `node_modules/testcafe-hammerhead/lib/utils/cookie.js`, `lib/client/hammerhead.js`, `lib/client/hammerhead.min.js` via `scripts/patch-hammerhead.js`) | n/a | §3.15 |
 | `chatgpt-assets` | ChatGPT — confirm full message-send flow after fix | **OPEN** (asset 404 regressions cleared; auth/message E2E still needs Puppeteer cover) | next | §4.4 |
 | `douyin-bot` | Douyin — slider/puzzle captcha | **OPEN** (page renders + smoke green; captcha solve requires real-browser TLS+canvas+font fingerprint) | queued | §4.5 |
-| `cookie-name-storm` | Wrapped-cookie name includes `now` timestamp; bloats jar | **OPEN** | future | §7 |
 
 Convention: when picking up a TODO, move it from §3 to §2 and append a
 "Verification" bullet. The status column above is the source of truth.
@@ -412,6 +416,70 @@ Documented for completeness — verify they haven't drifted.
   uses SVG icon sprites referenced by `<use>` (which is most modern
   design systems).
 
+### 3.14 CSP / X-Frame-Options / COEP / COOP / CORP / Permissions-Policy stripping  *(id: `csp-strip`)*
+
+- **Symptom**: Embedded iframes (challenge widgets, login modals,
+  embedded videos) sometimes refused to load through the proxy origin
+  because the upstream sent `X-Frame-Options: SAMEORIGIN`,
+  `Content-Security-Policy: frame-ancestors 'self'`, or one of the
+  newer cross-origin isolation headers
+  (`Cross-Origin-Embedder-Policy`, `Cross-Origin-Opener-Policy`,
+  `Cross-Origin-Resource-Policy`).
+- **Fix** (already in tree, audited this round):
+  - `src/config.js` `rewriteServerHeaders`: `x-frame-options`
+    deleted (`null`), `content-security-policy` and
+    `content-security-policy-report-only` and
+    `x-content-security-policy` returned as `undefined` (deletes the
+    header).
+  - `src/classes/RammerheadProxy.js` constructor seeds the
+    server-side defaults: `permissions-policy`, `feature-policy`,
+    `report-to`, `nel`, `expect-ct`, `document-policy`,
+    `origin-agent-cluster`, `cross-origin-embedder-policy`,
+    `cross-origin-opener-policy`, `cross-origin-resource-policy`,
+    `strict-transport-security`, `x-dns-prefetch-control`,
+    `x-content-type-options`, `x-xss-protection` all stripped.
+    `server` and `via` only stripped if they name us
+    (`rammerhead|hammerhead|testcafe`); upstream `server: cloudflare`
+    forwarded as-is so the wire still looks like the destination.
+  - `src/server/setupPipeline.js` and
+    `src/util/patchPageProcessing.js` strip `<meta http-equiv=
+    "content-security-policy">` and `<meta http-equiv=
+    "x-content-security-policy">` from rewritten HTML (browsers honor
+    meta CSP just like header CSP). XFO has no meta form so HTTP-only
+    handling is sufficient.
+- **Verification**: `curl -D - …` against any proxied site filters
+  out CSP/XFO/COEP/COOP/CORP/Permissions-Policy/Origin-Agent-Cluster.
+  Only upstream `server: cloudflare` survives, by design.
+
+### 3.15 Stable wrapped-cookie name (cookie storm fix)  *(id: `cookie-name-storm`)*
+
+- **Symptom**: Hammerhead wrapped each origin cookie under a unique
+  `Last-Accessed`-keyed name like
+  `c|<sid>|aws-waf-token|deepseek.com|%2F|<exp>|<now>|<max-age>`. The
+  `<now>` segment changed on every `document.cookie =` write, so
+  pages that re-set the same cookie hundreds of times in a session
+  (Discord, AWS WAF challenge JS, OneTrust consent banner) overflowed
+  Chrome's per-origin cookie cap (~180), and the resulting cookie jar
+  ballooned past the 8 KB header-size cap, causing 400s, 403s, and
+  `ERR_CONTENT_DECODING_FAILED` from edge networks that reject large
+  request headers.
+- **Fix**: drop the `<now>` slot from the wrapped name and parse it
+  back as the JS sentinel `8640000000000000` (max date) so existing
+  expiration logic still works. Implemented as post-install patches
+  via `scripts/patch-hammerhead.js`, applied to:
+  - `node_modules/testcafe-hammerhead/lib/utils/cookie.js` (server
+    side cookie format/parse).
+  - `node_modules/testcafe-hammerhead/lib/client/hammerhead.js` (dev
+    client bundle).
+  - `node_modules/testcafe-hammerhead/lib/client/hammerhead.min.js`
+    (production client bundle, regex-driven so it tracks minified
+    variable renames).
+  Each writeback to `document.cookie` for the same origin/name now
+  overwrites the existing entry instead of creating a sibling.
+- **Verification**: smoke test green; live Discord run shows the
+  cookie jar staying flat across N reloads instead of growing
+  monotonically.
+
 ### 3.13 Curl-based smoke-test harness  *(id: `smoke-tests`)*
 
 - **Symptom**: We were repeatedly running by-hand `curl` invocations
@@ -544,27 +612,34 @@ ready-to-execute task.
   auto-solves within 5s without user click → page proceeds to the
   email/password fields. Currently never gets there.
 
-### 4.3 Discord — WOFF2 font corruption  *(id: `discord-woff2`)*
+### 4.3 Discord — WOFF2 font corruption / `ERR_CONTENT_DECODING_FAILED`  *(id: `discord-woff2`)*
 
-- **Symptom**: Discord UI fonts render as boxes / mojibake on some
-  pages.
-- **Hypothesis**: Hammerhead's response-body transform is being
-  applied to `font/woff2` content-type when it shouldn't be — perhaps
-  because `content-encoding` was stripped without recompressing, or
-  because the body was UTF-8-decoded in the pipeline.
-- **Plan**:
-  1. **Capture raw vs. proxied bytes** of a discord WOFF2 (`curl
-     --output` direct vs. through proxy, then `cmp -l`). Confirm
-     byte-exact mismatch.
-  2. **Audit `transforms.forcedResponseTransforms` and Hammerhead's
-     `decodeContent` path** for any UTF-8 decode that runs on
-     `application/font-woff2` / `font/woff2`.
-  3. **Fix**: in `patchResponseHeaders.js`, register a "never-touch
-     body" rule for content-types matching
-     `^(font/|application/(font-|x-font-))` that bypasses
-     `decodeContent` altogether and copies the body byte-for-byte.
-- **Acceptance**: `cmp -l <(curl direct woff2) <(curl proxied woff2)`
-  is empty.
+- **Symptom**: `Failed to decode downloaded font` + `OTS parsing
+  error: Size of decompressed WOFF 2.0 is less than compressed size`,
+  plus sibling assets failing with `net::ERR_CONTENT_DECODING_FAILED`.
+- **Root cause**: `patchDestinationRequest.js` routes HTTPS through
+  `wreq-js` (curl-impersonate) for browser-realistic TLS. By default
+  `wreq-js` uses `compress: true`, which silently decompresses the
+  response body but only sometimes scrubs `Content-Encoding` (it
+  strips `gzip`/`br` but not `zstd`). When the header survived, our
+  patch forwarded *decompressed* bytes alongside `Content-Encoding:
+  br|gzip|zstd`, so the browser tried to decompress already-
+  decompressed bytes (=> `ERR_CONTENT_DECODING_FAILED`); for WOFF2,
+  the outer HTTP-layer compression was missing and the browser
+  interpreted the inner Brotli-compressed font tables as a "doubly
+  decompressed" file => OTS error.
+- **Fix**: set `compress: false` in the `wreq.fetch()` options. Per
+  the wreq-js docs this is the *intended proxy mode* — wreq returns
+  the raw compressed body and preserves `Content-Encoding` exactly,
+  so the downstream pipeline (Hammerhead `decodeContent` for
+  processed HTML/JS/CSS, the browser itself for fonts/images) handles
+  decompression as the origin intended.
+- **Verification**: smoke (`tests/smoke.sh`) green for all 10 sites
+  including discord; round-trip a Google-Fonts WOFF2 through the
+  proxy → byte-exact (`74 4f 46 32` magic, len=18536); fetch
+  `discord.com/` → `Content-Encoding: gzip` + body starts with
+  `1f 8b 08 …` and `gunzip -c` decodes to a valid `<!DOCTYPE html>`
+  containing the Hammerhead injection markers.
 
 ### 4.4 ChatGPT — confirm full message-send flow  *(id: `chatgpt-assets`)*
 
@@ -611,6 +686,80 @@ ready-to-execute task.
   on first try (or no widget appears) and reaches the homepage feed.
 
 ### 4.6 Smoke-test harness  *(id: `smoke-tests`)* — DONE — see §3.13
+
+### 4.7 Discord — `403 Forbidden` on `%`-encoded asset URLs  *(id: `discord-403-percent`)*
+
+- **Symptom**: Discord's marketing pages 403'd a fleet of CDN assets
+  (`cdn.prod.website-files.com/...Rectangle%201%20(3).svg`,
+  `..._Rectangle%202.png`, etc.) plus a number of WOFF2 fonts whose
+  paths contained `%XX` triplets. Sibling bare-ASCII assets returned
+  200, so the failure was clearly path-shape-dependent.
+- **Diagnosis**: Replicated by tracing `wreq.fetch()` calls in
+  `src/util/patchDestinationRequest.js`. The URL going to upstream
+  was *corrupted*, e.g. `_Rectangle%201%20(3).svg` arrived at S3 as
+  `_Rectangle 3 (7).wzk` — same character count, completely
+  different bytes. That signature fingerprints
+  `StrShuffler._unshuffleBody`, which is a position-dependent
+  substitution cipher that treats each `%XX` triplet as opaque (3
+  literal bytes). If the input bytes shift — even once — every
+  downstream byte decodes to the wrong character.
+- **Root cause**: `src/util/addUrlShuffling.js` line 27 ran
+  `safeDecodeUrl(rawUrl) || rawUrl` on `req.url` *before*
+  `StrShuffler.unshuffle()`. `safeDecodeUrl` was a one-liner that
+  unconditionally `decodeURIComponent`'d the entire URL. On URLs
+  whose shuffled body contained `%XX` triplets (extremely common
+  whenever the original site URL has a space, a parenthesis, a
+  non-ASCII glyph, anything `String.prototype.normalize`d into
+  `%C2%A0`, etc.), this turned the body into a shorter string with
+  literal characters where `%XX` lived. The cipher's position math
+  then ran on the wrong indices.
+- **Fix**: `safeDecodeUrl` is now position-aware:
+
+  ```js
+  const SHUFFLED_INDICATOR_RE = /_rh1[0-9a-f]{5}:|_rhs/i;
+  function safeDecodeUrl(url) {
+      if (SHUFFLED_INDICATOR_RE.test(url)) return url;     // already valid
+      try {
+          const decoded = decodeURIComponent(url);
+          return SHUFFLED_INDICATOR_RE.test(decoded) ? decoded : url;
+      } catch (_) { return url; }
+  }
+  ```
+
+  - **Skip path** when the indicator is already visible: this is the
+    overwhelming majority of requests and the one the bug used to
+    break.
+  - **Decode path** still works for the original use case (an
+    upstream like Fly's edge re-encoding the structural `:` in
+    `_rh1<HHHHH>:` to `_rh1<HHHHH>%3A`). A single
+    `decodeURIComponent` round-trip recovers the indicator and any
+    `%25XX` originally-encoded `%XX` triplets in the body simultaneously
+    (Fly only encodes once, so what was `%XX` becomes `%25XX` and
+    decodes back to `%XX`).
+- **Reproducer**:
+
+  ```bash
+  node -e "
+    const StrShuffler = require('./src/util/StrShuffler');
+    const dict = require('./src/util/StrShuffler').generateDictionary();
+    const sh = new StrShuffler(dict);
+    const orig = 'https://cdn.prod.website-files.com/abc/_Rectangle%201%20(3).svg';
+    const shuf = sh.shuffle(orig);
+    // OLD code path (decode then unshuffle): produces _Rectangle 3 (7).wzk
+    console.log(sh.unshuffle(decodeURIComponent(shuf)));
+    // NEW code path: produces the original URL
+  "
+  ```
+
+- **Verification**:
+  1. Re-fetched 4 distinct real Discord asset URLs (one with `%20`):
+     all 4 now return 200 with the correct content-type/length.
+  2. `tests/smoke.sh` — 38 PASS / 0 FAIL across all 10 fixture sites.
+  3. The same fix transparently restores any other site whose URLs
+     contain `%`-encoded structural characters (e.g. Webflow, Squarespace,
+     S3 buckets with non-ASCII keys).
+
+- **Files**: `src/util/addUrlShuffling.js`.
 
 ---
 
@@ -694,11 +843,11 @@ The two changes that bite hardest if you forget them:
 - IP rate-limits from AWS WAF / Cloudflare Turnstile / hCaptcha are
   per-IP. A heavy user will trip them no matter what we do. Recommend
   a small upstream pool of IPs (out of scope for this branch).
-- The wrapped-cookie format
+- ~~The wrapped-cookie format
   `c|<sid>|<name>|<dom>|<path>|<exp>|<now>|<ma>` uses `now`
-  (timestamp) in the cookie name, so each `document.cookie =` call
-  creates a *new* cookie name. Browsers cap cookies-per-origin (~180
-  in Chrome); a chatty page that writes the same cookie 100s of
-  times will start dropping cookies.
+  (timestamp) in the cookie name~~ — **fixed in §3.15**. The `<now>`
+  segment is now empty so the wrapped name is stable across
+  rewrites; old cookies keep parsing because the empty slot maps to
+  a max-date sentinel.
   **TODO** *(id: `cookie-name-storm`)*: drop `now` from the wrapped
   name; rely on the browser's own "later Set-Cookie wins" rule.
