@@ -231,12 +231,24 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     const StrShuffler = require('../util/StrShuffler');
 
     // ── Pluggable URL path style ─────────────────────────────────────────────
-    // When `config.pathStyle` is non-empty (e.g. "cdn-cgi/p"), session URLs
-    // arrive as `/<pathStyle>/<sid>/<dest>`. Strip the prefix at the very top
-    // of the request pipeline so the rest of Hammerhead never has to know it
-    // exists; outgoing URL attributes get the prefix re-injected by
-    // `_stripProxyOriginFromBody` (in patchPageProcessing.js) so the served
-    // HTML refers to the prefixed form. See config.js for the full rationale.
+    // When `config.pathStyle` is non-empty (e.g. "cdn-cgi/p"), incoming
+    // requests arrive as `/<pathStyle>/<sid>/<dest>`. We strip the prefix at
+    // the *very* top of `_onRequest` — BEFORE Hammerhead's `checkIsRoute`,
+    // BEFORE every Rammerhead pipeline handler, BEFORE `super._onRequest`.
+    // This is critical: many handlers (notably `injectBrowserLikeHeaders` →
+    // see `PROXY_REQUEST_RE` in browserLikeHeaders.js) recognise a request as
+    // "proxied" only if the path starts with `/<32-hex-sid>/`. If we strip
+    // later in the pipeline, those handlers see `/<pathStyle>/...`, decide
+    // it's not a proxy URL, and silently leave headers alone — including the
+    // client's `Accept: */*` which makes Hammerhead's `isPage()` return false
+    // and skip page processing entirely (raw upstream HTML, no antidetect
+    // injection, no URL rewriting).
+    //
+    // Outgoing URLs in HTML/JS/CSS get the prefix re-injected by
+    // `_stripProxyOriginFromBody` (in patchPageProcessing.js) and
+    // `_stripProxyOriginFromScript` (in patchScriptProcessing.js), so the
+    // served bytes refer to `/cdn-cgi/p/<sid>/...` while the server-side
+    // pipeline only ever sees `/<sid>/...`. See config.js for full rationale.
     //
     // Edge case: we accept the bare `/<sid>/<dest>` form too. Hammerhead's
     // client-side getProxyUrl can't see the configured prefix and so emits
@@ -246,15 +258,25 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     const _pathStyle = (require('../config').pathStyle || '').replace(/^\/+|\/+$/g, '');
     const _pathPrefix = _pathStyle ? '/' + _pathStyle : '';
     if (_pathPrefix) {
-        proxyServer.addToOnRequestPipeline((req) => {
-            const u = req.url;
-            if (u && (u === _pathPrefix || u.startsWith(_pathPrefix + '/') || u.startsWith(_pathPrefix + '?'))) {
+        function _stripPrefix(req) {
+            const u = req && req.url;
+            if (!u) return;
+            if (u === _pathPrefix || u.startsWith(_pathPrefix + '/') || u.startsWith(_pathPrefix + '?')) {
                 const before = u;
                 req.url = u.slice(_pathPrefix.length) || '/';
-                if (process.env.PATH_STYLE_DEBUG) console.error('[pathStrip]', before, '->', req.url);
+                if (process.env.PATH_STYLE_DEBUG) console.error('[pathStrip]', before, '→', req.url);
             }
-            return false;
-        }, true); // beginning=true → runs before every other handler
+        }
+        const _origOnRequest = proxyServer._onRequest.bind(proxyServer);
+        proxyServer._onRequest = function (req, res, serverInfo) {
+            _stripPrefix(req);
+            return _origOnRequest(req, res, serverInfo);
+        };
+        const _origOnUpgrade = proxyServer._onUpgradeRequest.bind(proxyServer);
+        proxyServer._onUpgradeRequest = function (req, socket, head, serverInfo) {
+            _stripPrefix(req);
+            return _origOnUpgrade(req, socket, head, serverInfo);
+        };
     }
 
     // Extract the real destination URL from a proxied request. Handles unshuffled

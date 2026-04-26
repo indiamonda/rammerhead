@@ -201,7 +201,10 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     // Existing /<sessionId>/<destination> share links are unaffected because
     // session IDs (32-char hex) are routed by hammerhead's session pipeline,
     // not by this handler.
-    const _stealthPortal = (config.stealthPortal || '').trim() || null;
+    // Accept the portal token either as "portal42" or "/portal42" — we strip
+    // surrounding slashes so the route registration below never produces
+    // "//portal42" (which would 404 because `req.url` is single-slash).
+    const _stealthPortal = ((config.stealthPortal || '').trim().replace(/^\/+|\/+$/g, '')) || null;
     // Pure-HTML cover page. No JS, no fonts, no external resources, no proxy/
     // unblock/session keywords. Looks like a brand-new domain placeholder.
     const COVER_HTML = [

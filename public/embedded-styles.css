@@ -2402,17 +2402,28 @@ body {
     text-align: center;
     padding: 24px 16px 20px;
     margin-top: 32px;
-    border-top: 1px solid var(--color-border);
     font-size: 13px;
     line-height: 1.7;
     color: var(--color-text-primary);
 }
+/* Pill-shaped backdrop on the inner span so the footer text always sits on
+   a clearly contrasted surface — even when the page has a custom wallpaper,
+   a solid theme color similar to the text color, or any other background.
+   Using --color-bg-secondary (slightly off the page's primary background)
+   keeps it subtle on plain pages and readable on busy ones. */
 .jq-footer-inner {
     display: inline-block;
     max-width: min(720px, 94%);
     color: inherit;
     white-space: normal;
     word-spacing: 0.02em;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-divider);
+    border-radius: 999px;
+    padding: 8px 18px;
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 .jq-footer-inner strong {
     font-weight: 600;
