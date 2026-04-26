@@ -884,18 +884,42 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // CRITICAL: After Tier-1.1 rename, hammerhead serves these scripts at NEW_PATHS.task /
     // NEW_PATHS.iframeTask (e.g. /_a/t.js, /_a/i.js). The legacy paths are also accepted as
     // a back-compat alias.
+    //
+    // CRITICAL #2: Hammerhead's _onTaskScriptRequest extracts sessionId via parseProxyUrl(referer),
+    // whose internal SUPPORTED_PROTOCOL_RE (/^(?:https?|file):/i) only matches real protocols. When
+    // URL shuffling is on, the referer's destination part is `_rhsfMSD-://...` (shuffled), which
+    // FAILS that protocol check, parseProxyUrl returns null, and hammerhead responds 500 even
+    // though the session exists. We must unshuffle the referer's dest part in-place so
+    // hammerhead's parseProxyUrl can extract the sessionId.
     const TASK_PATHS = new Set([NEW_PATHS.task, NEW_PATHS.iframeTask, OLD_PATHS.task, OLD_PATHS.iframeTask]);
+    const REFERER_DEST_RE = /^(.+?\/[a-f0-9]{32}(?:![^/?]+)*\/)([^?#]*)(.*)$/i;
     proxyServer.addToOnRequestPipeline((req, _res, _serverInfo) => {
         let pathname = (req.url || '').split('?')[0];
         try {
             pathname = decodeURIComponent(pathname);
         } catch (_) {}
         if (!TASK_PATHS.has(pathname)) return false;
-        const sessionId = getSessionId(req.headers?.referer || '');
+        const referer = req.headers?.referer || '';
+        const sessionId = getSessionId(referer);
         if (!sessionId || !sessionStore.has(sessionId)) return false;
+        const session = sessionStore.get(sessionId);
+        if (session?.shuffleDict) {
+            const m = referer.match(REFERER_DEST_RE);
+            if (m) {
+                const [, prefix, destPart, suffix] = m;
+                if (destPart.startsWith(StrShuffler.shuffledIndicator)) {
+                    try {
+                        const shuffler = new StrShuffler(session.shuffleDict);
+                        const unshuffled = shuffler.unshuffle(destPart);
+                        if (/^https?:\/\//i.test(unshuffled)) {
+                            req.headers.referer = prefix + unshuffled + suffix;
+                        }
+                    } catch (_) {}
+                }
+            }
+        }
         if (proxyServer.openSessions.get(sessionId)) return false;
         try {
-            const session = sessionStore.get(sessionId);
             if (session && typeof session.serializeSession === 'function') {
                 proxyServer.openSessions.addSerializedSession(sessionId, session.serializeSession());
             }
