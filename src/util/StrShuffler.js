@@ -48,6 +48,30 @@ const generateDictionary = function () {
     return str;
 };
 
+// Heuristic used by `unshuffle` to decide whether a candidate decoded body
+// looks like the URL the page actually meant. We accept anything starting
+// with a known scheme (http/https/ws/wss/file/data/blob), or the special
+// `about:` URLs that hammerhead emits, or a protocol-relative `//host/…`
+// form. Anything else (random base-62 garbage from cipher misalignment) is
+// rejected so the caller can try the next candidate length.
+const VALID_URL_RE = /^(?:https?:\/\/|wss?:\/\/|file:\/\/|data:|blob:|about:|\/\/)/i;
+function looksLikeValidUnshuffledUrl(str) {
+    if (typeof str !== 'string' || !str) return false;
+    return VALID_URL_RE.test(str);
+}
+
+// Path-resolved import detection: when the BROWSER turns
+//   <importer URL>/_rh1<len>:<shuffled-importer-tail>
+// into
+//   <importer URL>/_rh1<len>:<shuffled-prefix><literal-filename>
+// by resolving `import "./chunk.js"`, the trailing portion of the body is
+// LITERAL filename text that the cipher would otherwise mangle. Common
+// indicator: the body contains a `/` followed by characters that end in a
+// recognized file extension — those bytes would virtually never appear from
+// the cipher's random output, so their presence is a near-certain marker
+// of path resolution.
+const PATH_RESOLVED_TAIL_RE = /\.(?:js|mjs|cjs|css|html|htm|json|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot|wasm|mp3|mp4|webm|ogg|wav|txt|xml|pdf)\b/i;
+
 class StrShuffler {
     constructor(dictionary = generateDictionary()) {
         this.dictionary = dictionary;
@@ -92,6 +116,21 @@ class StrShuffler {
      * format (`_rhs<body>`). For the versioned format, anything after the
      * declared body length is treated as a verbatim suffix — that's what
      * lets concatenated chunk names round-trip correctly.
+     *
+     * Robustness for browser path resolution: when the page does
+     *   <script src="…/_rh1<len>:<shuffled-importer-tail>"> (eg ES module)
+     * and that script statically imports `./chunk.js`, the BROWSER resolves
+     * the relative URL against the importer's directory, producing
+     *   …/_rh1<len>:<shuffled-prefix-with-trailing-slash><chunk.js>
+     * The length prefix in the URL is now larger than the actually-encoded
+     * portion (the original importer URL bytes), and the literal `chunk.js`
+     * sits at cipher positions where naive decoding produces garbage. To
+     * handle this we try the declared length first and, if the decoded body
+     * doesn't look like a valid absolute/protocol-relative URL, fall back to
+     * the longest split at a literal `/` whose decoded prefix DOES look
+     * valid. That recovers the correct destination for path-resolved
+     * imports without breaking the common case (declared length already
+     * matches the encoded bytes).
      */
     unshuffle(str) {
         if (typeof str !== 'string') return str;
@@ -102,12 +141,52 @@ class StrShuffler {
             const lenHex = str.substr(shuffledIndicatorV2.length, LEN_DIGITS);
             if (!/^[0-9a-f]{5}$/i.test(lenHex)) return str;
             if (str.charAt(shuffledIndicatorV2.length + LEN_DIGITS) !== SEPARATOR) return str;
-            const len = parseInt(lenHex, 16);
+            const declaredLen = parseInt(lenHex, 16);
             const bodyStart = headerLen;
-            const bodyEnd = bodyStart + len;
-            const body = str.substring(bodyStart, bodyEnd);
-            const suffix = str.substring(bodyEnd);
-            return this._unshuffleBody(body) + suffix;
+            const fullPayload = str.substring(bodyStart);
+
+            const declaredBody = fullPayload.substring(0, declaredLen);
+            const declaredSuffix = fullPayload.substring(declaredLen);
+            const declaredOut = this._unshuffleBody(declaredBody) + declaredSuffix;
+            const declaredValid = looksLikeValidUnshuffledUrl(declaredOut);
+
+            // Path-resolved import recovery: when the body contains a
+            // recognized file extension (`.js`, `.css`, `.png`, …) we
+            // likely have the path-resolution case where the browser
+            // appended a literal `<filename>.<ext>` to a shuffled importer
+            // URL. Try splitting at every `/` from the longest shuffled
+            // prefix down and pick the FIRST split whose decoded head is
+            // a valid URL. Longest valid split wins (matches browser
+            // resolution, which preserves as much directory as possible).
+            const looksPathResolved = PATH_RESOLVED_TAIL_RE.test(fullPayload);
+            if (looksPathResolved) {
+                for (let i = fullPayload.length; i > 0; i--) {
+                    if (fullPayload.charAt(i - 1) !== '/') continue;
+                    const head = fullPayload.substring(0, i);
+                    const tail = fullPayload.substring(i);
+                    if (!PATH_RESOLVED_TAIL_RE.test(tail)) continue;
+                    const candidate = this._unshuffleBody(head) + tail;
+                    if (looksLikeValidUnshuffledUrl(candidate)) {
+                        return candidate;
+                    }
+                }
+            }
+
+            if (declaredValid) return declaredOut;
+
+            // Last-ditch fallback: scan every `/` in the body and pick the
+            // longest split whose decoded prefix looks valid.
+            for (let i = declaredLen - 1; i > 0; i--) {
+                if (fullPayload.charAt(i - 1) !== '/') continue;
+                const head = fullPayload.substring(0, i);
+                const tail = fullPayload.substring(i);
+                const candidate = this._unshuffleBody(head) + tail;
+                if (looksLikeValidUnshuffledUrl(candidate)) {
+                    return candidate;
+                }
+            }
+
+            return declaredOut;
         }
 
         if (str.startsWith(shuffledIndicator)) {

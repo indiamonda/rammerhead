@@ -243,6 +243,10 @@
         const LEN_DIGITS = 5;
         const SEPARATOR = ':';
         const MAX_LEN = (1 << (LEN_DIGITS * 4)) - 1;
+        const VALID_URL_RE = /^(?:https?:\/\/|wss?:\/\/|file:\/\/|data:|blob:|about:|\/\/)/i;
+        const PATH_RESOLVED_TAIL_RE = /\.(?:js|mjs|cjs|css|html|htm|json|map|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot|wasm|mp3|mp4|webm|ogg|wav|txt|xml|pdf)\b/i;
+        const looksLikeValidUnshuffledUrl = (s) =>
+            typeof s === 'string' && !!s && VALID_URL_RE.test(s);
         const generateDictionary = function () {
             let str = '';
             const split = baseDictionary.split('');
@@ -305,10 +309,41 @@
                     const lenHex = str.substr(shuffledIndicatorV2.length, LEN_DIGITS);
                     if (!/^[0-9a-f]{5}$/i.test(lenHex)) return str;
                     if (str.charAt(shuffledIndicatorV2.length + LEN_DIGITS) !== SEPARATOR) return str;
-                    const len = parseInt(lenHex, 16);
+                    const declaredLen = parseInt(lenHex, 16);
                     const bodyStart = headerLen;
-                    const bodyEnd = bodyStart + len;
-                    return this._unshuffleBody(str.substring(bodyStart, bodyEnd)) + str.substring(bodyEnd);
+                    const fullPayload = str.substring(bodyStart);
+                    const declaredBody = fullPayload.substring(0, declaredLen);
+                    const declaredSuffix = fullPayload.substring(declaredLen);
+                    const declaredOut = this._unshuffleBody(declaredBody) + declaredSuffix;
+                    const declaredValid = looksLikeValidUnshuffledUrl(declaredOut);
+                    // Path-resolved import recovery: if the body contains a
+                    // recognized file extension, the browser likely
+                    // appended a literal filename to a shuffled importer
+                    // URL. Try splitting at every `/` from longest down
+                    // and pick the first whose decoded head is a valid URL.
+                    if (PATH_RESOLVED_TAIL_RE.test(fullPayload)) {
+                        for (let i = fullPayload.length; i > 0; i--) {
+                            if (fullPayload.charAt(i - 1) !== '/') continue;
+                            const head = fullPayload.substring(0, i);
+                            const tail = fullPayload.substring(i);
+                            if (!PATH_RESOLVED_TAIL_RE.test(tail)) continue;
+                            const candidate = this._unshuffleBody(head) + tail;
+                            if (looksLikeValidUnshuffledUrl(candidate)) {
+                                return candidate;
+                            }
+                        }
+                    }
+                    if (declaredValid) return declaredOut;
+                    for (let i = declaredLen - 1; i > 0; i--) {
+                        if (fullPayload.charAt(i - 1) !== '/') continue;
+                        const head = fullPayload.substring(0, i);
+                        const tail = fullPayload.substring(i);
+                        const candidate = this._unshuffleBody(head) + tail;
+                        if (looksLikeValidUnshuffledUrl(candidate)) {
+                            return candidate;
+                        }
+                    }
+                    return declaredOut;
                 }
                 if (str.startsWith(shuffledIndicator)) {
                     return this._unshuffleBody(str.slice(shuffledIndicator.length));
@@ -318,10 +353,12 @@
         }
 
         const replaceUrl = (url, replacer) => {
-            //        regex:              https://google.com/    sessionid/   url
-            return (url || '').replace(/^((?:[a-z0-9]+:\/\/[^/]+)?(?:\/[^/]+\/))([^]+)/i, function (_, g1, g2) {
-                return g1 + replacer(g2);
-            });
+            // Must mirror src/util/addUrlShuffling.js: allow multiple path segments
+            // before /<32hex>(!meta)*/ so /rammerhead/<sid>/… and PATH_STYLE bases work.
+            return (url || '').replace(
+                /^((?:[a-z0-9]+:\/\/[^/]+)?(?:\/[^/]+)*\/[a-f0-9]{32}(?:![^/?#]*)*\/)((?:.|\s)+)$/i,
+                (_, g1, g2) => g1 + replacer(g2)
+            );
         };
         const shuffler = new StrShuffler(shuffleDict);
 
