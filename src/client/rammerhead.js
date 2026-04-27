@@ -1,5 +1,5 @@
 (function () {
-    var hammerhead = window['%hammerhead%'];
+    var hammerhead = window['%_d%'];
     if (!hammerhead) throw new Error('hammerhead not loaded yet');
     if (hammerhead.settings._settings.sessionId) {
         // task.js already loaded. this will likely never happen though since this file loads before task.js
@@ -355,8 +355,10 @@
         const replaceUrl = (url, replacer) => {
             // Must mirror src/util/addUrlShuffling.js: allow multiple path segments
             // before /<32hex>(!meta)*/ so /rammerhead/<sid>/… and PATH_STYLE bases work.
+            // NON-GREEDY `*?` so the FIRST 32-hex segment wins (otherwise content-hash
+            // dirs in destinations are mistaken for the session id).
             return (url || '').replace(
-                /^((?:[a-z0-9]+:\/\/[^/]+)?(?:\/[^/]+)*\/[a-f0-9]{32}(?:![^/?#]*)*\/)((?:.|\s)+)$/i,
+                /^((?:[a-z0-9]+:\/\/[^/]+)?(?:\/[^/]+)*?\/[a-f0-9]{32}(?:![^/?#]*)*\/)((?:.|\s)+)$/i,
                 (_, g1, g2) => g1 + replacer(g2)
             );
         };

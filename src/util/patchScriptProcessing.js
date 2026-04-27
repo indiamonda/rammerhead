@@ -44,7 +44,7 @@ const FALLBACK = [
 // Fallback chain: proxy URL → blob URL (proxy content) → blob URL (raw content via /__rh_raw with bridge).
 const IFRAME_PROXY = [
     'if(typeof window!=="undefined"&&typeof document!=="undefined"&&!window.__rhIframe){window.__rhIframe=1;(function(){',
-    'function getHH(){try{return window["%hammerhead%"]}catch(e){return null}}',
+    'function getHH(){try{return window["%_d%"]}catch(e){return null}}',
     'var _pOrig,_sid;',
     'function getCtx(){',
       'if(_pOrig)return true;',

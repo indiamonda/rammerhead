@@ -452,6 +452,115 @@ patch(
     'null-safe owner in __call$ (client)'
 );
 
+// ---------------------------------------------------------------------------
+// Patch 7: brand-strip hammerhead's serialized magic strings.
+//
+// The proxied page surface leaks the word "hammerhead" in several places that
+// content scanners (Lightspeed Smart Agent, Lightspeed Web Filter, GoGuardian,
+// Smoothwall, Securly, etc.) string-grep:
+//
+//   • `window["%hammerhead%"]`    — accessed by 2× `<script class="self-removing-script-…">`
+//                                   blocks injected on every proxied page.
+//   • `window["%is-hammerhead%"]` — set in our own injectHammerhead client wrap.
+//   • `/*hammerhead|stylesheet|start*/` and `…|end*/` — wrapped around every
+//                                   processed `<style>` block.
+//   • `…-hammerhead-stored-value` — attribute postfix used to mirror original
+//                                    URL/source-attr values.
+//   • `data-hammerhead-hovered`, `data-hammerhead-focused` — pseudo-class
+//                                    proxies left in CSS rules.
+//   • `hammerhead|<X>` — internal property keys stored on the global object.
+//   • `hammerhead|storage-wrapper|` — virtualised localStorage prefix.
+//
+// Each of these is a single-pattern string-grep target. We rebrand all of
+// them to neutral identifiers ("_d…") so the proxied bytes contain zero
+// occurrences of the literal word "hammerhead". Both the server-side
+// serializers AND the client bundle (which reads these keys back) must use
+// the SAME new value, so we patch every file that references them in a
+// single sweep.
+//
+// This is purely a string substitution at install time; semantics are
+// unchanged because the strings are only used as opaque keys/markers.
+// ---------------------------------------------------------------------------
+const BRAND_REPLACEMENTS = [
+    // Specific multi-word strings whose prefix overlaps another generic rule.
+    // Process these BEFORE the generic `hammerhead|` → `_d|` so their
+    // semantically meaningful (and visible-in-page) form is shortened,
+    // not just prefixed.
+    ['/*hammerhead|stylesheet|start*/', '/*_d|css|s*/'],
+    ['/*hammerhead|stylesheet|end*/', '/*_d|css|e*/'],
+    // Embedded `hammerhead-` substring inside a string (NOT `hammerhead|`,
+    // which is handled generically). One known case in event names.
+    ['eval-hammerhead-script', 'eval-_d-script'],
+    // document.write begin/end markers
+    ['hammerhead_write_marker_begin', '_d_wmb'],
+    ['hammerhead_write_marker_end', '_d_wme'],
+    // GENERIC: every other `hammerhead|<something>` internal-property key.
+    // `|` is invalid in JS identifiers, so any source occurrence of the
+    // literal substring `hammerhead|` is necessarily inside a string. Safe
+    // to rebrand wholesale.
+    ['hammerhead|', '_d|'],
+    // Magic window properties / DOM attribute postfixes / pseudo-class proxies.
+    ['data-hammerhead-hovered', 'data-_d-hov'],
+    ['data-hammerhead-focused', 'data-_d-foc'],
+    ['-hammerhead-stored-value', '-_d-sv'],
+    ['%is-hammerhead%', '%_isd%'],
+    ['%hammerhead%', '%_d%'],
+];
+
+const BRAND_FILES = [
+    // server-side
+    'processing/style.js',
+    'processing/dom/internal-attributes.js',
+    'processing/dom/internal-properties.js',
+    'utils/get-storage-key.js',
+    // client mustache (re-served as task.js with the new path)
+    'client/task.js.mustache',
+    // unminified client bundles (consumed by src/build.js)
+    'client/hammerhead.js',
+    'client/worker-hammerhead.js',
+    'client/transport-worker.js',
+    // minified bundles too, in case anything reads them directly during
+    // testing or fallback paths
+    'client/hammerhead.min.js',
+    'client/worker-hammerhead.min.js',
+    'client/transport-worker.min.js',
+];
+
+function applyBrandReplacements() {
+    let totalReplacements = 0;
+    let filesPatched = 0;
+    let filesAlreadyClean = 0;
+    for (const rel of BRAND_FILES) {
+        const filePath = path.join(HH, rel);
+        if (!fs.existsSync(filePath)) continue;
+        let src = fs.readFileSync(filePath, 'utf8');
+        let fileChanged = 0;
+        for (const [from, to] of BRAND_REPLACEMENTS) {
+            if (!src.includes(from)) continue;
+            const before = src.length;
+            src = src.split(from).join(to);
+            const replaced = (before - src.length) / Math.max(1, from.length - to.length);
+            fileChanged += Math.max(1, Math.round(replaced));
+        }
+        if (fileChanged > 0) {
+            fs.writeFileSync(filePath, src, 'utf8');
+            console.log(`[patch-hammerhead] brand-strip: ${rel} (${fileChanged} replacement${fileChanged === 1 ? '' : 's'}).`);
+            applied++;
+            filesPatched++;
+            totalReplacements += fileChanged;
+        } else {
+            filesAlreadyClean++;
+        }
+    }
+    if (filesPatched === 0) {
+        console.log(`[patch-hammerhead] brand-strip: all ${filesAlreadyClean} target files already clean.`);
+        skipped++;
+    } else {
+        console.log(`[patch-hammerhead] brand-strip done (${filesPatched} files, ${totalReplacements} total).`);
+    }
+}
+applyBrandReplacements();
+
 const total = applied + skipped;
 if (total === 0) {
     console.error('[patch-hammerhead] No patches applied! Check hammerhead version.');

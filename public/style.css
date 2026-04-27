@@ -778,6 +778,232 @@ body {
 }
 
 /* ============================================
+   Get web-build files button + status banners
+   ============================================ */
+.generate-link-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.generate-link-section > button {
+    align-self: center;
+}
+
+.webbuild-button {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 10px 24px;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: var(--font-family);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color var(--transition-fast), color var(--transition-fast),
+                background var(--transition-fast), box-shadow var(--transition-fast),
+                transform var(--transition-fast);
+}
+
+.webbuild-button:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+}
+
+.webbuild-button:active {
+    transform: translateY(1px);
+}
+
+.webbuild-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.webbuild-button:disabled:hover {
+    border-color: var(--color-border);
+    color: var(--color-text-secondary);
+    background: var(--color-bg-primary);
+}
+
+[data-theme="dark"] .webbuild-button {
+    color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .webbuild-button:hover {
+    border-color: var(--accent, var(--color-primary));
+    color: var(--accent, var(--color-primary));
+    background: rgba(77, 166, 255, 0.12);
+}
+
+.message-slot {
+    width: 100%;
+}
+
+/* Loading shown while the build/probe is in flight */
+.webbuild-loading {
+    display: none;
+    align-items: center;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    line-height: 1.4;
+    gap: 8px;
+}
+
+.webbuild-loading-text {
+    flex: 1;
+    text-align: left;
+}
+
+/* Success banner shown once the download has been initiated */
+.webbuild-result {
+    display: none;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: var(--color-success-bg, #e6f4ea);
+    border: 1px solid var(--color-success, #34a853);
+    border-radius: 8px;
+    color: var(--color-success, #137333);
+    font-size: 13px;
+    line-height: 1.45;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 200ms var(--ease, ease), transform 200ms var(--ease, ease);
+}
+
+.webbuild-result.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.webbuild-result-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--color-success, #34a853);
+    color: var(--color-white, #fff);
+    margin-top: 1px;
+}
+
+.webbuild-result-text {
+    flex: 1;
+    text-align: left;
+}
+
+[data-theme="dark"] .webbuild-result {
+    background: rgba(46, 204, 113, 0.12);
+    border-color: var(--success, #2ecc71);
+    color: var(--success, #2ecc71);
+}
+
+/* ============================================
+   Invalid-link banner & shake animation
+   ============================================ */
+.invalid-link-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--color-error-bg, #fce8e6);
+    border: 1px solid var(--color-error-border, #f28b82);
+    border-radius: 8px;
+    color: var(--color-error-text, #c5221f);
+    font-size: 13px;
+    line-height: 1.4;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 200ms ease, transform 200ms ease,
+                box-shadow 200ms ease, border-color 200ms ease;
+    will-change: transform, opacity;
+}
+
+.invalid-link-banner.active {
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0);
+    animation: invalidLinkGlow 2.4s ease-out 1;
+}
+
+.invalid-link-banner.shake {
+    animation: invalidLinkGlow 2.4s ease-out 1, invalidLinkShake 600ms cubic-bezier(.36,.07,.19,.97) 1;
+}
+
+.invalid-link-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--color-error-text, #c5221f);
+    color: #fff;
+}
+
+.invalid-link-text {
+    flex: 1;
+    text-align: left;
+    font-weight: 500;
+}
+
+[data-theme="dark"] .invalid-link-banner {
+    background: rgba(231, 76, 60, 0.12);
+    border-color: var(--error, #e74c3c);
+    color: var(--error, #e74c3c);
+}
+
+[data-theme="dark"] .invalid-link-icon {
+    background: var(--error, #e74c3c);
+}
+
+/* Briefly highlights the URL input the user typed into so it's clear
+   which field is invalid. */
+.url-input.shake-error {
+    animation: invalidLinkShake 600ms cubic-bezier(.36,.07,.19,.97) 1;
+    border-color: var(--color-error-text, #c5221f) !important;
+    box-shadow: 0 0 0 4px rgba(197, 34, 31, 0.18) !important;
+}
+
+@keyframes invalidLinkShake {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+}
+
+@keyframes invalidLinkGlow {
+    0%   { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.55); }
+    35%  { box-shadow: 0 0 0 10px rgba(229, 57, 53, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .invalid-link-banner,
+    .invalid-link-banner.active,
+    .invalid-link-banner.shake,
+    .url-input.shake-error {
+        animation: none !important;
+        transition: opacity 120ms ease !important;
+    }
+}
+
+/* ============================================
    Internal Pages (Chrome-like)
    ============================================ */
 .home-page, .settings-page, .sessions-page {

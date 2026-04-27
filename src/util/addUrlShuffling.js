@@ -43,8 +43,16 @@ const replaceUrl = (url, replacer) => {
     // UI base path leaves `<sid>!meta/…` inside the "destination" capture, the
     // shuffler never sees `_rh1…`, and static chunks (ChatGPT `/cdn/assets/…`,
     // etc.) 404.
+    //
+    // Use NON-GREEDY `*?` for the path segments so the FIRST 32-hex segment is
+    // claimed as the session. Otherwise content-hash directories that real
+    // destinations include (Bilibili `/<32hex>/seg.m4s`, Twitch HLS
+    // `/<32hex>/playlist.m3u8`, jsDelivr `/npm/foo@1.2.3/<32hex>.js`,
+    // webpack chunks, etc.) are mistaken for session ids — the URL gets
+    // sliced *after* that hash, the shuffled prefix never reaches the
+    // shuffler, and the request 4xx's at the upstream origin.
     return (url || '').replace(
-        /^((?:[a-z0-9]+:\/\/[^/]+)?(?:\/[^/]+)*\/[a-f0-9]{32}(?:![^/?#]*)*\/)((?:.|\s)+)$/i,
+        /^((?:[a-z0-9]+:\/\/[^/]+)?(?:\/[^/]+)*?\/[a-f0-9]{32}(?:![^/?#]*)*\/)((?:.|\s)+)$/i,
         (_, g1, g2) => g1 + replacer(g2)
     );
 };

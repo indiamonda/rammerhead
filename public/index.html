@@ -312,7 +312,7 @@
                 var raw = null;
                 try {
                     if (iframeWindow) {
-                        var hh = iframeWindow['%hammerhead%'];
+                        var hh = iframeWindow['%_d%'];
                         if (hh && hh.utils && hh.utils.url && hh.utils.url.parseProxyUrl) {
                             var parsed = hh.utils.url.parseProxyUrl(proxyUrl);
                             if (parsed && parsed.destUrl) raw = parsed.destUrl;
@@ -3008,6 +3008,12 @@
                                 </svg>
                                 Generate never-expire link
                             </button>
+                            <button class="webbuild-button" id="newtab-webbuild-button" type="button">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                                </svg>
+                                Get web-build files
+                            </button>
                             <div class="message-slot">
                                 <div class="link-result" id="newtab-link-result" style="display: none;">
                                     <div class="link-result-label">Never-expire link:</div>
@@ -3016,10 +3022,30 @@
                                         <button class="copy-button" id="newtab-copy-button" disabled>Copy</button>
                                     </div>
                                 </div>
+                                <div class="webbuild-result" id="newtab-webbuild-result" style="display: none;">
+                                    <div class="webbuild-result-icon" aria-hidden="true">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                                        </svg>
+                                    </div>
+                                    <div class="webbuild-result-text"></div>
+                                </div>
+                                <div class="invalid-link-banner" id="newtab-invalid-banner" role="alert" aria-live="assertive">
+                                    <div class="invalid-link-icon" aria-hidden="true">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                                        </svg>
+                                    </div>
+                                    <div class="invalid-link-text">The link entered is invalid.</div>
+                                </div>
                                 <div class="error-message" id="newtab-error-message"></div>
                                 <div class="loading" id="newtab-loading">
                                     <span class="spinner"></span>
                                     Creating session...
+                                </div>
+                                <div class="webbuild-loading" id="newtab-webbuild-loading">
+                                    <span class="spinner"></span>
+                                    <span class="webbuild-loading-text">Preparing web-build files…</span>
                                 </div>
                             </div>
                         </div>
@@ -3799,6 +3825,7 @@
                 const luckyButton = contentElement.querySelector('#newtab-lucky-button');
                 const generateButton = contentElement.querySelector('#newtab-generate-link-button');
                 const copyButton = contentElement.querySelector('#newtab-copy-button');
+                const webBuildButton = contentElement.querySelector('#newtab-webbuild-button');
 
                 function handleNavigate() {
                     const url = searchInput.value.trim();
@@ -3932,6 +3959,129 @@
                         setTimeout(() => {
                             copyButton.textContent = originalText;
                         }, 2000);
+                    }
+                });
+
+                // ─── Get web-build files ────────────────────────────────
+                // Pulls the URL from the top nav bar (preferred) or the
+                // inner newtab search input as a fallback. Probes the
+                // server first so we can show the "invalid link" shake
+                // animation BEFORE the browser starts streaming a zip
+                // (you can't change a Content-Disposition response
+                // mid-stream into an error).
+                const invalidBanner   = contentElement.querySelector('#newtab-invalid-banner');
+                const webbuildResult  = contentElement.querySelector('#newtab-webbuild-result');
+                const webbuildLoading = contentElement.querySelector('#newtab-webbuild-loading');
+                const webbuildLoadingText = webbuildLoading?.querySelector('.webbuild-loading-text');
+                const navUrlInput     = document.getElementById('url-input');
+
+                const _wbHide = (el) => { if (el) { el.classList.remove('active'); el.style.display = 'none'; } };
+                const _wbShow = (el) => { if (el) { el.style.display = 'flex'; requestAnimationFrame(() => el.classList.add('active')); } };
+
+                function _flashInvalid(msg) {
+                    if (!invalidBanner) return;
+                    const text = invalidBanner.querySelector('.invalid-link-text');
+                    if (text) text.textContent = msg || 'The link entered is invalid.';
+                    _wbHide(webbuildResult);
+                    _wbHide(webbuildLoading);
+                    invalidBanner.classList.remove('shake');
+                    invalidBanner.style.display = 'flex';
+                    requestAnimationFrame(() => {
+                        invalidBanner.classList.add('active');
+                        invalidBanner.classList.add('shake');
+                    });
+                    // Also nudge the url-input visually so the user knows
+                    // which field is being judged invalid.
+                    if (navUrlInput) {
+                        navUrlInput.classList.remove('shake-error');
+                        requestAnimationFrame(() => navUrlInput.classList.add('shake-error'));
+                        setTimeout(() => navUrlInput.classList.remove('shake-error'), 700);
+                    }
+                    setTimeout(() => invalidBanner.classList.remove('shake'), 700);
+                }
+
+                function _setWebbuildSuccess(msg) {
+                    if (!webbuildResult) return;
+                    const text = webbuildResult.querySelector('.webbuild-result-text');
+                    if (text) text.textContent = msg || 'Your web-build files are downloading.';
+                    _wbHide(invalidBanner);
+                    _wbHide(webbuildLoading);
+                    _wbShow(webbuildResult);
+                }
+
+                function _wbCurrentUrl() {
+                    // Prefer the top nav bar URL (the user's request was
+                    // explicit about that), then fall back to the new-tab
+                    // search input so the button still works on a fresh
+                    // tab where the nav bar is empty.
+                    const navVal = (navUrlInput?.value || '').trim();
+                    if (navVal) return navVal;
+                    const ntVal = (searchInput?.value || '').trim();
+                    return ntVal;
+                }
+
+                webBuildButton?.addEventListener('click', async () => {
+                    const raw = _wbCurrentUrl();
+                    if (!raw) { _flashInvalid('Please enter a URL in the address bar first.'); return; }
+
+                    // Don't show the never-expire link result anymore — we
+                    // own the message slot until the user picks again.
+                    const linkResult = contentElement.querySelector('#newtab-link-result');
+                    if (linkResult) { linkResult.classList.remove('active'); linkResult.style.display = 'none'; }
+                    _wbHide(invalidBanner);
+                    _wbHide(webbuildResult);
+                    if (webbuildLoadingText) webbuildLoadingText.textContent = 'Checking the link…';
+                    _wbShow(webbuildLoading);
+                    webBuildButton.disabled = true;
+
+                    let mode = 'static';
+                    try {
+                        const probeRes = await fetch(`${basePath}/buildwebfiles?probe=1&url=${encodeURIComponent(raw)}`);
+                        const probe = await probeRes.json().catch(() => ({}));
+                        if (!probe || !probe.ok) {
+                            _flashInvalid(probe?.reason || 'The link entered is invalid.');
+                            webBuildButton.disabled = false;
+                            return;
+                        }
+                        mode = probe.mode || 'static';
+                    } catch (e) {
+                        _flashInvalid('Could not reach the link. Check your connection and try again.');
+                        webBuildButton.disabled = false;
+                        return;
+                    }
+
+                    if (webbuildLoadingText) {
+                        webbuildLoadingText.textContent = mode === 'local'
+                            ? 'Packaging server source files…'
+                            : 'Crawling the site and bundling assets… this can take a minute on large sites.';
+                    }
+
+                    // Trigger the download via a temporary iframe so
+                    // streaming starts in the background and the rest of
+                    // the page stays responsive. We can't observe progress
+                    // (browsers don't fire load on streamed downloads
+                    // consistently), but we can detect the response began
+                    // by listening for `beforeunload` cancellation — easier
+                    // to just show success after a short delay since the
+                    // server will 400 first if anything's wrong.
+                    try {
+                        const downloadUrl = `${basePath}/buildwebfiles?url=${encodeURIComponent(raw)}` + (mode === 'local' ? '&mode=local' : '');
+                        const a = document.createElement('a');
+                        a.href = downloadUrl;
+                        a.rel = 'noopener';
+                        a.style.display = 'none';
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(() => { try { document.body.removeChild(a); } catch (_) {} }, 1000);
+
+                        const friendlyMode = mode === 'local'
+                            ? 'Bundling this server\'s source tree (public/, src/, …).'
+                            : 'Crawling and bundling the site as a portable static archive.';
+                        _setWebbuildSuccess(friendlyMode + ' The download will start shortly. Large sites may take a minute.');
+                    } catch (e) {
+                        _flashInvalid('Download failed: ' + (e?.message || 'unknown error'));
+                    } finally {
+                        webBuildButton.disabled = false;
                     }
                 });
             }

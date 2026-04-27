@@ -17,8 +17,8 @@ fs.writeFileSync(
         .readFileSync(path.join(__dirname, '../node_modules/testcafe-hammerhead/lib/client/hammerhead.js'), 'utf8')
         // part of fix for iframing issue
         .replace('(function initHammerheadClient () {', '(function initHammerheadClient () {' +
-            'if (window["%is-hammerhead%"]) throw new TypeError("already ran"); window["%is-hammerhead%"] = true;' +
-            'window.rammerheadTop = (function() {var w = window; while (w !== w.top && w.parent["%hammerhead"]) w = w.parent; return w;})();' +
+            'if (window["%_isd%"]) throw new TypeError("already ran"); window["%_isd%"] = true;' +
+            'window.rammerheadTop = (function() {var w = window; while (w !== w.top && w.parent["%_d%"]) w = w.parent; return w;})();' +
             'window.rammerheadParent = window.rammerheadTop === window ? window : window.parent;' +
             'window.distanceRammerheadTopToTop = (function() { var i=0,w=window; while (w !== window.top) {i++;w=w.parent} return i; })();' +
             'window.rammerheadAncestorOrigins = Array.from(location.ancestorOrigins).slice(0, -window.distanceRammerheadTopToTop);\n')
@@ -38,15 +38,19 @@ fs.writeFileSync(
         )
         .replace(
             'isCrossDomainParent = parentLocationWrapper === parentWindow.location',
-            'isCrossDomainParent = parentLocationWrapper === parentWindow.location || !parentWindow["%hammerhead%"]'
+            'isCrossDomainParent = parentLocationWrapper === parentWindow.location || !parentWindow["%_d%"]'
         )
         .replace(
             '!sameOriginCheck(window1Location, window2Location)',
-            '!(sameOriginCheck(window1Location, window2Location) && (!!window1["%is-hammerhead%"] === !!window2["%is-hammerhead%"]))'
+            '!(sameOriginCheck(window1Location, window2Location) && (!!window1["%_isd%"] === !!window2["%_isd%"]))'
         )
-        // return false when unable to convert properties on other windows to booleans (!)
+        // return false when unable to convert properties on other windows to booleans (!).
+        // Match BOTH the original `%hammerhead%` / `%is-hammerhead%` keys (in case
+        // patch-hammerhead.js hasn't run yet) AND the rebranded `%_d%` / `%_isd%`
+        // keys (post-patch). The brand-strip patch in `scripts/patch-hammerhead.js`
+        // rewrites those literals across hammerhead's lib/ tree.
         .replace(
-            /!(parent|parentWindow|window1|window2|window\.top)\[("%(?:is-)?hammerhead%")]/g,
+            /!(parent|parentWindow|window1|window2|window\.top)\[("%(?:is-)?hammerhead%"|"%_(?:is)?d%")\]/g,
             '!(() => { try{ return $1[$2]; }catch(error){ return true } })()'
         )
 

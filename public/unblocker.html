@@ -141,7 +141,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         var raw = null;
         try {
             if (iframeWin) {
-                var hh = iframeWin['%hammerhead%'];
+                var hh = iframeWin['%_d%'];
                 if (hh && hh.utils && hh.utils.url && hh.utils.url.parseProxyUrl) {
                     var parsed = hh.utils.url.parseProxyUrl(proxyUrl);
                     if (parsed && parsed.destUrl) raw = parsed.destUrl;

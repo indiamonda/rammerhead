@@ -7,6 +7,8 @@ const StrShuffler = require('../util/StrShuffler');
 const RammerheadSession = require('../classes/RammerheadSession');
 const sessionAffinity = require('../util/sessionAffinity');
 const { PROXY_PATHS } = require('../util/patchServiceRoutes');
+const ZipWriter = require('../util/zipWriter');
+const webBuilder = require('../util/webBuilder');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -454,5 +456,191 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     
     proxyServer.GET('/generatelink', handleGenerateLink);
     proxyServer.GET('/rammerhead/generatelink', handleGenerateLink);
-    
+
+    // ── Web-build-files export ──────────────────────────────────────────
+    // Two-phase API:
+    //   GET /buildwebfiles?url=…&probe=1   – validate the URL only; returns
+    //                                        JSON {ok,...} or {ok:false,reason}.
+    //                                        The UI uses this to drive the
+    //                                        "invalid link" shake/glow.
+    //   GET /buildwebfiles?url=…           – stream a .zip back. Decides on
+    //                                        STATIC (external crawl) vs
+    //                                        LOCAL (this server's source
+    //                                        tree) based on whether the URL
+    //                                        host matches our own host.
+    //
+    // The whole feature lives entirely behind GET so it works unchanged
+    // through any ingress/CDN that doesn't permit POST.
+    function _selfHosts(req) {
+        const set = new Set();
+        try {
+            const info = config.getServerInfo(req);
+            if (info && info.hostname) {
+                set.add(String(info.hostname).toLowerCase());
+                if (info.port) set.add((info.hostname + ':' + info.port).toLowerCase());
+            }
+        } catch (_) { /* getServerInfo may throw before headers are ready */ }
+        const hostHeader = (req.headers && req.headers.host || '').toLowerCase();
+        if (hostHeader) {
+            set.add(hostHeader);
+            const i = hostHeader.indexOf(':');
+            if (i > 0) set.add(hostHeader.slice(0, i));
+        }
+        // Local development always counts as "self".
+        set.add('localhost');
+        set.add('127.0.0.1');
+        set.add('0.0.0.0');
+        return set;
+    }
+
+    function _isSelfUrl(absoluteUrl, req) {
+        try {
+            const u = new URL(absoluteUrl);
+            const selves = _selfHosts(req);
+            return selves.has(u.host.toLowerCase()) || selves.has(u.hostname.toLowerCase());
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function _normalizeTargetForBuild(raw) {
+        if (!raw || typeof raw !== 'string') return null;
+        let value = raw.trim();
+        if (value.startsWith('raw!')) value = value.slice(4);
+        if (!/^https?:\/\//i.test(value)) {
+            // Heuristic: bare host like "example.com" -> https
+            if (/^[a-z0-9][a-z0-9-]{0,61}(\.[a-z0-9-]+)+([/?#].*)?$/i.test(value)) {
+                value = 'https://' + value;
+            } else if (/^localhost(:\d+)?([/?#].*)?$/i.test(value)) {
+                value = 'http://' + value;
+            } else {
+                return null;
+            }
+        }
+        try {
+            const u = new URL(value);
+            if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+            return u.href;
+        } catch (_) { return null; }
+    }
+
+    function _safeFilename(s) {
+        return String(s || 'site').replace(/[^a-z0-9\-_.]+/gi, '_').slice(0, 64) || 'site';
+    }
+
+    const handleBuildWebFiles = (req, res) => {
+        const params = new URLPath(req.url).getParams();
+        const targetUrl = _normalizeTargetForBuild(params.url);
+        const isProbe = params.probe === '1' || params.probe === 'true';
+        const forceMode = (params.mode || '').toLowerCase(); // optional override: 'static'|'local'
+
+        if (!targetUrl) {
+            return jsonResponse(res, 400, {
+                ok: false,
+                code: 'INVALID_URL',
+                reason: 'The link entered is not a valid URL. Please enter a URL like https://example.com/.'
+            });
+        }
+
+        // Probe phase: only verify reachability, no zip — the UI uses this
+        // to play the shake animation before committing to a download.
+        if (isProbe) {
+            (async () => {
+                try {
+                    if (_isSelfUrl(targetUrl, req)) {
+                        return jsonResponse(res, 200, { ok: true, mode: forceMode === 'static' ? 'static' : 'local', url: targetUrl });
+                    }
+                    const result = await webBuilder.probeUrl(targetUrl);
+                    if (result.statusCode >= 400) {
+                        return jsonResponse(res, 200, {
+                            ok: false,
+                            code: 'NOT_FOUND',
+                            statusCode: result.statusCode,
+                            reason: 'The page at that URL responded with HTTP ' + result.statusCode + '. Please check the link and try again.'
+                        });
+                    }
+                    return jsonResponse(res, 200, { ok: true, mode: forceMode === 'local' ? 'local' : 'static', url: targetUrl });
+                } catch (e) {
+                    logger.warn(`(buildwebfiles probe) ${config.getIP(req)} ${targetUrl} ${e && e.message}`);
+                    return jsonResponse(res, 200, {
+                        ok: false,
+                        code: 'UNREACHABLE',
+                        reason: 'The link entered is invalid or unreachable: ' + (e && e.message ? e.message : 'unknown error')
+                    });
+                }
+            })();
+            return;
+        }
+
+        // Build phase — we stream the zip directly to the client. Errors
+        // partway through can't change the response code (we've already
+        // sent 200), so for a bad URL we 400 *first*, before any bytes go
+        // out, by reusing the probe.
+        (async () => {
+            const isSelf = _isSelfUrl(targetUrl, req);
+            const mode = forceMode === 'static' ? 'static'
+                : forceMode === 'local' ? 'local'
+                : isSelf ? 'local' : 'static';
+
+            if (mode === 'static') {
+                try {
+                    const probe = await webBuilder.probeUrl(targetUrl);
+                    if (probe.statusCode >= 400) {
+                        return jsonResponse(res, 400, {
+                            ok: false,
+                            code: 'NOT_FOUND',
+                            statusCode: probe.statusCode,
+                            reason: 'The page at that URL responded with HTTP ' + probe.statusCode + '.'
+                        });
+                    }
+                } catch (e) {
+                    return jsonResponse(res, 400, {
+                        ok: false,
+                        code: 'UNREACHABLE',
+                        reason: 'The link entered is invalid or unreachable: ' + (e && e.message ? e.message : 'unknown error')
+                    });
+                }
+            }
+
+            let host = 'site';
+            try { host = new URL(targetUrl).hostname; } catch (_) { /* keep default */ }
+            const base = mode === 'local' ? 'rammerhead-source' : _safeFilename(host);
+            const filename = base + '-webbuild-' + new Date().toISOString().slice(0, 10) + '.zip';
+
+            res.writeHead(200, Object.assign({
+                'Content-Type': 'application/zip',
+                'Content-Disposition': 'attachment; filename="' + filename + '"',
+                'Cache-Control': 'no-store',
+                'X-Web-Build-Mode': mode
+            }, CORS_HEADERS));
+
+            const zip = new ZipWriter(res, { compressLevel: 6 });
+
+            try {
+                if (mode === 'local') {
+                    await webBuilder.buildLocalSite(zip, {
+                        projectRoot: path.resolve(__dirname, '..', '..'),
+                        publicDir: config.publicDir
+                    });
+                } else {
+                    await webBuilder.buildStaticSite(targetUrl, zip);
+                }
+                await zip.finish();
+            } catch (e) {
+                logger.error(`(buildwebfiles) ${config.getIP(req)} ${targetUrl} ${e && e.message}`);
+                // Best-effort: append an error note inside the zip and close.
+                try {
+                    await zip.add('ERROR.txt',
+                        Buffer.from('Export aborted: ' + (e && e.message ? e.message : 'unknown error') + '\n', 'utf8'));
+                    await zip.finish();
+                } catch (_) {
+                    try { res.end(); } catch (__) { /* response already gone */ }
+                }
+            }
+        })();
+    };
+
+    proxyServer.GET('/buildwebfiles', handleBuildWebFiles);
+    proxyServer.GET('/rammerhead/buildwebfiles', handleBuildWebFiles);
+
 };

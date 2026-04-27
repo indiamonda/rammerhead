@@ -460,8 +460,8 @@ const ANTIDETECT_SCRIPT = [
     'try{if(navigator.languages&&navigator.languages.length===0){',
         'Object.defineProperty(navigator,"languages",{get:function(){return["en-US","en"]},configurable:true})}}catch(e){}',
     'try{Object.defineProperty(document,"referrer",{get:function(){return ""},configurable:true})}catch(e){}',
-    'try{Object.defineProperty(window,"%hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
-    'try{Object.defineProperty(window,"%is-hammerhead%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
+    'try{Object.defineProperty(window,"%_d%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
+    'try{Object.defineProperty(window,"%_isd%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
     // Unconditional top/parent/self spoof so anti-iframe guards (TurboWarp, ad networks, etc.)
     // see top === self === parent even when hammerhead\'s own wrapping is still settling.
     'try{Object.defineProperty(window,"top",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"parent",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"frameElement",{get:function(){return null},configurable:true});}catch(e){}',
