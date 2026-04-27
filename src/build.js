@@ -1,4 +1,10 @@
-require('dotenv-flow').config();
+try {
+    require('dotenv-flow').config();
+} catch (e) {
+    // dotenv-flow is a devDependency; in production installs it's missing and
+    // that's fine — build doesn't actually need any env vars to produce the
+    // src/client/* bundles. Don't fail the postinstall on its absence.
+}
 
 const path = require('path');
 const fs = require('fs');

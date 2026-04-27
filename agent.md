@@ -56,6 +56,9 @@ references and commit messages.
 | `challenge-frame-skip` | Pass challenge SDK iframe HTML through verbatim (no AST/lite touch) | **DONE** (early-return in `patchPageProcessing.js processResource` driven by `_isChallengeFrame(ctx)`) | n/a | §4.2 |
 | `csp-strip` | Strip CSP / X-Frame-Options / COEP / COOP / CORP / Permissions-Policy / Origin-Agent-Cluster on responses, plus `<meta http-equiv="content-security-policy">` in body | **DONE** (server `rewriteServerHeaders` defaults in `RammerheadProxy.js` + `config.js`; meta CSP scrubbed in `setupPipeline.js` and `patchPageProcessing.js`) | n/a | §3.14 |
 | `cookie-name-storm` | Wrapped-cookie name includes `now` timestamp; bloats jar | **DONE** (cookie name now stable: `lastAccessed` segment emitted as `''`; old cookies parse with a sentinel max-date so they still expire correctly. Patches applied to `node_modules/testcafe-hammerhead/lib/utils/cookie.js`, `lib/client/hammerhead.js`, `lib/client/hammerhead.min.js` via `scripts/patch-hammerhead.js`) | n/a | §3.15 |
+| `discord-optional-chain` | Discord login blank — Hammerhead's `computed-property-get` / `method-call` AST transformers eagerly evaluated args inside `obj?.foo[idx]` / `obj?.method()`, breaking native short-circuit (Discord login crashed with `TypeError: Cannot read properties of undefined (reading 'messages')`) | **DONE** (transformers now skip the rewrite when `node.optional` / `callee.optional` is set so the chain stays intact in emitted code; runtime `_error` helpers throw `TypeError` instead of `Error` so React error boundaries / `instanceof TypeError` checks (Poki, Discord) catch them; `__call$` short-circuits to `void 0` before any `owner[methName]` access when receiver is null. Patches via `scripts/patch-hammerhead.js`, applied to server-side `lib/processing/script/transformers/{computed-property-get,method-call}.js` AND propagated into `src/client/hammerhead.{js,min.js}` by re-running `src/build.js` at end of patch step.) | n/a | §3.16 |
+| `client-bundle-rebuild` | `scripts/patch-hammerhead.js` patched `node_modules/testcafe-hammerhead/lib/client/hammerhead.{js,min.js}` but the proxy actually serves `src/client/hammerhead.min.js` (built by `src/build.js` from the node_modules copy). Patches were invisible to browsers between installs unless `npm run build` was re-run manually. | **DONE** (`scripts/patch-hammerhead.js` now `require()`s `src/build.js` at the end so patching always re-runs the build; `src/build.js` made resilient to missing `dotenv-flow` for production installs.) | n/a | §3.17 |
+| `adblock-toggle-honored` | Disabling the adblocker in the toolbar/settings (`__rh_ab=0`) didn't actually let ads render: server stopped blocking URLs but the injected `_a_js` layer (CSS hider, popup blocker, anti-adblock spoofer, paywall hider) kept running because Hammerhead virtualises `localStorage` + `document.cookie` to the proxied origin and explicitly strips `__rh_*` cookies — the page-side script literally could not see the toggle. | **DONE** (server now resolves `adBlocker.isEnabledFor(ctx.req)` inside `pageProcessor.processResource` and bakes the answer into the placeholder `__RH_AB_OFF__` at the head of the injected script, so the very first synchronous statement is `var _off=true|false`. Pre-built two static variants per dev/prod so injection stays a single pointer pick. Page-side `localStorage` / `document.cookie` checks remain as defensive overrides.) | n/a | §3.18 |
 | `chatgpt-assets` | ChatGPT — confirm full message-send flow after fix | **OPEN** (asset 404 regressions cleared; auth/message E2E still needs Puppeteer cover) | next | §4.4 |
 | `douyin-bot` | Douyin — slider/puzzle captcha | **OPEN** (page renders + smoke green; captcha solve requires real-browser TLS+canvas+font fingerprint) | queued | §4.5 |
 
@@ -479,6 +482,190 @@ Documented for completeness — verify they haven't drifted.
 - **Verification**: smoke test green; live Discord run shows the
   cookie jar staying flat across N reloads instead of growing
   monotonically.
+
+### 3.16 Optional-chain preservation in AST rewrite + native-shaped runtime errors  *(id: `discord-optional-chain`)*
+
+- **Symptom**:
+  1. Discord login page rendered blank with
+     `Uncaught TypeError: Cannot read properties of undefined (reading 'messages')`
+     thrown from inside Discord's i18n helper. Identical line/column
+     across runs — i.e. a deterministic transformation bug, not a
+     flaky API.
+  2. Poki "click a game tile" path errored with
+     `Uncaught (in promise) Error: Cannot call method 'replace' of undefined`
+     thrown from `MethodCallInstrumentation._error` (Hammerhead's
+     own runtime helper). Site error-boundary swallowed it as an
+     unhandled `Error` instead of recovering — Poki's React boundary
+     filters by `instanceof TypeError`.
+- **Diagnosis**:
+  - Hammerhead's `computed-property-get` AST transformer rewrites
+    `obj[prop]` into `__get$(obj, prop, optional)`. JS evaluates
+    `obj` and `prop` as **arguments** before the wrapper runs.
+    For `t?.messages[s.current % t.messages.length]`, the
+    transformer left the optional `?` in place but still evaluated
+    `s.current % t.messages.length` (the second argument) eagerly.
+    When `t === undefined`, the native short-circuit *should* skip
+    that whole index expression; instead it ran and crashed on
+    `t.messages.length`.
+    `method-call.js` had the symmetrical bug for `obj?.method(args)`.
+  - The runtime helpers `PropertyAccessorsInstrumentation._error`
+    and `MethodCallInstrumentation._error` threw `new Error(msg)`.
+    Native JS throws `TypeError` for "cannot read property of
+    null" / "cannot call method of null" — sites whose React
+    error-boundary or promise-rejection handler does
+    `instanceof TypeError` quietly swallow native TypeErrors but
+    let Hammerhead's generic `Error` through as fatal.
+  - `__call$` checked `!isFunction(owner[methName])` *before*
+    short-circuiting on null `owner`, so the `owner[methName]`
+    read itself threw whenever `owner` was null even when the
+    call site was optional.
+- **Fix** (all wired into `scripts/patch-hammerhead.js`,
+  idempotent, and now followed by an in-process `require('src/build.js')`
+  so the patched client bundles propagate into `src/client/*.min.js`
+  on every install — see §3.17):
+  1. **Optional-chain skip in AST transformers**: `condition()`
+     short-circuits to `false` whenever `node.optional` (and for
+     method-call, `node.callee.optional`) is set. Acorn marks
+     every MemberExpression downstream of a `?.` with
+     `optional:true`, so the transform leaves the chain intact in
+     the emitted code and the browser handles short-circuiting
+     natively. Applied to:
+     - server: `lib/processing/script/transformers/computed-property-get.js`,
+       `…/method-call.js`.
+     - client (dev + min): `lib/client/hammerhead.js`,
+       `lib/client/hammerhead.min.js` (regex-driven for the
+       minified copy so it tracks renamed variables).
+  2. **TypeError in runtime _error helpers**:
+     `PropertyAccessorsInstrumentation._error` and
+     `MethodCallInstrumentation._error` now throw `new TypeError(msg)`
+     instead of `new Error(msg)`. Patched in dev + min client
+     bundles.
+  3. **Null-safe `__call$`**: when `owner` is null/undefined we
+     short-circuit immediately — `_error()` if `optional===false`,
+     otherwise `return void 0` to match native
+     `obj?.method()` semantics. Patched in `lib/client/hammerhead.js`
+     (the minified bundle's prelude is fed by the same source via
+     `src/build.js`).
+- **Verification**:
+  - Re-ran `node scripts/patch-hammerhead.js`: all 18 patches
+    show `already patched`, then the embedded build runs and
+    rewrites `src/client/hammerhead.{js,min.js}`.
+  - `curl http://localhost:8080/_a/c.js | grep '_error=function'`
+    now reports `_error=function(e){throw new TypeError(e)`
+    (was `…throw new Error(e)`).
+  - Round-tripping a Discord-shaped pattern through
+    `processScript` confirms `obj?.foo[idx]` is preserved while
+    `obj.foo[idx]` is still wrapped (instrumentation kept where
+    safe). Optional-method calls (`obj?.method()`) likewise pass
+    through untouched, while non-optional `location.replace(url)`
+    is still wrapped as `__call$(__get$Loc(location),'replace',[url])`.
+  - `tests/smoke.sh`: 38 pass / 2 warn / 0 fail.
+
+### 3.17 Auto-rebuild client bundles after post-install patching  *(id: `client-bundle-rebuild`)*
+
+- **Symptom**: every patch we applied to
+  `node_modules/testcafe-hammerhead/lib/client/hammerhead.{js,min.js}`
+  via `scripts/patch-hammerhead.js` was invisible to browsers.
+  Discord/Poki kept showing the pre-patch error format
+  (`Error: Cannot call method 'replace' of undefined`) even after
+  the patch script reported success.
+- **Diagnosis**: the proxy does not serve the node_modules client
+  bundle at all — it serves `src/client/hammerhead.min.js`, which
+  is generated by `src/build.js` from the node_modules source plus
+  a sequence of additional string-substitution fixes
+  (top-frame proxy, srcset parser, Kasada/postMessage, etc.).
+  `package.json`'s `postinstall` ran the patches but never the
+  build, so the served bundle was a stale snapshot from whatever
+  was last built locally.
+- **Fix**:
+  - At the end of `scripts/patch-hammerhead.js`, `require()` the
+    repo-local `src/build.js`. Single-process — no shelling out to
+    `npm run build`, which avoids needing npm on PATH inside the
+    postinstall sandbox.
+  - Wrap the `require('dotenv-flow').config()` in `src/build.js`
+    in a `try/catch` so production installs (which skip
+    devDependencies) don't fail on the missing `dotenv-flow`
+    package.
+  - Errors from the rebuild are logged but **not** fatal — the
+    operator can re-run `npm run build` manually. Skipping is
+    available via `RH_SKIP_BUILD=1` if a CI step needs to.
+- **Verification**:
+  - Manual `node scripts/patch-hammerhead.js` now ends with
+    `Client bundles rebuilt.` and `src/client/hammerhead.min.js`
+    contains the new `throw new TypeError(...)` pattern.
+  - Restarted server, `curl /_a/c.js` confirms the served bundle
+    has TypeError thrown by `_error`.
+
+### 3.18 Adblocker toggle actually disables the client-side layer  *(id: `adblock-toggle-honored`)*
+
+- **Symptom**: with the toolbar / settings adblocker switched **OFF**
+  (`__rh_ab=0` cookie set on the proxy origin) and the proxied tab
+  reloaded, ads still didn't render. Ad containers stayed
+  `display:none`, anti-adblock detection scripts kept reporting
+  "no ads" → publisher walls (Poki, gaming/unblocker sites, news
+  sites) showed "Please disable your adblocker and refresh".
+- **Diagnosis**:
+  - **Server-side** request blocking did the right thing: all three
+    pipeline hooks in `src/server/setupPipeline.js`
+    (`shouldBlockUrl`, the rescue-path hook, the YouTube player
+    rewriter) read `adBlocker.isEnabledFor(req)` first, so they
+    short-circuit when the cookie says off.
+  - **Client-side** `_a_js` (the cosmetic filter, popup blocker,
+    redirect guard, anti-adblock spoofer, paywall hider, YouTube ad
+    skipper) decided whether to bail purely from
+    `localStorage.getItem('adBlockerEnabled')` and
+    `document.cookie.indexOf('__rh_ab=0')`. Both are virtualised by
+    Hammerhead to the **proxied** origin (gimkit.com,
+    discord.com, …) — and `document.cookie`'s read-side filter
+    explicitly strips any cookie whose name starts with `__rh_` (see
+    `src/util/patchPageProcessing.js` lite mode `_fSync`, plus the
+    full-mode hammerhead bundle's equivalent). So the script ran on
+    the proxied origin and could *never* see the toggle that lives
+    on the proxy origin.
+  - Net effect: the only way `_off=true` was ever reached in
+    practice was if the proxied origin itself happened to have a
+    same-named pref — which never happens.
+- **Fix** (in `src/util/patchPageProcessing.js`):
+  - Replace the literal `var _off=false;` line with a placeholder
+    `var _off=__RH_AB_OFF__;`. Keep the existing
+    localStorage/`document.cookie` checks below as defensive
+    overrides (they only flip from `false` → `true`, never the
+    other way, matching the original semantics).
+  - Pre-compute four static inject strings at module load:
+    `INJECT_{PROD,DEV}_{ENABLED,DISABLED}`. Each substitutes
+    `__RH_AB_OFF__` for `false` or `true`. Keeps per-request work
+    to a single pointer pick.
+  - New helper `_isAdblockEnabledForReq(ctx)` reads the cookie via
+    `adBlocker.isEnabledFor(ctx.req)` (already used server-side).
+    Falls back to `true` (= adblock on) on any error so we never
+    accidentally disable the layer for users who didn't ask to.
+  - `pageProcessor.processResource` now calls `_injectFor(ctx)` to
+    pick the variant, then injects it on every code path —
+    challenge response, lite mode, error-fallback, and full AST.
+- **Why this is a generic fix**:
+  - Server is the single source of truth: every cookie change in
+    the parent UI immediately changes what the next page-load
+    receives, no client-side caching to flush.
+  - Same code path covers Poki, gimkit, news sites, gaming
+    unblocker pages — anything that runs through page processing.
+    Nothing site-specific.
+  - Doesn't break the existing toolbar/settings-page UI: the
+    `__rh_ab` cookie semantics, the `localStorage` mirror, and
+    the iframe-reload-on-toggle in `public/index.html` are
+    unchanged.
+- **Verification**:
+  - Without cookie:
+    `curl … /<sid>/https://example.com/ | grep _off=` → `var _off=false;`
+  - With `Cookie: __rh_ab=0`:
+    `curl … /<sid>/https://example.com/ | grep _off=` → `var _off=true;`
+  - With `Cookie: __rh_ab=1` (explicit on): `var _off=false;`
+  - Same outcomes verified for lite-mode (Discord) and full-mode
+    (Poki) HTML.
+  - Server-side blocking confirmed unchanged:
+    `curl /<sid>/https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js`
+    returns the empty stub (`X-Rammerhead-Blocked: 1`) without the
+    cookie and the genuine 62 KB of upstream JS with `__rh_ab=0`.
+  - `tests/smoke.sh`: 38 pass / 2 warn / 0 fail.
 
 ### 3.13 Curl-based smoke-test harness  *(id: `smoke-tests`)*
 

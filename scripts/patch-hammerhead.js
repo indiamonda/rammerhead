@@ -41,6 +41,50 @@
  *      as actual and emits a deletion for the old-format one. Without
  *      this, we'd risk an oscillation in worst-case browser cookie
  *      iteration order (NaN > realDate is false).
+ *
+ *   4. **optional-chain skip in AST transformers** *(new)* — Hammerhead's
+ *      `computed-property-get` and `method-call` transformers wrap
+ *      `obj[prop]` / `obj.method(args)` as `__get$(obj, prop, optional)` /
+ *      `__call$(obj, 'method', args, optional)`. Both wrappers receive
+ *      their property/method/args expressions as *function arguments*,
+ *      which JS evaluates *before* the wrapper runs. That breaks native
+ *      optional-chain short-circuiting:
+ *
+ *          // native: t?.messages[s.current % t.messages.length]
+ *          //   when `t === undefined` returns undefined and never
+ *          //   evaluates `t.messages.length`.
+ *          // hammerhead-rewritten:
+ *          //   __get$(t?.messages, s.current % t.messages.length, true)
+ *          //   evaluates the index expression first → throws because
+ *          //   `t.messages.length` reads `.length` on undefined.
+ *
+ *      That `TypeError: Cannot read properties of undefined (reading
+ *      'messages')` was the visible Discord login-page crash. Acorn marks
+ *      *every* MemberExpression downstream of a `?.` with `optional:
+ *      true`, so we simply skip the transform whenever `node.optional`
+ *      (or, for CallExpression, `node.callee.optional`) is set. The chain
+ *      stays intact in the emitted code and the browser handles short-
+ *      circuiting natively. We only lose Hammerhead instrumentation for
+ *      `obj?.[…]` / `obj?.method()` patterns (rare in real code) — far
+ *      better than corrupting the host page.
+ *
+ *   5. **TypeError in runtime _error helpers** *(new)* — Hammerhead's
+ *      `__call$` and `__get$` runtime helpers throw `new Error(msg)` when
+ *      a method/property is accessed on null/undefined. Native JS throws
+ *      `TypeError`. Sites whose error boundaries / promise rejection
+ *      handlers do `instanceof TypeError` checks (React, Poki, etc.)
+ *      silently swallow native TypeErrors but treat Hammerhead's generic
+ *      `Error` as an unhandled exception. Switching to `TypeError`
+ *      restores native behavior with zero downside.
+ *
+ *   6. **null-safe owner access in __call$** *(new)* — when `optional`
+ *      flag is set and `owner` is null, the original runtime evaluated
+ *      `!isFunction(owner[methName])` *before* checking `optional`, so
+ *      it threw on the very property access it was meant to skip. We
+ *      now short-circuit to `undefined` immediately when owner is
+ *      null/undefined and the call is optional, matching native
+ *      `obj?.method()` semantics even on the rare paths that still
+ *      reach the wrapper.
  */
 
 const fs = require('fs');
@@ -218,9 +262,238 @@ patchRegex(
     'stable sync-cookie name (client.min, parse)'
 );
 
+// ---------------------------------------------------------------------------
+// Patch 4a: optional-chain skip in computed-property-get (server transformer)
+// ---------------------------------------------------------------------------
+patch(
+    'processing/script/transformers/computed-property-get.js',
+    `    condition: (node, parent) => {
+        if (!node.computed || !parent)
+            return false;
+        if (node.property.type === esotope_hammerhead_1.Syntax.Literal && !(0, instrumented_1.shouldInstrumentProperty)(node.property.value))
+            return false;`,
+    `    condition: (node, parent) => {
+        if (!node.computed || !parent)
+            return false;
+        /* RH: skip optional-chain access — args are evaluated eagerly which breaks short-circuit */
+        if (node.optional)
+            return false;
+        if (node.property.type === esotope_hammerhead_1.Syntax.Literal && !(0, instrumented_1.shouldInstrumentProperty)(node.property.value))
+            return false;`,
+    'optional-chain skip (computed-property-get, server)'
+);
+
+// ---------------------------------------------------------------------------
+// Patch 4b: optional-chain skip in method-call (server transformer)
+// ---------------------------------------------------------------------------
+patch(
+    'processing/script/transformers/method-call.js',
+    `    condition: node => {
+        const callee = node.callee;
+        if (callee.type === esotope_hammerhead_1.Syntax.MemberExpression) {
+            // Skip: super.meth()
+            if (callee.object.type === esotope_hammerhead_1.Syntax.Super)
+                return false;
+            if (callee.computed)`,
+    `    condition: node => {
+        const callee = node.callee;
+        if (callee.type === esotope_hammerhead_1.Syntax.MemberExpression) {
+            // Skip: super.meth()
+            if (callee.object.type === esotope_hammerhead_1.Syntax.Super)
+                return false;
+            /* RH: skip optional-chain call — args are evaluated eagerly which breaks short-circuit */
+            if (node.optional || callee.optional)
+                return false;
+            if (callee.computed)`,
+    'optional-chain skip (method-call, server)'
+);
+
+// ---------------------------------------------------------------------------
+// Patch 4c: optional-chain skip in unminified client bundle
+// ---------------------------------------------------------------------------
+patch(
+    'client/hammerhead.js',
+    `    name: 'computed-property-get',
+	    nodeReplacementRequireTransform: true,
+	    nodeTypes: Syntax_1.MemberExpression,
+	    condition: function (node, parent) {
+	        if (!node.computed || !parent)
+	            return false;
+	        if (node.property.type === Syntax_1.Literal && !shouldInstrumentProperty(node.property.value))
+	            return false;`,
+    `    name: 'computed-property-get',
+	    nodeReplacementRequireTransform: true,
+	    nodeTypes: Syntax_1.MemberExpression,
+	    condition: function (node, parent) {
+	        if (!node.computed || !parent)
+	            return false;
+	        /* RH: skip optional-chain access — args are evaluated eagerly which breaks short-circuit */
+	        if (node.optional)
+	            return false;
+	        if (node.property.type === Syntax_1.Literal && !shouldInstrumentProperty(node.property.value))
+	            return false;`,
+    'optional-chain skip (computed-property-get, client)'
+);
+
+patch(
+    'client/hammerhead.js',
+    `    name: 'method-call',
+	    nodeReplacementRequireTransform: true,
+	    nodeTypes: Syntax_1.CallExpression,
+	    condition: function (node) {
+	        var callee = node.callee;
+	        if (callee.type === Syntax_1.MemberExpression) {
+	            // Skip: super.meth()
+	            if (callee.object.type === Syntax_1.Super)
+	                return false;
+	            if (callee.computed)`,
+    `    name: 'method-call',
+	    nodeReplacementRequireTransform: true,
+	    nodeTypes: Syntax_1.CallExpression,
+	    condition: function (node) {
+	        var callee = node.callee;
+	        if (callee.type === Syntax_1.MemberExpression) {
+	            // Skip: super.meth()
+	            if (callee.object.type === Syntax_1.Super)
+	                return false;
+	            /* RH: skip optional-chain call — args are evaluated eagerly which breaks short-circuit */
+	            if (node.optional || callee.optional)
+	                return false;
+	            if (callee.computed)`,
+    'optional-chain skip (method-call, client)'
+);
+
+// ---------------------------------------------------------------------------
+// Patch 4d: optional-chain skip in minified client bundle
+//
+// Anchor on the unique `name:"computed-property-get"` / `name:"method-call"`
+// strings; the surrounding identifier names (Iu, Fo, Zu, …) drift between
+// minifier runs but those literals do not.
+// ---------------------------------------------------------------------------
+patchRegex(
+    'client/hammerhead.min.js',
+    /(\{name:"computed-property-get",[^}]*?condition:function\(e,t\)\{return!\(!e\.computed\|\|!t)\)/g,
+    '$1||e.optional)/*RH:cpg-skip-optional*/',
+    '/*RH:cpg-skip-optional*/',
+    'optional-chain skip (computed-property-get, client.min)'
+);
+
+patchRegex(
+    'client/hammerhead.min.js',
+    /(\{name:"method-call",[^}]*?condition:function\(e\)\{var t=e\.callee;return t\.type===[a-zA-Z_$][\w$]*\.MemberExpression&&\(t\.object\.type!==[a-zA-Z_$][\w$]*\.Super)/g,
+    '$1&&!e.optional&&!t.optional/*RH:mc-skip-optional*/',
+    '/*RH:mc-skip-optional*/',
+    'optional-chain skip (method-call, client.min)'
+);
+
+// ---------------------------------------------------------------------------
+// Patch 5a: TypeError in unminified runtime _error helpers
+// ---------------------------------------------------------------------------
+patch(
+    'client/hammerhead.js',
+    `    PropertyAccessorsInstrumentation._error = function (msg) {
+	        throw new Error(msg);
+	    };`,
+    `    PropertyAccessorsInstrumentation._error = function (msg) {
+	        /* RH: throw TypeError to match native (sites often catch instanceof TypeError) */
+	        throw new TypeError(msg);
+	    };`,
+    'TypeError _error (PropertyAccessors, client)'
+);
+
+patch(
+    'client/hammerhead.js',
+    `    MethodCallInstrumentation._error = function (msg) {
+	        throw new Error(msg);
+	    };`,
+    `    MethodCallInstrumentation._error = function (msg) {
+	        /* RH: throw TypeError to match native (sites often catch instanceof TypeError) */
+	        throw new TypeError(msg);
+	    };`,
+    'TypeError _error (MethodCall, client)'
+);
+
+// ---------------------------------------------------------------------------
+// Patch 5b: TypeError in minified runtime _error helpers (both instances)
+// ---------------------------------------------------------------------------
+patchRegex(
+    'client/hammerhead.min.js',
+    /([a-zA-Z_$][\w$]*\._error=function\(e\)\{throw new )Error(\(e\)\})/g,
+    '$1TypeError$2/*RH:typeerror*/',
+    '/*RH:typeerror*/',
+    'TypeError _error (client.min, both helpers)',
+    2
+);
+
+// ---------------------------------------------------------------------------
+// Patch 6: null-safe owner access in unminified __call$ runtime
+// (rebuild the prelude so `owner[methName]` is never read when owner is
+//  null/undefined; matches native `obj?.method()` short-circuit on the few
+//  paths that still reach the wrapper after Patch 4.)
+// ---------------------------------------------------------------------------
+patch(
+    'client/hammerhead.js',
+    `	            value: function (owner, methName, args, optional) {
+	                if (optional === void 0) { optional = false; }
+	                if (isNullOrUndefined(owner) && !optional)
+	                    MethodCallInstrumentation._error("Cannot call method '".concat(methName, "' of ").concat(inaccessibleTypeToStr(owner)));
+	                if (!isFunction(owner[methName]) && !optional)
+	                    MethodCallInstrumentation._error("'".concat(methName, "' is not a function"));`,
+    `	            value: function (owner, methName, args, optional) {
+	                if (optional === void 0) { optional = false; }
+	                /* RH: short-circuit null receiver before any owner[methName] access (optional chain) */
+	                if (isNullOrUndefined(owner)) {
+	                    if (!optional)
+	                        MethodCallInstrumentation._error("Cannot call method '".concat(methName, "' of ").concat(inaccessibleTypeToStr(owner)));
+	                    return void 0;
+	                }
+	                if (!isFunction(owner[methName]) && !optional)
+	                    MethodCallInstrumentation._error("'".concat(methName, "' is not a function"));`,
+    'null-safe owner in __call$ (client)'
+);
+
 const total = applied + skipped;
 if (total === 0) {
     console.error('[patch-hammerhead] No patches applied! Check hammerhead version.');
     process.exit(1);
 }
-console.log(`[patch-hammerhead] Done (${applied} applied, ${skipped} already present).`);
+console.log(`[patch-hammerhead] Patching done (${applied} applied, ${skipped} already present).`);
+
+// ---------------------------------------------------------------------------
+// IMPORTANT: rebuild the client bundles after patching.
+//
+// The proxy does NOT serve `node_modules/testcafe-hammerhead/lib/client/hammerhead.{js,min.js}`
+// directly. `src/build.js` reads those files, applies extra string-substitution
+// fixes (top-frame proxying, srcset parser, Kasada/postMessage workarounds,
+// etc.) and writes the result into `src/client/hammerhead.{js,min.js}`. The
+// served `/_a/c.js` is the minified copy in `src/client/`. So patching the
+// node_modules copy is invisible to browsers until we re-run the build.
+//
+// We do it inline here (instead of as a separate `&&` in package.json) so:
+//   - `npm install` (which runs `postinstall: patch-hammerhead.js`) leaves the
+//     repo in a runnable state with patches actually live.
+//   - Re-running `node scripts/patch-hammerhead.js` manually also keeps the
+//     served bundle in sync, no second command needed.
+//
+// We require() src/build.js (rather than spawning `npm run build`) to avoid
+// depending on npm being on PATH inside the postinstall sandbox.
+// ---------------------------------------------------------------------------
+try {
+    if (process.env.RH_SKIP_BUILD === '1') {
+        console.log('[patch-hammerhead] RH_SKIP_BUILD=1 set; skipping client rebuild.');
+    } else {
+        const buildPath = path.join(__dirname, '..', 'src', 'build.js');
+        if (!fs.existsSync(buildPath)) {
+            console.warn('[patch-hammerhead] src/build.js not found; skipping rebuild.');
+        } else {
+            console.log('[patch-hammerhead] Rebuilding src/client/* bundles to propagate patches…');
+            require(buildPath);
+            console.log('[patch-hammerhead] Client bundles rebuilt.');
+        }
+    }
+} catch (err) {
+    // Don't fail the install — patches in node_modules are still applied,
+    // and the user can manually re-run `npm run build` if the rebuild here
+    // fails for environment-specific reasons.
+    console.error(`[patch-hammerhead] Client rebuild failed (run \`npm run build\` manually): ${err && err.stack || err}`);
+}

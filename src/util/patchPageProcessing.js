@@ -12,6 +12,7 @@
 const pageProcessor = require('testcafe-hammerhead/lib/processing/resources/page');
 const processingMode = require('./processingMode');
 const { CAPTCHA_HOST_RE, CAPTCHA_PATH_RE } = require('./browserLikeHeaders');
+const adBlocker = require('./adBlocker');
 
 // ---------------------------------------------------------------------------
 // AD BLOCKER — client-side cosmetic filter + popup/redirect suppressor.
@@ -93,9 +94,17 @@ const AD_BLOCKER_SCRIPT = [
     '<script id="_a_js">',
     '(function(){',
     'if(typeof window==="undefined"||window.__rhABinit)return;window.__rhABinit=1;',
-    'var _off=false;',
-    'try{_off=localStorage.getItem("adBlockerEnabled")==="0"}catch(e){}',
-    'if(!_off){try{_off=document.cookie.indexOf("__rh_ab=0")!==-1}catch(e){}}',
+    // _off = "should this client-side ad-blocking layer bail out and let ads/popups
+    // render natively?" The initial value is INJECTED PER-REQUEST by the server
+    // (see _injectFor in processResource): when the user has the global toggle
+    // off (cookie __rh_ab=0 on the proxy origin) the server emits true here.
+    // Hammerhead virtualises both localStorage and document.cookie to the
+    // proxied origin and explicitly strips __rh_* cookies, so the page-side
+    // checks below are dead in practice — they remain as defensive overrides
+    // for proxied origins that happen to set their own adBlockerEnabled flag.
+    'var _off=__RH_AB_OFF__;',
+    'try{if(!_off&&localStorage.getItem("adBlockerEnabled")==="0")_off=true}catch(e){}',
+    'try{if(!_off&&document.cookie.indexOf("__rh_ab=0")!==-1)_off=true}catch(e){}',
     'if(_off){try{var cs=document.getElementById("_a_css");if(cs)cs.remove()}catch(e){}return}',
     // --- POPUP / POPUNDER GUARD ---
     // Block ad popups while still allowing legitimate cross-origin popups (Discord invite
@@ -1109,11 +1118,39 @@ if(f&&f.tagName==='FORM'){var fa=_oGA.call(f,'action');if(fa){var n=rw(fa);if(n!
 }
 
 const _DEV = !!process.env.DEVELOPMENT;
-const INJECT_PROD = ANTIDETECT_SCRIPT + AD_BLOCKER_SCRIPT;
-const INJECT_DEV = ANTIDETECT_SCRIPT + AD_BLOCKER_SCRIPT + DEVTOOLS_SCRIPT;
+
+// AD_BLOCKER_SCRIPT contains the placeholder __RH_AB_OFF__ that decides whether
+// the injected layer hides ads / blocks popups / spoofs adblock-detection. We
+// pre-bake both states so per-request injection is a single pointer pick.
+const _AD_SCRIPT_ENABLED  = AD_BLOCKER_SCRIPT.replace(/__RH_AB_OFF__/g, 'false');
+const _AD_SCRIPT_DISABLED = AD_BLOCKER_SCRIPT.replace(/__RH_AB_OFF__/g, 'true');
+
+const INJECT_PROD_ENABLED  = ANTIDETECT_SCRIPT + _AD_SCRIPT_ENABLED;
+const INJECT_PROD_DISABLED = ANTIDETECT_SCRIPT + _AD_SCRIPT_DISABLED;
+const INJECT_DEV_ENABLED   = ANTIDETECT_SCRIPT + _AD_SCRIPT_ENABLED  + DEVTOOLS_SCRIPT;
+const INJECT_DEV_DISABLED  = ANTIDETECT_SCRIPT + _AD_SCRIPT_DISABLED + DEVTOOLS_SCRIPT;
+
+// Resolve the user's ad-blocker preference for this specific request. The
+// __rh_ab cookie is set on the proxy origin by the parent UI (toolbar +
+// settings page); since every iframe sub-resource also routes through that
+// origin, the cookie reaches us on every request. Hammerhead's per-page
+// virtualisation hides this cookie from the proxied script context, which is
+// why we have to thread the answer through to the injected bundle ourselves.
+function _isAdblockEnabledForReq(ctx) {
+    try {
+        if (ctx && ctx.req && ctx.req.headers) return adBlocker.isEnabledFor(ctx.req);
+    } catch (_) { /* fall through */ }
+    return true;
+}
+
+function _injectFor(ctx) {
+    const enabled = _isAdblockEnabledForReq(ctx);
+    if (_DEV) return enabled ? INJECT_DEV_ENABLED  : INJECT_DEV_DISABLED;
+    return        enabled ? INJECT_PROD_ENABLED : INJECT_PROD_DISABLED;
+}
 
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
-    const inject = _DEV ? INJECT_DEV : INJECT_PROD;
+    const inject = _injectFor(ctx);
 
     if (typeof html === 'string' && ctx && ctx.dest) {
         const destHost = (ctx.dest.host || '').toLowerCase();
