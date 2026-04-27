@@ -482,29 +482,90 @@ patch(
 // unchanged because the strings are only used as opaque keys/markers.
 // ---------------------------------------------------------------------------
 const BRAND_REPLACEMENTS = [
-    // Specific multi-word strings whose prefix overlaps another generic rule.
-    // Process these BEFORE the generic `hammerhead|` → `_d|` so their
-    // semantically meaningful (and visible-in-page) form is shortened,
-    // not just prefixed.
+    // ---------------------------------------------------------------
+    // SECTION 1 — multi-word string markers.
+    // ---------------------------------------------------------------
+    // CSS processing markers wrapped around every processed <style> block.
     ['/*hammerhead|stylesheet|start*/', '/*_d|css|s*/'],
     ['/*hammerhead|stylesheet|end*/', '/*_d|css|e*/'],
-    // Embedded `hammerhead-` substring inside a string (NOT `hammerhead|`,
-    // which is handled generically). One known case in event names.
+    // Embedded `hammerhead-` substring inside an internal event name.
     ['eval-hammerhead-script', 'eval-_d-script'],
-    // document.write begin/end markers
+    // document.write begin/end markers (visible in DOM during streaming writes).
     ['hammerhead_write_marker_begin', '_d_wmb'],
     ['hammerhead_write_marker_end', '_d_wme'],
-    // GENERIC: every other `hammerhead|<something>` internal-property key.
-    // `|` is invalid in JS identifiers, so any source occurrence of the
-    // literal substring `hammerhead|` is necessarily inside a string. Safe
-    // to rebrand wholesale.
+    // ---------------------------------------------------------------
+    // SECTION 2 — generic `hammerhead|<something>` internal-property keys.
+    // `|` is invalid in JS identifiers, so any literal `hammerhead|` is
+    // necessarily inside a string. Safe to rebrand wholesale.
+    // ---------------------------------------------------------------
     ['hammerhead|', '_d|'],
-    // Magic window properties / DOM attribute postfixes / pseudo-class proxies.
+    // ---------------------------------------------------------------
+    // SECTION 3 — magic window properties + DOM attribute postfixes +
+    // pseudo-class proxies + storage virtualization keys.
+    // ---------------------------------------------------------------
     ['data-hammerhead-hovered', 'data-_d-hov'],
     ['data-hammerhead-focused', 'data-_d-foc'],
     ['-hammerhead-stored-value', '-_d-sv'],
     ['%is-hammerhead%', '%_isd%'],
     ['%hammerhead%', '%_d%'],
+    // ---------------------------------------------------------------
+    // SECTION 4 — DEEPER REBRAND
+    //
+    // The above renames remove every `hammerhead|...` and `%hammerhead%`
+    // marker from the bundle, but leave a long tail of identifier-name
+    // and string-literal occurrences that survive Uglify minification:
+    //
+    //   • `INTERNAL_PROPS.hammerhead` — the magic-key indirection used to
+    //     access `window['%_d%']`. Property name → not minified.
+    //   • `parentHammerhead`, `var hammerhead = window["..."]` — local
+    //     variables INSIDE template strings that get serialized into
+    //     injected <script> tags on every iframe init / window recreate
+    //     event. Strings → not minified.
+    //   • `_waitHammerheadSettings`, `waitHammerheadSettings`,
+    //     `EVAL_HAMMERHEAD_SCRIPT_EVENT`, `isHammerheadAttr`,
+    //     `topSameDomainHammerhead` — instance fields / object keys.
+    //     Property names → not minified.
+    //   • `sourceURL=hammerhead.js` — DevTools sourceURL pragma in the
+    //     iframe-eval string.
+    //   • `testcafe-hammerhead:` — console.warn message prefix.
+    //
+    // Each below is a single, atomic, idempotent string substitution.
+    // The replacements do NOT collide because:
+    //   1) Property-name renames use the full `<obj>.hammerhead` form,
+    //      not the bare keyword, so `hammerhead:` (the key definition)
+    //      and `<id>.hammerhead` (the access) are separate patterns.
+    //   2) Identifier renames use UNIQUE identifier strings
+    //      (parentHammerhead etc.) — they never collide with each other
+    //      or with substrings of other patterns.
+    //   3) String-literal renames use distinctive long substrings.
+    //
+    // Order is significant only when one `from` is a substring of another
+    // `from`. We guard that by listing more-specific patterns FIRST.
+    // ---------------------------------------------------------------
+    // 4a) INTERNAL_PROPS.hammerhead — access pattern (most specific first).
+    ['INTERNAL_PROPS.hammerhead', 'INTERNAL_PROPS.h0'],
+    ['internal_properties_1.default.hammerhead', 'internal_properties_1.default.h0'],
+    ['internalProperties.hammerhead', 'internalProperties.h0'],
+    // 4b) INTERNAL_PROPS.hammerhead — KEY definition.
+    [`hammerhead: '%_d%'`, `h0: '%_d%'`],
+    [`hammerhead:"%_d%"`, `h0:"%_d%"`],
+    // 4c) Hammerhead-named local variables INSIDE injected <script> templates.
+    // Picked unique substrings so we don't accidentally match `var hammerhead`
+    // outside a template (the only other source line is `var hammerhead =
+    // new Hammerhead();` which Uglify renames anyway, but keeping the rename
+    // there is a no-op).
+    ['var hammerhead = window[', 'var h_ = window['],
+    ['hammerhead && hammerhead.sandbox', 'h_ && h_.sandbox'],
+    ['parentHammerhead', 'pH'],
+    // 4d) Class-instance / object property names that survive minification.
+    ['_waitHammerheadSettings', '_waitS'],
+    ['waitHammerheadSettings', 'waitS'],
+    ['EVAL_HAMMERHEAD_SCRIPT_EVENT', 'EVAL_S_E'],
+    ['isHammerheadAttr', 'isHA'],
+    ['topSameDomainHammerhead', 'tSDX'],
+    // 4e) String-literal contents.
+    ['sourceURL=hammerhead.js', 'sourceURL=app.js'],
+    ['testcafe-hammerhead:', 'app:'],
 ];
 
 const BRAND_FILES = [
@@ -513,6 +574,9 @@ const BRAND_FILES = [
     'processing/dom/internal-attributes.js',
     'processing/dom/internal-properties.js',
     'utils/get-storage-key.js',
+    'utils/self-removing-scripts.js',
+    'proxy/index.js',
+    'session/injectables.js',
     // client mustache (re-served as task.js with the new path)
     'client/task.js.mustache',
     // unminified client bundles (consumed by src/build.js)

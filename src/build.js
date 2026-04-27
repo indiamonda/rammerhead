@@ -86,12 +86,15 @@ fs.writeFileSync(
             '$& var url = new URL(get$$2()); url.hash = hash; window.location.hash = (new URL(convertToProxyUrl(url.href))).hash; return hash;'
         )
         // sometimes, postMessage doesn't work as expected when
-        // postMessage gets run/received in same window without hammerhead wrappings.
-        // this is to double check hammerhead wrapped it
-        // (cloudflare's turnsile threw this error after it tried to postMessage a fail code)
+        // postMessage gets run/received in same window without our wrappings.
+        // this is to double check we wrapped it.
+        // (cloudflare's turnstile threw this error after it tried to postMessage a fail code)
+        // NOTE: hammerhead's `MessageType` constants now start with `_d|` (post-rebrand).
+        // We accept both `_d|` (current) and `hammerhead|` (legacy, in case patch-hammerhead
+        // hasn't run yet / pre-rebrand cached pages still send the old format).
         .replace(
             'data.type !== MessageType.Service && isWindow(target)',
-            '$& && data.type?.startsWith("hammerhead|")'
+            '$& && (data.type?.startsWith("_d|") || data.type?.startsWith("hammerhead|"))'
         )
         // Make _parseMessageJSONData NEVER throw on non-JSON postMessage payloads.
         //

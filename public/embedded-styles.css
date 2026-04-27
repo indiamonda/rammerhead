@@ -1030,6 +1030,329 @@ body {
 }
 
 /* ============================================
+   Get web-build files button + status banners
+   ============================================ */
+
+/* Section becomes a centred column so the two action buttons stack
+   neatly instead of fighting the link-result for layout. */
+.generate-link-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.generate-link-section > button {
+    align-self: center;
+}
+
+/* "Get web-build files" — visually distinct from the primary
+   never-expire-link button: outlined surface, gradient sheen, animated
+   download icon so it still reads as a desirable action. */
+.webbuild-button {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background:
+        linear-gradient(180deg, var(--color-bg-primary) 0%, var(--color-bg-tertiary) 100%);
+    color: var(--color-text-secondary);
+    font-family: var(--font-family);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition:
+        border-color 180ms ease,
+        color        180ms ease,
+        background   180ms ease,
+        box-shadow   180ms ease,
+        transform    120ms ease;
+    -webkit-user-select: none;
+            user-select: none;
+}
+
+/* Subtle conic-gradient halo on hover, painted via a pseudo-element so
+   the actual button surface stays readable. */
+.webbuild-button::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg,
+        var(--color-primary) 0%,
+        rgba(26, 115, 232, 0) 40%,
+        rgba(26, 115, 232, 0) 60%,
+        var(--color-primary) 100%);
+    -webkit-mask:
+        linear-gradient(#000, #000) content-box,
+        linear-gradient(#000, #000);
+            mask:
+        linear-gradient(#000, #000) content-box,
+        linear-gradient(#000, #000);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 220ms ease;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.webbuild-button > svg {
+    transition: transform 240ms cubic-bezier(.2,.7,.3,1.4);
+}
+
+.webbuild-button:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background:
+        linear-gradient(180deg,
+            var(--color-primary-light, rgba(26,115,232,0.08)) 0%,
+            var(--color-bg-primary) 100%);
+    box-shadow:
+        0 1px 2px rgba(26, 115, 232, 0.10),
+        0 4px 14px rgba(26, 115, 232, 0.18);
+}
+
+.webbuild-button:hover::before { opacity: 0.55; }
+
+.webbuild-button:hover > svg { transform: translateY(2px) scale(1.05); }
+
+.webbuild-button:focus-visible {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow:
+        0 0 0 3px rgba(26, 115, 232, 0.28),
+        0 4px 14px rgba(26, 115, 232, 0.18);
+}
+
+.webbuild-button:active {
+    transform: translateY(1px);
+    box-shadow:
+        0 0 0 0 rgba(26, 115, 232, 0),
+        0 2px 6px rgba(26, 115, 232, 0.18);
+}
+
+/* Disabled is a real "do-nothing" state: no hover/active styling, no
+   pointer events, so a click handler can't fire mid-build. */
+.webbuild-button:disabled,
+.webbuild-button[aria-busy="true"] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+    box-shadow: none;
+}
+
+.webbuild-button:disabled::before,
+.webbuild-button[aria-busy="true"]::before { opacity: 0; }
+
+.webbuild-button[aria-busy="true"] > svg {
+    animation: webbuildBusyBounce 1.1s ease-in-out infinite;
+}
+
+@keyframes webbuildBusyBounce {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(3px); }
+}
+
+[data-theme="dark"] .webbuild-button {
+    color: var(--color-text-primary);
+    background:
+        linear-gradient(180deg,
+            var(--surface-2, var(--color-bg-secondary)) 0%,
+            var(--surface-1, var(--color-bg-primary)) 100%);
+    border-color: var(--edge, var(--color-border));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .webbuild-button:hover {
+    color: var(--accent, var(--color-primary));
+    border-color: var(--accent, var(--color-primary));
+    background:
+        linear-gradient(180deg,
+            rgba(77, 166, 255, 0.16) 0%,
+            var(--surface-1, var(--color-bg-primary)) 100%);
+    box-shadow:
+        0 1px 2px rgba(77, 166, 255, 0.10),
+        0 4px 14px rgba(77, 166, 255, 0.30);
+}
+
+[data-theme="dark"] .webbuild-button:focus-visible {
+    box-shadow:
+        0 0 0 3px rgba(77, 166, 255, 0.36),
+        0 4px 14px rgba(77, 166, 255, 0.30);
+}
+
+/* Loading shown while the build/probe is in flight. Hidden by default
+   so the message slot is empty until the user actually clicks. */
+.webbuild-loading {
+    display: none;
+    align-items: center;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    line-height: 1.4;
+    gap: 8px;
+}
+
+.webbuild-loading-text {
+    flex: 1;
+    text-align: left;
+}
+
+/* Success banner — shown only after a click + successful probe. */
+.webbuild-result {
+    display: none;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: var(--color-success-bg, #e6f4ea);
+    border: 1px solid var(--color-success, #34a853);
+    border-radius: 8px;
+    color: var(--color-success, #137333);
+    font-size: 13px;
+    line-height: 1.45;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.webbuild-result.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.webbuild-result-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--color-success, #34a853);
+    color: var(--color-white, #fff);
+    margin-top: 1px;
+}
+
+.webbuild-result-text {
+    flex: 1;
+    text-align: left;
+}
+
+[data-theme="dark"] .webbuild-result {
+    background: rgba(46, 204, 113, 0.12);
+    border-color: var(--success, #2ecc71);
+    color: var(--success, #2ecc71);
+}
+
+/* ============================================
+   Invalid-link banner & shake animation
+   ============================================ */
+.invalid-link-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--color-error-bg, #fce8e6);
+    border: 1px solid var(--color-error-border, #f28b82);
+    border-radius: 8px;
+    color: var(--color-error-text, #c5221f);
+    font-size: 13px;
+    line-height: 1.4;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 200ms ease, transform 200ms ease,
+                box-shadow 200ms ease, border-color 200ms ease;
+    will-change: transform, opacity;
+}
+
+.invalid-link-banner.active {
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0);
+    animation: invalidLinkGlow 2.4s ease-out 1;
+}
+
+.invalid-link-banner.shake {
+    animation: invalidLinkGlow 2.4s ease-out 1, invalidLinkShake 600ms cubic-bezier(.36,.07,.19,.97) 1;
+}
+
+.invalid-link-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--color-error-text, #c5221f);
+    color: #fff;
+}
+
+.invalid-link-text {
+    flex: 1;
+    text-align: left;
+    font-weight: 500;
+}
+
+[data-theme="dark"] .invalid-link-banner {
+    background: rgba(231, 76, 60, 0.12);
+    border-color: var(--error, #e74c3c);
+    color: var(--error, #e74c3c);
+}
+
+[data-theme="dark"] .invalid-link-icon {
+    background: var(--error, #e74c3c);
+}
+
+/* Briefly highlight the URL input the user typed into so it's clear
+   which field is being judged invalid. */
+.url-input.shake-error {
+    animation: invalidLinkShake 600ms cubic-bezier(.36,.07,.19,.97) 1;
+    border-color: var(--color-error-text, #c5221f) !important;
+    box-shadow: 0 0 0 4px rgba(197, 34, 31, 0.18) !important;
+}
+
+@keyframes invalidLinkShake {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+}
+
+@keyframes invalidLinkGlow {
+    0%   { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.55); }
+    35%  { box-shadow: 0 0 0 10px rgba(229, 57, 53, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .webbuild-button,
+    .webbuild-button > svg,
+    .webbuild-button::before,
+    .invalid-link-banner,
+    .invalid-link-banner.active,
+    .invalid-link-banner.shake,
+    .url-input.shake-error {
+        transition: none;
+        animation: none !important;
+    }
+}
+
+/* ============================================
    Internal Pages (Chrome-like)
    ============================================ */
 .home-page, .settings-page, .sessions-page {

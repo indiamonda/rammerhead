@@ -3022,30 +3022,43 @@
                                         <button class="copy-button" id="newtab-copy-button" disabled>Copy</button>
                                     </div>
                                 </div>
-                                <div class="webbuild-result" id="newtab-webbuild-result" style="display: none;">
-                                    <div class="webbuild-result-icon" aria-hidden="true">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <div class="webbuild-result" id="newtab-webbuild-result"
+                                     style="display: none; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 14px 16px;
+                                            background: #e6f4ea; border: 1px solid #34a853; border-radius: 8px;
+                                            color: #137333; font-size: 13px; line-height: 1.45; text-align: left;">
+                                    <div class="webbuild-result-icon" aria-hidden="true"
+                                         style="flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+                                                width: 24px; height: 24px; border-radius: 50%; background: #34a853; color: #fff; margin-top: 1px;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
                                         </svg>
                                     </div>
-                                    <div class="webbuild-result-text"></div>
+                                    <div class="webbuild-result-text" style="flex: 1; text-align: left;"></div>
                                 </div>
-                                <div class="invalid-link-banner" id="newtab-invalid-banner" role="alert" aria-live="assertive">
-                                    <div class="invalid-link-icon" aria-hidden="true">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <div class="invalid-link-banner" id="newtab-invalid-banner" role="alert" aria-live="assertive"
+                                     style="display: none; align-items: center; gap: 10px; margin-top: 16px; padding: 12px 16px;
+                                            background: #fce8e6; border: 1px solid #f28b82; border-radius: 8px;
+                                            color: #c5221f; font-size: 13px; line-height: 1.4; text-align: left;">
+                                    <div class="invalid-link-icon" aria-hidden="true"
+                                         style="flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+                                                width: 24px; height: 24px; border-radius: 50%; background: #c5221f; color: #fff;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                                         </svg>
                                     </div>
-                                    <div class="invalid-link-text">The link entered is invalid.</div>
+                                    <div class="invalid-link-text" style="flex: 1; text-align: left; font-weight: 500;">The link entered is invalid.</div>
                                 </div>
                                 <div class="error-message" id="newtab-error-message"></div>
                                 <div class="loading" id="newtab-loading">
                                     <span class="spinner"></span>
                                     Creating session...
                                 </div>
-                                <div class="webbuild-loading" id="newtab-webbuild-loading">
+                                <div class="webbuild-loading" id="newtab-webbuild-loading"
+                                     style="display: none; align-items: center; gap: 8px; margin-top: 16px; padding: 12px 16px;
+                                            background: var(--color-bg-tertiary, #f8f9fa); border: 1px solid var(--color-border, #dadce0);
+                                            border-radius: 8px; color: var(--color-text-secondary, #3c4043); font-size: 13px; line-height: 1.4; text-align: left;">
                                     <span class="spinner"></span>
-                                    <span class="webbuild-loading-text">Preparing web-build files…</span>
+                                    <span class="webbuild-loading-text" style="flex: 1; text-align: left;">Preparing web-build files…</span>
                                 </div>
                             </div>
                         </div>
