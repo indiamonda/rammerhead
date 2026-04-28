@@ -33,6 +33,42 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     }
     const _staticCache = new Map();
     const DEV = !!process.env.DEVELOPMENT;
+
+    // ─────────────────────────────────────────────────────────────────────
+    // KEYWORD-FILTER PREVENTION FOR THE PROXY UI ITSELF
+    // ─────────────────────────────────────────────────────────────────────
+    //
+    // public/index.html ships with the runtime mangler (`_t`, `_`) defined
+    // up top, and most user-visible strings are already routed through it
+    // (the keyword leaks are removed at SOURCE rather than at serve time —
+    // see the `_(...)` / `_t(...)` calls inside index.html where literal
+    // brand strings used to live).
+    //
+    // The only thing we do at serve time is strip HTML comments
+    // (<!-- … -->). Those occasionally contain keyword leaks, are never
+    // load-bearing, and most importantly CANNOT collide with JS strings
+    // or regex literals (so this rewrite is safe).
+    //
+    // We tried stripping JS comments here too but every approach short of
+    // a real JS parser corrupted source code: line comments lived inside
+    // regex character classes (`/^https?:\/\//`), block comments lived
+    // inside HTML attribute values (`accept="image/*"`), and even after
+    // tracking string state we'd still mangle template-literal contents.
+    // Comments in the source file have been hand-stripped where they
+    // contained keyword leaks (the vast majority remain harmless).
+    let _kwSanitizedUI = null;
+    function _sanitizeUIKeywords(html) {
+        if (typeof html !== 'string' || !html) return html;
+        return html.replace(/<!--[\s\S]*?-->/g, '');
+    }
+    function _serveSanitizedUI(res, contents) {
+        if (!_kwSanitizedUI) {
+            try { _kwSanitizedUI = _sanitizeUIKeywords(contents.toString('utf8')); }
+            catch (_) { _kwSanitizedUI = contents.toString('utf8'); }
+        }
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+        res.end(_kwSanitizedUI);
+    }
     function _getCached(filePath, contentType) {
         let e = _staticCache.get(filePath);
         if (e) return e;
@@ -248,8 +284,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         if (!config.publicDir) { sendErrorPage(req, res, 404, { detail: req.url }); return; }
         const indexPath = path.join(config.publicDir, 'index.html');
         if (!fs.existsSync(indexPath)) { sendErrorPage(req, res, 404, { detail: req.url }); return; }
-        res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
-        res.end(fs.readFileSync(indexPath));
+        _serveSanitizedUI(res, fs.readFileSync(indexPath));
     }
 
     // Hosts the real proxy UI under /<token> (and base-path-prefixed equivalents).
@@ -294,8 +329,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
                 const indexPath = path.join(config.publicDir, 'index.html');
                 if (fs.existsSync(indexPath)) {
                     logger.debug(`(handleRoot) Serving public index.html`);
-                    res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
-                    res.end(fs.readFileSync(indexPath));
+                    _serveSanitizedUI(res, fs.readFileSync(indexPath));
                     return;
                 }
             }
@@ -533,6 +567,12 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         const targetUrl = _normalizeTargetForBuild(params.url);
         const isProbe = params.probe === '1' || params.probe === 'true';
         const forceMode = (params.mode || '').toLowerCase(); // optional override: 'static'|'local'
+        // Modal flags. All are coerced to boolean here so downstream
+        // builders don't have to defensively re-parse strings.
+        const useServer = params.useServer === '1' || params.useServer === 'true';
+        const noLimit   = params.noLimit   === '1' || params.noLimit   === 'true';
+        const single    = params.single    === '1' || params.single    === 'true';
+        const customFilename = _safeFilename(params.filename || '');
 
         if (!targetUrl) {
             return jsonResponse(res, 400, {
@@ -542,8 +582,9 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             });
         }
 
-        // Probe phase: only verify reachability, no zip — the UI uses this
-        // to play the shake animation before committing to a download.
+        // Probe phase: only verify reachability, no zip — the UI uses
+        // this to play the shake animation before committing to a
+        // download.
         if (isProbe) {
             (async () => {
                 try {
@@ -572,15 +613,17 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
             return;
         }
 
-        // Build phase — we stream the zip directly to the client. Errors
-        // partway through can't change the response code (we've already
-        // sent 200), so for a bad URL we 400 *first*, before any bytes go
-        // out, by reusing the probe.
+        // Build phase — we stream the response directly to the client.
+        // Errors partway through can't change the response code (we've
+        // already sent 200), so for a bad URL we 400 *first*, before
+        // any bytes go out, by reusing the probe.
         (async () => {
             const isSelf = _isSelfUrl(targetUrl, req);
             const mode = forceMode === 'static' ? 'static'
                 : forceMode === 'local' ? 'local'
                 : isSelf ? 'local' : 'static';
+            // Single-file build is static-only.
+            const singleFile = single && mode === 'static';
 
             if (mode === 'static') {
                 try {
@@ -604,26 +647,100 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
 
             let host = 'site';
             try { host = new URL(targetUrl).hostname; } catch (_) { /* keep default */ }
-            const base = mode === 'local' ? 'rammerhead-source' : _safeFilename(host);
-            const filename = base + '-webbuild-' + new Date().toISOString().slice(0, 10) + '.zip';
+            const baseName = customFilename
+                || (mode === 'local' ? 'rammerhead-source' : _safeFilename(host) + '-webbuild-' + new Date().toISOString().slice(0, 10));
 
+            // Asset budgets — bumped to "effectively unlimited" when
+            // the user opted in via the modal toggle. We use a finite
+            // (but enormous) value so range-comparisons keep working.
+            const NO_LIMIT = Number.MAX_SAFE_INTEGER;
+
+            // For "Use their server" mode we mint a fresh rammerhead
+            // session right here. The build embeds a small bridge
+            // script that prefixes every fetch / XHR / WS URL with
+            // `<host>/<sessionId>/`, which is the only path layout
+            // the rammerhead URL router actually understands. Without
+            // a session ID the proxy 404s every request, so the
+            // bridge would be effectively a no-op.
+            let proxySessionId = null;
+            if (useServer) {
+                try {
+                    proxySessionId = generateId();
+                    const session = new RammerheadSession();
+                    // Don't IP-lock: the deployed copy might run from
+                    // anywhere. We accept the looser security posture
+                    // here because the user opted in by ticking the
+                    // toggle.
+                    sessionStore.addSerializedSession(proxySessionId, session.serializeSession());
+                } catch (e) {
+                    logger.warn(`(buildwebfiles) failed to mint proxy session: ${e && e.message}`);
+                    proxySessionId = null;
+                }
+            }
+
+            const staticOpts = {
+                useServer,
+                proxyHostHeader: req.headers && req.headers.host,
+                proxySessionId,
+                proxyProtocol: (req.headers['x-forwarded-proto'] || (req.connection && req.connection.encrypted ? 'https' : 'http'))
+            };
+            if (noLimit) {
+                staticOpts.maxTotalBytes = NO_LIMIT;
+                staticOpts.maxPerFileBytes = NO_LIMIT;
+                staticOpts.maxPages = 100000;
+                staticOpts.maxDepth = 32;
+                staticOpts.totalTimeoutMs = 60 * 60 * 1000; // 1h
+            }
+            const localOpts = noLimit
+                ? { publicMaxBytes: NO_LIMIT, restMaxBytes: NO_LIMIT }
+                : {};
+
+            // ── Single-file path ────────────────────────────────────
+            // Returns a single text/html document with everything
+            // inlined. Streamed via res.end() because the builder
+            // collects into a buffer first (single-file inherently
+            // requires the full DOM in memory to inline base64 data).
+            if (singleFile) {
+                try {
+                    const html = await webBuilder.buildSingleFileSite(targetUrl, staticOpts);
+                    res.writeHead(200, Object.assign({
+                        'Content-Type': 'text/html; charset=utf-8',
+                        'Content-Disposition': 'attachment; filename="' + baseName + '.html"',
+                        'Cache-Control': 'no-store',
+                        'X-Web-Build-Mode': 'static-single',
+                        'Content-Length': Buffer.byteLength(html)
+                    }, CORS_HEADERS));
+                    res.end(html);
+                    return;
+                } catch (e) {
+                    logger.error(`(buildwebfiles single) ${config.getIP(req)} ${targetUrl} ${e && e.message}`);
+                    // No bytes have gone out yet — JSON-error politely.
+                    return jsonResponse(res, 500, {
+                        ok: false,
+                        code: 'BUILD_FAILED',
+                        reason: 'Build failed: ' + (e && e.message ? e.message : 'unknown error')
+                    });
+                }
+            }
+
+            // ── ZIP path (default) ─────────────────────────────────
             res.writeHead(200, Object.assign({
                 'Content-Type': 'application/zip',
-                'Content-Disposition': 'attachment; filename="' + filename + '"',
+                'Content-Disposition': 'attachment; filename="' + baseName + '.zip"',
                 'Cache-Control': 'no-store',
-                'X-Web-Build-Mode': mode
+                'X-Web-Build-Mode': mode + (useServer ? '+useServer' : '') + (noLimit ? '+noLimit' : '')
             }, CORS_HEADERS));
 
             const zip = new ZipWriter(res, { compressLevel: 6 });
 
             try {
                 if (mode === 'local') {
-                    await webBuilder.buildLocalSite(zip, {
+                    await webBuilder.buildLocalSite(zip, Object.assign({
                         projectRoot: path.resolve(__dirname, '..', '..'),
                         publicDir: config.publicDir
-                    });
+                    }, localOpts));
                 } else {
-                    await webBuilder.buildStaticSite(targetUrl, zip);
+                    await webBuilder.buildStaticSite(targetUrl, zip, staticOpts);
                 }
                 await zip.finish();
             } catch (e) {

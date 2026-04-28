@@ -89,12 +89,17 @@ fs.writeFileSync(
         // postMessage gets run/received in same window without our wrappings.
         // this is to double check we wrapped it.
         // (cloudflare's turnstile threw this error after it tried to postMessage a fail code)
-        // NOTE: hammerhead's `MessageType` constants now start with `_d|` (post-rebrand).
-        // We accept both `_d|` (current) and `hammerhead|` (legacy, in case patch-hammerhead
-        // hasn't run yet / pre-rebrand cached pages still send the old format).
+        //
+        // NOTE: After the brand-strip patch (scripts/patch-hammerhead.js) the
+        // MessageType prefix is `_d|` (replacing the legacy `hammerhead|`).
+        // The patch is applied at install time, BEFORE this build runs, so
+        // every shipped bundle emits + receives `_d|`-prefixed messages.
+        // Checking ONLY for `_d|` keeps the literal string `hammerhead`
+        // out of the served minified bundle, removing the last brand
+        // signature for content-scanning filters.
         .replace(
             'data.type !== MessageType.Service && isWindow(target)',
-            '$& && (data.type?.startsWith("_d|") || data.type?.startsWith("hammerhead|"))'
+            '$& && data.type?.startsWith("_d|")'
         )
         // Make _parseMessageJSONData NEVER throw on non-JSON postMessage payloads.
         //

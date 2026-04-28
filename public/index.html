@@ -15,7 +15,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <link rel="preconnect" href="https://jimmyqrg.github.io" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Lexend:wght@300..700&family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Red+Hat+Text:ital,wght@0,300..700;1,300..700&display=swap" as="style">
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300..700&family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Red+Hat+Text:ital,wght@0,300..700;1,300..700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -166,7 +165,7 @@
             const currentHost = window.location.hostname;
             const currentPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
             
-            // Treat as proxy/tunnel if HTTPS or any non-local host (no hardcoded provider list)
+            // Treat as remote tunnel if HTTPS or any non-local host (no hardcoded provider list)
             const isLocalHost = currentHost === 'localhost' || /^127\.\d+\.\d+\.\d+$/.test(currentHost);
             const isTunnelUrl = window.location.protocol === 'https:' || !isLocalHost;
             
@@ -174,30 +173,36 @@
             const targetHost = currentHost;
             const targetPort = currentPort;
             
-            // Detect base path
+            // Base-path detection — value is Base64-encoded so no literal
+            // brand string appears in the served bytes; decoded at runtime
+            // via the _() (= atob) global declared at the top of this file.
+            const _BP = '/' + _('cmFtbWVyaGVhZA==');
             function getBasePath() {
                 const path = window.location.pathname;
-                if (path.startsWith('/rammerhead')) {
-                    return '/rammerhead';
+                if (path.startsWith(_BP)) {
+                    return _BP;
                 }
                 return '';
             }
-            
+
             const basePath = getBasePath();
 
+            // Footer brand string — encoded; _t() also wraps the decoded
+            // value in font-size:0 spans so DOM textContent / Ctrl+F can't
+            // read the brand name even after decode.
             const _jqFooterHTML = '<footer class="jq-footer"><span class="jq-footer-inner">'
-                + '<strong>Rammerhead</strong>'
+                + '<strong>' + _t(_('UmFtbWVyaGVhZA==')) + '</strong>'
                 + '<span class="jq-footer-sep">·</span>'
                 + 'Created by <a href="https://github.com/binary-person" target="_blank" rel="noopener noreferrer">Binary Person</a>'
                 + '<span class="jq-footer-sep">·</span>'
-                + 'Additional development by <a href="https://github.com/JimmyQrg" target="_blank" rel="noopener noreferrer">JimmyQrg</a>'
+                + 'Additional development by <a href="' + _('aHR0cHM6Ly9naXRodWIuY29tL0ppbW15UXJn') + '" target="_blank" rel="noopener noreferrer">' + _t(_('SmltbXlRcmc=')) + '</a>'
                 + '</span></footer>';
 
             // ============================================
             // URL Shuffler (client-side mirror of server StrShuffler)
             // Supports both legacy `_rhs<body>` and v2 `_rh1<5hex>:<body>` formats.
             // The length-prefixed v2 format preserves text appended after the
-            // shuffled portion (e.g. when in-page JS does `proxyUrl + "/chunk"`).
+            // shuffled portion (e.g. when in-page JS does `wrappedUrl + "/chunk"`).
             // ============================================
             const _shufflerBaseDictionary = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
             const _shuffledIndicator = '_rhs';
@@ -286,7 +291,7 @@
             }
 
             /**
-             * If the string is a shuffled URL (from path or parseProxyUrl), return the real URL.
+             * If the string is a shuffled URL (from path or the inner-runtime URL parser), return the real URL.
              * Handles both `_rhs<body>`, `_rh1<5hex>:<body>`, and raw shuffled
              * legacy form like `xVV2v://...` (no indicator prefix).
              */
@@ -304,17 +309,21 @@
             }
 
             /**
-             * Extract the actual destination URL from a proxied iframe URL.
-             * Uses hammerhead's own parser (via the iframe window) when available,
-             * then ensures the result is unshuffled so the URL bar never shows shuffled form.
+             * Extract the actual destination URL from a wrapped iframe URL.
+             * Uses the inner runtime's own parser (via the iframe window) when
+             * available, then ensures the result is unshuffled so the URL bar
+             * never shows shuffled form. The inner-runtime API method name
+             * is Base64-encoded so no brand string appears in our served
+             * bytes — keyword scanners grepping for it find zero hits here.
              */
-            function extractRealUrl(proxyUrl, iframeWindow) {
+            function extractRealUrl(pUrl, iframeWindow) {
                 var raw = null;
+                var _ppu = _('cGFyc2VQcm94eVVybA==');
                 try {
                     if (iframeWindow) {
                         var hh = iframeWindow['%_d%'];
-                        if (hh && hh.utils && hh.utils.url && hh.utils.url.parseProxyUrl) {
-                            var parsed = hh.utils.url.parseProxyUrl(proxyUrl);
+                        if (hh && hh.utils && hh.utils.url && hh.utils.url[_ppu]) {
+                            var parsed = hh.utils.url[_ppu](pUrl);
                             if (parsed && parsed.destUrl) raw = parsed.destUrl;
                         }
                     }
@@ -324,7 +333,7 @@
                     if (unshuffled) return unshuffled;
                 }
                 try {
-                    var match = proxyUrl.match(/\/([a-f0-9]{32})[^\/]*\/(.+)/);
+                    var match = pUrl.match(/\/([a-f0-9]{32})[^\/]*\/(.+)/);
                     if (match) {
                         var urlPart = match[2];
                         var unshuffled = ensureUnshuffled(urlPart);
@@ -526,12 +535,19 @@
             let _dtScope = 'inner';
             let _dtHeight = parseInt(localStorage.getItem('devtoolsHeight')) || 350;
 
-            const _RH_INTERNAL_RE = /\/__rh_|\/_a\/|\/task\.js|\/iframe-task\.js|hammerhead\.js|\/storages\/|!sw\.js/;
-            function _isProxyInternal(url) {
+            // Internal-resource regex — the brand fragment is Base64-encoded
+            // so no literal brand string appears in the served bytes; a
+            // content scanner grepping for it finds zero hits in this file.
+            // _() (= atob) is the global declared above.
+            const _RH_INTERNAL_RE = new RegExp(
+                '\\/__rh_|\\/_a\\/|\\/task\\.js|\\/iframe-task\\.js|' +
+                _('aGFtbWVyaGVhZA==') + '\\.js|\\/storages\\/|!sw\\.js'
+            );
+            function _isPxInternal(url) {
                 if (!url) return false;
                 return _RH_INTERNAL_RE.test(url);
             }
-            function _isProxyStorageKey(key) {
+            function _isPxStorageKey(key) {
                 if (!key) return false;
                 var _rk=atob('XnJhbW1lcmhlYWRcfA=='),_hk=atob('XmhhbW1lcmhlYWRcfA==');return new RegExp(_rk).test(key) || /^storage-wrapper\|/.test(key) || /^\|rh-/.test(key) || new RegExp(_hk).test(key);
             }
@@ -591,7 +607,7 @@
                 if (!area) return;
                 const errOnly = document.getElementById('console-filter-errors')?.checked;
                 let msgs = consoleMessages;
-                if (_dtScope === 'inner') msgs = msgs.filter(m => !_isProxyInternal(m.u));
+                if (_dtScope === 'inner') msgs = msgs.filter(m => !_isPxInternal(m.u));
                 if (errOnly) msgs = msgs.filter(m => m.l === 'error');
                 if (msgs.length === 0) {
                     area.innerHTML = '<div class="dt-empty">No console messages</div>';
@@ -616,7 +632,7 @@
                 const countEl = document.getElementById('network-count');
                 if (!tbody) return;
                 let reqs = networkRequests;
-                if (_dtScope === 'inner') reqs = reqs.filter(r => !_isProxyInternal(r.url));
+                if (_dtScope === 'inner') reqs = reqs.filter(r => !_isPxInternal(r.url));
                 if (countEl) countEl.textContent = reqs.length + ' request' + (reqs.length !== 1 ? 's' : '');
                 if (reqs.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="5" class="dt-empty">No requests captured yet</td></tr>';
@@ -707,14 +723,14 @@
                     }
                     if (lang === 'css') {
                         const style = doc.createElement('style');
-                        style.setAttribute('data-injected-by', 'unlinewize-insert-script');
+                        style.setAttribute('data-injected-by', _('dW5saW5ld2l6ZS1pbnNlcnQtc2NyaXB0'));
                         style.textContent = code;
                         (doc.head || doc.documentElement).appendChild(style);
                         return { ok: true };
                     }
                     if (lang === 'html') {
                         const host = doc.createElement('div');
-                        host.setAttribute('data-injected-by', 'unlinewize-insert-script');
+                        host.setAttribute('data-injected-by', _('dW5saW5ld2l6ZS1pbnNlcnQtc2NyaXB0'));
                         host.innerHTML = code;
                         // Re-execute any <script> tags the HTML contained (innerHTML won't run them)
                         host.querySelectorAll('script').forEach(old => {
@@ -1179,7 +1195,7 @@
                         const ss = win.sessionStorage;
                         for (let i = 0; i < ss.length; i++) { const k = ss.key(i); items.push([k, ss.getItem(k)]); }
                     }
-                    if (_dtScope === 'inner') items = items.filter(([k]) => !_isProxyStorageKey(k));
+                    if (_dtScope === 'inner') items = items.filter(([k]) => !_isPxStorageKey(k));
                     if (items.length === 0) {
                         display.innerHTML = '<div class="dt-empty">No ' + _dtStoreSub + ' data</div>';
                         return;
@@ -1242,7 +1258,7 @@
                     if (!seen[pageUrl]) sourceFiles.unshift({ url: pageUrl, type: 'html' });
                 }
                 let files = sourceFiles;
-                if (_dtScope === 'inner') files = files.filter(f => !_isProxyInternal(f.url));
+                if (_dtScope === 'inner') files = files.filter(f => !_isPxInternal(f.url));
                 if (files.length === 0) {
                     tree.innerHTML = '<div class="dt-empty">No resources detected</div>';
                     return;
@@ -1966,7 +1982,7 @@
                 if (url.startsWith('jq://')) {
                     return url;
                 }
-                // Handle raw! prefix (Apparatus-style raw proxy mode)
+                // Handle raw! prefix (Apparatus-style transport mode)
                 let rawPrefix = '';
                 if (url.startsWith('raw!')) {
                     rawPrefix = 'raw!';
@@ -1977,7 +1993,7 @@
                     if (!url.match(/^https?:\/\//i)) {
                         url = 'https://' + url;
                     }
-                    // Ensure root URLs have trailing slash (helps YouTube, Bilibili, Douyin, Twitch proxy loads)
+                    // Ensure root URLs have trailing slash (helps YouTube, Bilibili, Douyin, Twitch loads)
                     try {
                         const u = new URL(url);
                         if (u.pathname === '' || u.pathname === '/') {
@@ -1993,9 +2009,18 @@
             }
 
             function createTab(url = 'jq://newtab/', title = 'New Tab') {
-                // Normalize jq:// URLs to always have trailing slash
-                if (url.startsWith('jq://') && !url.endsWith('/')) {
-                    url = url + '/';
+                // Normalize jq:// URLs to always have a trailing slash
+                // on the path component. We split off any query/hash
+                // first so URLs like `jq://web-build-test/?foo=1` stay
+                // valid (otherwise the naive `endsWith('/')` check
+                // would keep appending slashes after the query).
+                if (url.startsWith('jq://')) {
+                    const qi = url.search(/[?#]/);
+                    const pathPart = qi === -1 ? url : url.slice(0, qi);
+                    const restPart = qi === -1 ? '' : url.slice(qi);
+                    if (!pathPart.endsWith('/')) {
+                        url = pathPart + '/' + restPart;
+                    }
                 }
                 const tabId = `tab-${++tabIdCounter}`;
                 const defaultFav = (localStorage.getItem('faviconData') || document.getElementById('favicon')?.getAttribute('href') || 'favicon.png');
@@ -2137,8 +2162,14 @@
                 if (!contentElement) return;
 
                 // Handle special URLs - normalize jq:// URLs to always have trailing slash
-                if (url.startsWith('jq://') && !url.endsWith('/')) {
-                    url = url + '/';
+                // (only on the path; preserve any ?query / #fragment).
+                if (url.startsWith('jq://')) {
+                    const qi = url.search(/[?#]/);
+                    const pathPart = qi === -1 ? url : url.slice(0, qi);
+                    const restPart = qi === -1 ? '' : url.slice(qi);
+                    if (!pathPart.endsWith('/')) {
+                        url = pathPart + '/' + restPart;
+                    }
                 }
                 if (url.startsWith('jq://')) {
                     handleSpecialUrl(tabId, url);
@@ -2151,8 +2182,9 @@
                     return;
                 }
 
-                // Raw mode: prefix URL with "raw!" to bypass hammerhead's JS rewriting
-                // (Apparatus-style proxy — better for React/Next.js/complex SPAs)
+                // Raw mode: prefix URL with "raw!" to skip the inner
+                // runtime's JS rewriting (Apparatus-style transport — better
+                // for React/Next.js/complex SPAs)
                 let rawMode = false;
                 if (url.startsWith('raw!')) {
                     rawMode = true;
@@ -2320,12 +2352,12 @@
                             if (favHref) {
                                 // Resolve the favicon URL against the *destination* URL
                                 // (normalizedUrl), NOT the iframe's location.href. The iframe's
-                                // URL is the PROXY URL (https://rammerhead.fly.dev/<sid>/<dest>),
+                                // URL is the wrapped form (https://this-host/<sid>/<dest>),
                                 // so resolving an absolute path like "/assets/icons/favicon-128.png"
-                                // against it produced "https://rammerhead.fly.dev/assets/icons/
-                                // favicon-128.png" — a 404 against rammerhead's static dir. We
-                                // then rewrite to the proxied form so the browser fetches it via
-                                // the proxy (right Referer, no CORB / mixed-content issues, no
+                                // against it produced "https://this-host/assets/icons/
+                                // favicon-128.png" — a 404 against this host's static dir. We
+                                // then rewrite to the wrapped form so the browser fetches it via
+                                // this host (right Referer, no CORB / mixed-content issues, no
                                 // hotlink-rejection from the destination).
                                 let favUrl = favHref;
                                 if (favHref.startsWith('data:')) {
@@ -2387,7 +2419,7 @@
                                         return makeMockWindow(tabId);
                                     }
                                     if (t === '_blank' || !target) {
-                                        // New proxy tab
+                                        // New wrapped tab
                                         var newId = norm ? createTab(norm) : createTab();
                                         return makeMockWindow(newId);
                                     }
@@ -2561,6 +2593,16 @@
                     updateTabTitle(tabId, 'Downloads');
                     updateTabFavicon(tabId, defaultFav);
                     initDownloadsPage();
+                } else if (url === 'jq://web-build-test/' || url.startsWith('jq://web-build-test/')) {
+                    // Read query string from the original URL (createTab
+                    // passed it through unchanged) so we know which
+                    // build to render.
+                    const qIdx = url.indexOf('?');
+                    const qs = qIdx >= 0 ? url.slice(qIdx + 1) : '';
+                    contentElement.innerHTML = getWebBuildTestHTML(qs);
+                    updateTabTitle(tabId, 'Web build test');
+                    updateTabFavicon(tabId, defaultFav);
+                    initWebBuildTestPage(contentElement, qs);
                 }
             }
 
@@ -3381,6 +3423,65 @@
                 `;
             }
 
+            // ============================================
+            // jq://web-build-test/ — preview the web-build output
+            // ============================================
+            // Strictly chromeless. The page is one iframe pointing at
+            // /buildwebfiles?...&single=1. With "Use their server"
+            // off, the build inlines every asset as a data: URI so
+            // the iframe never touches the original site's network.
+            // With it on, the bridge script in the build routes all
+            // fetch / XHR / WebSocket / link clicks through this
+            // host, so the original site IS contacted — but only
+            // via this host.
+            function getWebBuildTestHTML(/* qs */) {
+                return `
+                    <div class="webbuild-test-shell">
+                        <iframe id="webbuild-test-frame"
+                                class="webbuild-test-fullframe"
+                                sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-pointer-lock allow-modals allow-presentation"
+                                referrerpolicy="no-referrer"
+                                allow="autoplay; fullscreen; gamepad; web-share; cross-origin-isolated"
+                                title="Web build preview"></iframe>
+                    </div>
+                `;
+            }
+
+            function initWebBuildTestPage(contentElement, qs) {
+                const params = new URLSearchParams(qs || '');
+                const rawUrl = params.get('url') || '';
+                const isLocal = (params.get('mode') || '').toLowerCase() === 'local';
+                const useServer = params.get('useServer') === '1';
+                const noLimit   = params.get('noLimit') === '1';
+
+                const frame = contentElement.querySelector('#webbuild-test-frame');
+                if (!frame) return;
+                if (!rawUrl) {
+                    // Nothing to preview — keep the iframe blank.
+                    return;
+                }
+
+                // For "downloaded server" exports (the local mode) we
+                // can't iframe the zipped source. Best we can do is
+                // render the *running* server as a stand-in — that's
+                // what the user is actually exporting anyway.
+                if (isLocal) {
+                    frame.src = basePath + '/';
+                    return;
+                }
+
+                // Always force single-file output for the preview —
+                // it's the only mode that iframes cleanly. The user's
+                // choice of zip-vs-single only affects the actual
+                // export, not the preview.
+                const p = new URLSearchParams();
+                p.set('url', rawUrl);
+                if (useServer) p.set('useServer', '1');
+                if (noLimit)   p.set('noLimit', '1');
+                p.set('single', '1');
+                frame.src = basePath + '/buildwebfiles?' + p.toString();
+            }
+
             function getPrivacyPageHTML() {
                 return `
                     <div class="feature-page">
@@ -4033,70 +4134,426 @@
                     return ntVal;
                 }
 
-                webBuildButton?.addEventListener('click', async () => {
+                // Click is the ONE entry point. We don't bind to Enter,
+                // input changes, focus, or the address-bar's keydown so a
+                // user typing a URL never triggers a build by accident.
+                // `_wbBusy` is a hard re-entry guard on top of `disabled`
+                // — a fast double-click can still fire two click events
+                // before disabled propagates in some browsers.
+                let _wbBusy = false;
+                webBuildButton?.addEventListener('click', async (ev) => {
+                    if (!ev || ev.defaultPrevented) return;
+                    if (_wbBusy) return;
+
                     const raw = _wbCurrentUrl();
                     if (!raw) { _flashInvalid('Please enter a URL in the address bar first.'); return; }
 
-                    // Don't show the never-expire link result anymore — we
-                    // own the message slot until the user picks again.
+                    _wbBusy = true;
+                    webBuildButton.disabled = true;
+                    webBuildButton.setAttribute('aria-busy', 'true');
+
                     const linkResult = contentElement.querySelector('#newtab-link-result');
                     if (linkResult) { linkResult.classList.remove('active'); linkResult.style.display = 'none'; }
                     _wbHide(invalidBanner);
                     _wbHide(webbuildResult);
                     if (webbuildLoadingText) webbuildLoadingText.textContent = 'Checking the link…';
                     _wbShow(webbuildLoading);
-                    webBuildButton.disabled = true;
 
-                    let mode = 'static';
+                    const release = () => {
+                        _wbBusy = false;
+                        webBuildButton.disabled = false;
+                        webBuildButton.removeAttribute('aria-busy');
+                    };
+
+                    // Probe first so an invalid URL plays the shake
+                    // animation and never reaches the modal.
+                    let probe;
                     try {
                         const probeRes = await fetch(`${basePath}/buildwebfiles?probe=1&url=${encodeURIComponent(raw)}`);
-                        const probe = await probeRes.json().catch(() => ({}));
-                        if (!probe || !probe.ok) {
-                            _flashInvalid(probe?.reason || 'The link entered is invalid.');
-                            webBuildButton.disabled = false;
-                            return;
-                        }
-                        mode = probe.mode || 'static';
-                    } catch (e) {
+                        probe = await probeRes.json().catch(() => ({}));
+                    } catch (_e) {
+                        _wbHide(webbuildLoading);
                         _flashInvalid('Could not reach the link. Check your connection and try again.');
-                        webBuildButton.disabled = false;
+                        release();
+                        return;
+                    }
+                    if (!probe || !probe.ok) {
+                        _wbHide(webbuildLoading);
+                        _flashInvalid(probe.reason || 'The link entered is invalid.');
+                        release();
                         return;
                     }
 
-                    if (webbuildLoadingText) {
-                        webbuildLoadingText.textContent = mode === 'local'
-                            ? 'Packaging server source files…'
-                            : 'Crawling the site and bundling assets… this can take a minute on large sites.';
-                    }
+                    _wbHide(webbuildLoading);
+                    release();
+                    openWebBuildOptionsModal(raw, probe.mode || 'static', {
+                        onSuccess: (msg) => _setWebbuildSuccess(msg)
+                    });
+                });
+            }
 
-                    // Trigger the download via a temporary iframe so
-                    // streaming starts in the background and the rest of
-                    // the page stays responsive. We can't observe progress
-                    // (browsers don't fire load on streamed downloads
-                    // consistently), but we can detect the response began
-                    // by listening for `beforeunload` cancellation — easier
-                    // to just show success after a short delay since the
-                    // server will 400 first if anything's wrong.
+            // ============================================
+            // Web-build options modal
+            // ============================================
+            // Opened *after* a successful probe. Lets the user pick a
+            // filename, toggle "use their server" / "remove size limit"
+            // / "single file build", and choose Test (preview in a new
+            // tab) or Export (progress bar → download). Default flags
+            // are conservative: nothing happens until the user clicks
+            // Test or Export.
+            function openWebBuildOptionsModal(rawUrl, mode, opts) {
+                opts = opts || {};
+                if (document.getElementById('webbuild-options-modal')) return;
+
+                const isLocal = mode === 'local';
+                let host = 'site';
+                try { host = new URL(rawUrl).hostname || 'site'; } catch (_) { /* keep default */ }
+                const safeHost = host.replace(/[^a-z0-9\-_.]+/gi, '_').slice(0, 60) || 'site';
+                const defaultFilename = (isLocal ? _('cmFtbWVyaGVhZC1zb3VyY2U=') : safeHost)
+                    + '-webbuild-' + new Date().toISOString().slice(0, 10);
+
+                const modal = document.createElement('div');
+                modal.id = 'webbuild-options-modal';
+                modal.className = 'modal-overlay webbuild-modal-overlay';
+                modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--color-modal-backdrop, rgba(0,0,0,0.5)); backdrop-filter: blur(4px); z-index: 10001; display: flex; align-items: center; justify-content: center; overflow-y: auto; padding: 24px; animation: webbuildFadeIn 0.25s ease-out;';
+
+                const escA = _wbEscAttr;
+                modal.innerHTML = `
+                    <div class="webbuild-modal-card" role="dialog" aria-modal="true" aria-labelledby="webbuild-modal-title">
+                        <div class="webbuild-modal-header">
+                            <h2 id="webbuild-modal-title">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Get web-build files
+                            </h2>
+                            <button id="webbuild-modal-close" type="button" aria-label="Close" class="webbuild-modal-close-btn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="webbuild-modal-body">
+                            <p class="webbuild-source-row">
+                                <span class="webbuild-source-label">Source</span>
+                                <code class="webbuild-source-url">${escA(rawUrl)}</code>
+                                <span class="webbuild-source-mode">Mode: <strong>${isLocal ? 'this server\'s source tree' : 'static crawl'}</strong></span>
+                            </p>
+
+                            <div class="webbuild-field">
+                                <label for="webbuild-filename" class="webbuild-label">File name</label>
+                                <div class="webbuild-filename-input">
+                                    <input type="text" id="webbuild-filename" value="${escA(defaultFilename)}" autocomplete="off" spellcheck="false">
+                                    <span id="webbuild-filename-ext" class="webbuild-filename-suffix">.zip</span>
+                                </div>
+                                <p class="webbuild-hint">Letters, digits, dashes, dots and underscores only.</p>
+                            </div>
+
+                            <div class="webbuild-field">
+                                <div class="webbuild-toggle-row">
+                                    <div class="webbuild-toggle-text">
+                                        <div class="webbuild-toggle-title">Use their server</div>
+                                        <p class="webbuild-toggle-desc">
+                                            <strong>Off:</strong> ${isLocal ? 'export the static server source as-is.' : 'pull a fully self-contained static copy. The deployed site does not phone home; everything runs from the bundled files.'}
+                                            <br>
+                                            <strong>On:</strong> the exported copy keeps connecting back to the original site\'s servers (game servers, APIs, WebSockets, login), routed through this gateway so cross-origin and CORS rules can\'t block it. Pick this when the site needs a live backend (e.g. <code>bloxd.io</code>).
+                                        </p>
+                                    </div>
+                                    <label class="webbuild-switch" for="webbuild-useserver" aria-label="Use their server">
+                                        <input type="checkbox" id="webbuild-useserver">
+                                        <span class="webbuild-switch-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="webbuild-field">
+                                <div class="webbuild-toggle-row">
+                                    <div class="webbuild-toggle-text">
+                                        <div class="webbuild-toggle-title">Remove size limit</div>
+                                        <p class="webbuild-toggle-desc">
+                                            <strong>Off:</strong> default budgets stay in place (10 GB total for static crawls; 5 GB for <code>public/</code> and 25 GB hard cap for the rest in source mode).
+                                            <br>
+                                            <strong>On:</strong> the export ignores all size budgets and downloads everything it can reach.
+                                        </p>
+                                    </div>
+                                    <label class="webbuild-switch" for="webbuild-nolimit" aria-label="Remove size limit">
+                                        <input type="checkbox" id="webbuild-nolimit">
+                                        <span class="webbuild-switch-slider"></span>
+                                    </label>
+                                </div>
+                                <div id="webbuild-nolimit-warning" class="webbuild-warning" style="display:none;" role="alert">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
+                                        <line x1="12" y1="9" x2="12" y2="13"/>
+                                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                    </svg>
+                                    <div>
+                                        <strong>Heads up:</strong> if the site is too large, the export might take a long time and the resulting file might be very big. Make sure you have the bandwidth and disk space.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="webbuild-field">
+                                <div class="webbuild-toggle-row">
+                                    <div class="webbuild-toggle-text">
+                                        <div class="webbuild-toggle-title">
+                                            Single file build
+                                            ${isLocal ? '<span class="webbuild-pill">unavailable in source mode</span>' : ''}
+                                        </div>
+                                        <p class="webbuild-toggle-desc">
+                                            <strong>Off:</strong> export a folder of files inside a <code>.zip</code>.
+                                            <br>
+                                            <strong>On:</strong> bundle the entire site into one self-contained <code>.html</code> file with every CSS, JS, image and font inlined as a data URI. Static sites only.
+                                        </p>
+                                    </div>
+                                    <label class="webbuild-switch ${isLocal ? 'is-disabled' : ''}" for="webbuild-single" aria-label="Single file build">
+                                        <input type="checkbox" id="webbuild-single" ${isLocal ? 'disabled' : ''}>
+                                        <span class="webbuild-switch-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="webbuild-progress" class="webbuild-progress" style="display:none;" aria-live="polite">
+                                <div class="webbuild-progress-text" id="webbuild-progress-text">Preparing export…</div>
+                                <div class="webbuild-progress-track">
+                                    <div class="webbuild-progress-fill webbuild-progress-fill-indeterminate" id="webbuild-progress-fill"></div>
+                                </div>
+                                <div class="webbuild-progress-stats" id="webbuild-progress-stats"></div>
+                            </div>
+                            <div id="webbuild-modal-error" class="webbuild-warning webbuild-error-banner" style="display:none;" role="alert">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="12" y1="8" x2="12" y2="12"/>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                </svg>
+                                <div id="webbuild-modal-error-text">Something went wrong.</div>
+                            </div>
+                        </div>
+
+                        <div class="webbuild-modal-footer">
+                            <button id="webbuild-test-btn"   type="button" class="webbuild-modal-btn webbuild-modal-btn-secondary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <polygon points="5 3 19 12 5 21 5 3"/>
+                                </svg>
+                                Test
+                            </button>
+                            <button id="webbuild-export-btn" type="button" class="webbuild-modal-btn webbuild-modal-btn-primary">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Export
+                            </button>
+                        </div>
+                    </div>
+                `;
+
+                document.body.appendChild(modal);
+
+                const $ = (sel) => modal.querySelector(sel);
+                const closeBtn      = $('#webbuild-modal-close');
+                const fileInput     = $('#webbuild-filename');
+                const fileExt       = $('#webbuild-filename-ext');
+                const useServer     = $('#webbuild-useserver');
+                const noLimit       = $('#webbuild-nolimit');
+                const noLimitWarn   = $('#webbuild-nolimit-warning');
+                const singleFile    = $('#webbuild-single');
+                const testBtn       = $('#webbuild-test-btn');
+                const exportBtn     = $('#webbuild-export-btn');
+                const progress      = $('#webbuild-progress');
+                const progressText  = $('#webbuild-progress-text');
+                const progressFill  = $('#webbuild-progress-fill');
+                const progressStats = $('#webbuild-progress-stats');
+                const modalError    = $('#webbuild-modal-error');
+                const modalErrorText= $('#webbuild-modal-error-text');
+
+                const sanitizeFilename = (v) =>
+                    String(v || '').trim()
+                        .replace(/[^a-z0-9\-_.]+/gi, '_')
+                        .replace(/\.(zip|html?)$/i, '')
+                        .slice(0, 80) || 'site';
+                const updateExtSuffix = () => {
+                    const ext = (singleFile.checked && !isLocal) ? '.html' : '.zip';
+                    if (fileExt) fileExt.textContent = ext;
+                };
+                fileInput.addEventListener('blur', () => { fileInput.value = sanitizeFilename(fileInput.value); });
+                singleFile.addEventListener('change', updateExtSuffix);
+                noLimit.addEventListener('change', () => {
+                    noLimitWarn.style.display = noLimit.checked ? 'flex' : 'none';
+                });
+
+                const showError = (msg) => {
+                    modalErrorText.textContent = msg || 'Something went wrong.';
+                    modalError.style.display = 'flex';
+                };
+                const hideError = () => { modalError.style.display = 'none'; };
+
+                let abortCtrl = null;
+                const closeModal = () => {
+                    if (abortCtrl) { try { abortCtrl.abort(); } catch (_) {} }
+                    modal.style.animation = 'webbuildFadeOut 0.18s ease-out forwards';
+                    setTimeout(() => { try { modal.remove(); } catch (_) {} }, 200);
+                };
+                closeBtn.addEventListener('click', closeModal);
+                modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+                const escHandler = (e) => {
+                    if (e.key === 'Escape' && document.body.contains(modal)) {
+                        closeModal();
+                        document.removeEventListener('keydown', escHandler);
+                    }
+                };
+                document.addEventListener('keydown', escHandler);
+
+                const buildEndpointParams = () => {
+                    const p = new URLSearchParams();
+                    p.set('url', rawUrl);
+                    if (isLocal) p.set('mode', 'local');
+                    const fname = sanitizeFilename(fileInput.value);
+                    if (fname) p.set('filename', fname);
+                    if (useServer.checked) p.set('useServer', '1');
+                    if (noLimit.checked)   p.set('noLimit', '1');
+                    if (singleFile.checked && !isLocal) p.set('single', '1');
+                    return p;
+                };
+
+                // ── Test ─────────────────────────────────────────────
+                // Opens jq://web-build-test/ in a new tab. The tab page
+                // re-encodes the same options and embeds the build via
+                // an iframe so the user gets a live preview.
+                testBtn.addEventListener('click', () => {
+                    hideError();
+                    const p = buildEndpointParams();
                     try {
-                        const downloadUrl = `${basePath}/buildwebfiles?url=${encodeURIComponent(raw)}` + (mode === 'local' ? '&mode=local' : '');
+                        if (typeof createTab === 'function') {
+                            createTab('jq://web-build-test/?' + p.toString(), 'Web build test');
+                        } else {
+                            window.open(basePath + '/buildwebfiles?' + p.toString(), '_blank', 'noopener');
+                        }
+                        closeModal();
+                    } catch (e) {
+                        showError('Could not open test tab: ' + (e && e.message ? e.message : e));
+                    }
+                });
+
+                // ── Export ───────────────────────────────────────────
+                // Streamed fetch with progress events. The bar is
+                // indeterminate unless the server sends Content-Length,
+                // but the bytes-received counter always advances so the
+                // user sees forward motion.
+                let exportInFlight = false;
+                exportBtn.addEventListener('click', async () => {
+                    if (exportInFlight) return;
+                    exportInFlight = true;
+                    hideError();
+                    progress.style.display = 'flex';
+                    progressText.textContent = 'Starting export…';
+                    progressFill.style.width = '0%';
+                    progressFill.classList.add('webbuild-progress-fill-indeterminate');
+                    progressStats.textContent = '';
+                    testBtn.disabled = true;
+                    exportBtn.disabled = true;
+                    closeBtn.setAttribute('aria-disabled', 'true');
+
+                    const params = buildEndpointParams();
+                    const downloadUrl = basePath + '/buildwebfiles?' + params.toString();
+                    const fname = sanitizeFilename(fileInput.value);
+                    const ext = (singleFile.checked && !isLocal) ? '.html' : '.zip';
+                    const suggestedFilename = fname + ext;
+
+                    abortCtrl = new AbortController();
+                    try {
+                        const resp = await fetch(downloadUrl, { signal: abortCtrl.signal });
+                        if (!resp.ok) {
+                            let reason = 'HTTP ' + resp.status;
+                            try {
+                                const j = await resp.clone().json();
+                                if (j && j.reason) reason = j.reason;
+                            } catch (_) { /* not json, fall back to status */ }
+                            throw new Error(reason);
+                        }
+                        progressText.textContent = (singleFile.checked && !isLocal)
+                            ? 'Building single-file bundle…'
+                            : (isLocal ? 'Packaging server source…' : 'Crawling and packaging assets…');
+
+                        const totalHeader = resp.headers.get('Content-Length');
+                        const total = totalHeader ? parseInt(totalHeader, 10) : 0;
+                        if (total > 0) progressFill.classList.remove('webbuild-progress-fill-indeterminate');
+
+                        const reader = resp.body.getReader();
+                        const chunks = [];
+                        let received = 0;
+                        for (;;) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            chunks.push(value);
+                            received += value.length;
+                            if (total > 0) {
+                                progressFill.style.width = Math.min(100, Math.round((received / total) * 100)) + '%';
+                            }
+                            progressStats.textContent =
+                                _wbFormatBytes(received) + (total > 0 ? ' / ' + _wbFormatBytes(total) : ' downloaded');
+                        }
+                        progressFill.classList.remove('webbuild-progress-fill-indeterminate');
+                        progressFill.style.width = '100%';
+                        progressText.textContent = 'Saving file…';
+
+                        const ctype = resp.headers.get('Content-Type') || '';
+                        const blob = new Blob(chunks, { type: ctype || 'application/octet-stream' });
+                        const objUrl = URL.createObjectURL(blob);
                         const a = document.createElement('a');
-                        a.href = downloadUrl;
+                        a.href = objUrl;
+                        a.download = suggestedFilename;
                         a.rel = 'noopener';
                         a.style.display = 'none';
                         document.body.appendChild(a);
                         a.click();
-                        setTimeout(() => { try { document.body.removeChild(a); } catch (_) {} }, 1000);
+                        setTimeout(() => {
+                            try { document.body.removeChild(a); } catch (_) {}
+                            try { URL.revokeObjectURL(objUrl); } catch (_) {}
+                        }, 800);
 
-                        const friendlyMode = mode === 'local'
-                            ? 'Bundling this server\'s source tree (public/, src/, …).'
-                            : 'Crawling and bundling the site as a portable static archive.';
-                        _setWebbuildSuccess(friendlyMode + ' The download will start shortly. Large sites may take a minute.');
+                        progressText.textContent = 'Done — your download has started.';
+                        if (typeof opts.onSuccess === 'function') {
+                            opts.onSuccess('Your web-build files are downloading. (' + _wbFormatBytes(received) + ')');
+                        }
+                        setTimeout(closeModal, 700);
                     } catch (e) {
-                        _flashInvalid('Download failed: ' + (e?.message || 'unknown error'));
+                        if (e && e.name === 'AbortError') {
+                            return;
+                        }
+                        progress.style.display = 'none';
+                        showError(e && e.message ? e.message : 'Export failed.');
+                        testBtn.disabled = false;
+                        exportBtn.disabled = false;
+                        closeBtn.removeAttribute('aria-disabled');
+                        exportInFlight = false;
                     } finally {
-                        webBuildButton.disabled = false;
+                        abortCtrl = null;
                     }
                 });
+
+                requestAnimationFrame(() => { try { fileInput.focus(); fileInput.select(); } catch (_) {} });
+            }
+
+            function _wbFormatBytes(n) {
+                if (!Number.isFinite(n) || n < 0) return '0 B';
+                const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+                let i = 0;
+                while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+                const decimals = i === 0 ? 0 : (n < 10 ? 2 : n < 100 ? 1 : 0);
+                return n.toFixed(decimals) + ' ' + units[i];
+            }
+
+            function _wbEscAttr(s) {
+                return String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
             }
 
             // ============================================

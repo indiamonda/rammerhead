@@ -389,6 +389,20 @@ async function buildStaticSite(rootUrl, zip, opts = {}) {
     const o = Object.assign({}, DEFAULTS.static, opts);
     const root = new URL(rootUrl);
     const rootOrigin = root.origin;
+    const useServer = !!opts.useServer;
+    // Build the proxy bootstrap once. We inject it into every HTML
+    // page just inside <head>. When `useServer` is off this is null
+    // and no injection happens. The BASE we hand the bridge has the
+    // form `<protocol>://<host>/<sessionId>` — that's the only path
+    // shape rammerhead's URL router accepts. Without the trailing
+    // session ID the proxy 404s every request and the bridge is a
+    // no-op.
+    const proxyBase = (useServer && opts.proxyHostHeader && opts.proxySessionId)
+        ? (resolveProxyProtocol(opts) + '://' + opts.proxyHostHeader + '/' + opts.proxySessionId)
+        : null;
+    const proxyBootstrap = proxyBase
+        ? '<script data-rh-bridge="1">' + buildProxyBridgeScript(proxyBase) + '</script>'
+        : null;
 
     const pageQueue = []; // {url, depth}
     const visitedPages = new Set();
@@ -518,7 +532,17 @@ async function buildStaticSite(rootUrl, zip, opts = {}) {
         if (isHtml) {
             const html = res.body.toString('utf8');
             const mapper = makeMapper(finalUrl, zipPath);
-            const rewritten = rewriteHtml(html, finalUrl, mapper);
+            let rewritten = rewriteHtml(html, finalUrl, mapper);
+            // Inject the proxy bootstrap if "Use their server" is on.
+            // We insert just after the opening <head> so it runs before
+            // any of the page's own scripts can capture fetch/XHR/WS.
+            if (proxyBootstrap) {
+                if (/<head[^>]*>/i.test(rewritten)) {
+                    rewritten = rewritten.replace(/<head[^>]*>/i, (m) => m + proxyBootstrap);
+                } else {
+                    rewritten = proxyBootstrap + rewritten;
+                }
+            }
             // Find <a href> targets that the mapper already enqueued; we
             // re-enqueue here with proper depth so deep crawls stop at
             // maxDepth.
@@ -816,11 +840,442 @@ async function buildLocalSite(zip, opts = {}) {
     return manifest;
 }
 
+// ---- Single-file static build ----------------------------------------------
+
+/**
+ * Crawl `rootUrl` and return a single self-contained HTML document with
+ * every reachable CSS/JS/image/font/sub-page inlined as either
+ * `<style>`, `<script>`, or `data:` URI. Sub-page links become
+ * `javascript:void(0)` or relative anchors so navigation inside the
+ * iframe-able preview stays put.
+ *
+ * Use this when the user wants a one-file deliverable they can open
+ * straight from disk or post anywhere (chat, paste-bin, S3 object).
+ * It's static-only — the file has no live backend by definition.
+ *
+ * Note: we deliberately don't crawl beyond the root page here. The
+ * point of single-file is "drop a copy of *this page* somewhere", not
+ * "drop a copy of the whole site". Pulling sub-pages would produce a
+ * giant unreadable blob. Anchor links to other pages stay as absolute
+ * URLs so they still work online.
+ */
+async function buildSingleFileSite(rootUrl, opts = {}) {
+    const o = Object.assign({}, DEFAULTS.static, opts);
+    const root = new URL(rootUrl);
+    const rootOrigin = root.origin;
+    const useServer = !!opts.useServer;
+    // Real proxy host the bridge will use at runtime. See
+    // `buildStaticSite` for why we need the session ID baked in.
+    const proxyBase = (useServer && opts.proxyHostHeader && opts.proxySessionId)
+        ? (resolveProxyProtocol(opts) + '://' + opts.proxyHostHeader + '/' + opts.proxySessionId)
+        : null;
+
+    // Fetch the root page first.
+    const pageRes = await fetchUrl(rootUrl, {
+        timeoutMs: o.timeoutMs,
+        maxBytes: o.maxPerFileBytes,
+        userAgent: o.userAgent
+    });
+    if (pageRes.statusCode >= 400) throw new Error('HTTP ' + pageRes.statusCode + ' on root URL');
+
+    let html = pageRes.body.toString('utf8');
+    const finalUrl = pageRes.finalUrl;
+
+    // Cache fetched assets (inlined as data URIs) so the same image
+    // referenced ten times only downloads once.
+    const inlineCache = new Map(); // absUrl -> string (data URI or text)
+    let totalInlined = 0;
+    const totalCap = o.maxTotalBytes;
+
+    async function fetchAsDataUri(absUrl) {
+        if (inlineCache.has(absUrl)) return inlineCache.get(absUrl);
+        try {
+            const r = await fetchUrl(absUrl, {
+                timeoutMs: o.timeoutMs,
+                maxBytes: o.maxPerFileBytes,
+                userAgent: o.userAgent
+            });
+            if (r.statusCode >= 400) {
+                inlineCache.set(absUrl, null);
+                return null;
+            }
+            if (totalInlined + r.body.length > totalCap) {
+                // Over-cap: leave as absolute. Marking with `null`
+                // tells the rewriter to keep the original URL.
+                inlineCache.set(absUrl, null);
+                return null;
+            }
+            totalInlined += r.body.length;
+            const ct = (r.headers['content-type'] || 'application/octet-stream').split(';')[0].trim();
+            const b64 = r.body.toString('base64');
+            const dataUri = 'data:' + ct + ';base64,' + b64;
+            inlineCache.set(absUrl, dataUri);
+            return dataUri;
+        } catch (_) {
+            inlineCache.set(absUrl, null);
+            return null;
+        }
+    }
+
+    async function fetchAsText(absUrl) {
+        if (inlineCache.has(absUrl)) return inlineCache.get(absUrl);
+        try {
+            const r = await fetchUrl(absUrl, {
+                timeoutMs: o.timeoutMs,
+                maxBytes: o.maxPerFileBytes,
+                userAgent: o.userAgent
+            });
+            if (r.statusCode >= 400) {
+                inlineCache.set(absUrl, null);
+                return null;
+            }
+            if (totalInlined + r.body.length > totalCap) {
+                inlineCache.set(absUrl, null);
+                return null;
+            }
+            totalInlined += r.body.length;
+            const text = r.body.toString('utf8');
+            inlineCache.set(absUrl, text);
+            return text;
+        } catch (_) {
+            inlineCache.set(absUrl, null);
+            return null;
+        }
+    }
+
+    // Pass 1: rewrite the HTML, scheduling fetches as needed. We use a
+    // two-pass approach: collect references first, await all of them,
+    // then substitute. That keeps total wall time roughly constant
+    // even when many assets exist (we fan out in parallel).
+
+    const pendingTasks = []; // {placeholder, resolver}
+    let phToken = 0;
+    const _ph = () => '__WBP' + (++phToken).toString(36) + '__';
+
+    function rewriteRefForSingleFile(rawValue, baseUrl, ctx) {
+        const abs = tryResolveUrl(rawValue, baseUrl || finalUrl);
+        if (!abs) return null;
+        const parsed = new URL(abs);
+        const fragment = parsed.hash;
+        parsed.hash = '';
+        const cleanAbs = parsed.href;
+
+        // Page-y links (anchors, iframes, forms): keep as absolute so
+        // the user clicking through still goes somewhere sensible.
+        if (ctx.isPageLike) {
+            // Same-origin and #fragment: keep the fragment for in-page
+            // anchors; otherwise leave the absolute URL alone.
+            if (parsed.origin === rootOrigin && parsed.pathname === root.pathname && fragment) {
+                return fragment;
+            }
+            return cleanAbs + fragment;
+        }
+
+        // Asset-y: schedule a data-URI fetch, return a placeholder.
+        const ph = _ph();
+        pendingTasks.push({
+            placeholder: ph,
+            resolver: async () => {
+                const dataUri = await fetchAsDataUri(cleanAbs);
+                return dataUri || cleanAbs; // fall back to absolute if too big or failed
+            }
+        });
+        return ph + fragment;
+    }
+
+    // First pass: inline external <link rel="stylesheet"> and
+    // <script src=…> bodies. We do this BEFORE rewriteHtml swaps the
+    // URLs out for placeholders — otherwise the link/script regexes
+    // would see the placeholder string as the href/src and fail to
+    // resolve back to the real asset.
+    html = await inlineExternalCssAndScripts(html, finalUrl, fetchAsText, fetchAsDataUri, rootOrigin, root, totalCap, () => totalInlined, (n) => { totalInlined = n; }, o);
+
+    // Second pass: walk HTML, replacing remaining URL attrs (img,
+    // poster, srcset, inline url(), …) with placeholders. The link/
+    // script tags we just rewrote are now `<style>`/`<script>` and
+    // don't carry href/src anymore, so the rewriter skips them.
+    html = rewriteHtml(html, finalUrl, rewriteRefForSingleFile);
+
+    // Run the placeholder fetches in parallel and substitute in.
+    const limit = (o.concurrency || 6);
+    let cursor = 0;
+    const results = new Array(pendingTasks.length);
+    async function worker() {
+        while (cursor < pendingTasks.length) {
+            const i = cursor++;
+            try { results[i] = await pendingTasks[i].resolver(); }
+            catch (_) { results[i] = null; }
+        }
+    }
+    await Promise.all(Array(Math.min(limit, pendingTasks.length || 1)).fill(0).map(worker));
+    for (let i = 0; i < pendingTasks.length; i++) {
+        const ph = pendingTasks[i].placeholder;
+        const rep = (results[i] != null ? results[i] : ph).toString();
+        // Global replace via split/join (no regex) so any special
+        // characters in `rep` (e.g. `$&`) don't get interpreted.
+        html = html.split(ph).join(rep.replace(/"/g, '&quot;'));
+    }
+
+    // Add a small header comment + (optionally) the proxy-bridge
+    // bootstrap. The bootstrap is injected at the very top so it
+    // captures fetch / XHR / WebSocket *before* any of the page's
+    // own scripts can grab references to the originals.
+    let prelude = '<!-- Built by Rammerhead Web-Build (single-file). Source: '
+        + finalUrl + '. Generated: ' + new Date().toISOString() + ' -->\n';
+    if (proxyBase) {
+        prelude += '<script data-rh-bridge="1">' + buildProxyBridgeScript(proxyBase) + '</script>\n';
+    }
+    html = prelude + html;
+
+    return html;
+}
+
+/**
+ * Walk an HTML string and inline external <link rel="stylesheet"> and
+ * <script src=…> tags as <style> / <script> bodies. Used by single-file
+ * builds; the regular crawler builder treats them as separate files.
+ */
+async function inlineExternalCssAndScripts(html, baseUrl, fetchText, fetchData, rootOrigin, root, totalCap, getTotal, setTotal, opts) {
+    // <link rel="stylesheet" href="…"> → <style>…</style>
+    html = await replaceAsync(html, /<link\b([^>]*?)\srel\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))([^>]*)>/gi,
+        async (full, before, _q, dq, sq, bare, after) => {
+            const rel = (dq != null ? dq : sq != null ? sq : bare || '').toLowerCase();
+            if (!/\bstylesheet\b/.test(rel)) return full;
+            const hrefMatch = (full.match(/\shref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i)) || [];
+            const href = hrefMatch[2] != null ? hrefMatch[2] : hrefMatch[3] != null ? hrefMatch[3] : hrefMatch[4];
+            if (!href) return full;
+            const abs = tryResolveUrl(href, baseUrl);
+            if (!abs) return full;
+            const css = await fetchText(abs);
+            if (typeof css !== 'string') return full;
+
+            // Recurse into url()/import() inside the fetched CSS so
+            // referenced fonts/images get inlined too.
+            const inlined = await rewriteCssInline(css, abs, fetchData);
+            return '<style data-rh-from="' + _attrEscape(abs) + '">\n' + inlined + '\n</style>';
+        });
+
+    // <script src="…"></script> → <script>…</script>
+    html = await replaceAsync(html, /<script\b([^>]*?)\ssrc\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))([^>]*)>([\s\S]*?)<\/script>/gi,
+        async (full, before, _q, dq, sq, bare, after, _body) => {
+            const src = dq != null ? dq : sq != null ? sq : bare;
+            if (!src) return full;
+            const abs = tryResolveUrl(src, baseUrl);
+            if (!abs) return full;
+            const code = await fetchText(abs);
+            if (typeof code !== 'string') return full;
+            // Strip src attr but keep type/integrity if present —
+            // wait, we're not doing module type, just blindly inline
+            // as classic script. Modules would need special handling
+            // (different type, ESM imports etc.). For best-effort
+            // single-file, this gets us 95% of pages.
+            const safe = code.replace(/<\/script/gi, '<\\/script');
+            return '<script data-rh-from="' + _attrEscape(abs) + '">\n' + safe + '\n<\/script>';
+        });
+
+    return html;
+
+    // — local helpers —
+    function _attrEscape(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    /* eslint-disable no-unused-vars */
+    // (rootOrigin/root/opts/getTotal/setTotal currently unused — kept
+    // for parity with the buffered builder's signature so callers can
+    // pass through context if/when we add per-page budgets.)
+    /* eslint-enable no-unused-vars */
+}
+
+/**
+ * Like `rewriteCss`, but resolves url(...) targets to data: URIs by
+ * actually fetching the referenced bytes. Used for single-file builds
+ * where there's no separate file system to drop sibling files into.
+ */
+async function rewriteCssInline(cssBody, baseUrl, fetchData) {
+    let out = cssBody;
+    // url(...) — fetch and replace.
+    const urlRe = /url\(\s*("([^"]*)"|'([^']*)'|([^)]+))\s*\)/gi;
+    out = await replaceAsync(out, urlRe, async (full, _q, dq, sq, bare) => {
+        const value = (dq != null ? dq : sq != null ? sq : bare != null ? bare : '').trim();
+        if (!value || value.startsWith('data:') || value.startsWith('#')) return full;
+        const abs = tryResolveUrl(value, baseUrl);
+        if (!abs) return full;
+        const data = await fetchData(abs);
+        if (!data) return full;
+        return 'url("' + data + '")';
+    });
+    // @import "..." — fetch and inline as another @import won't help
+    // here; we fetch the imported CSS, recurse, and splice it in
+    // before the rest of the file (so cascade order is preserved).
+    const importRe = /@import\s+("([^"]*)"|'([^']*)')\s*;?/gi;
+    out = await replaceAsync(out, importRe, async (_full, _q, dq, sq) => {
+        const v = (dq != null ? dq : sq).trim();
+        if (!v) return '';
+        const abs = tryResolveUrl(v, baseUrl);
+        if (!abs) return '';
+        try {
+            const sub = await (async () => {
+                const text = await fetchData(abs);
+                // fetchData returns a data: URI; extract the body so
+                // we can splice CSS rather than re-encode it.
+                if (typeof text !== 'string' || !text.startsWith('data:')) return null;
+                const comma = text.indexOf(',');
+                if (comma < 0) return null;
+                const meta = text.slice(5, comma);
+                const body = text.slice(comma + 1);
+                if (/;base64/.test(meta)) {
+                    return Buffer.from(body, 'base64').toString('utf8');
+                }
+                return decodeURIComponent(body);
+            })();
+            if (typeof sub !== 'string') return '';
+            return await rewriteCssInline(sub, abs, fetchData);
+        } catch (_) { return ''; }
+    });
+    return out;
+}
+
+/**
+ * Async-safe wrapper around `String.prototype.replace`. Awaits the
+ * mapper for each match, preserves order, and does not mangle indexes
+ * when the replacement length differs from the match.
+ */
+async function replaceAsync(str, regex, mapper) {
+    const matches = [];
+    str.replace(regex, (...args) => { matches.push(args); return ''; });
+    if (!matches.length) return str;
+
+    const results = await Promise.all(matches.map((args) => Promise.resolve(mapper(...args))));
+    let out = '';
+    let cursor = 0;
+    let i = 0;
+    str.replace(regex, function reassemble(match) {
+        const idx = arguments[arguments.length - 2];
+        out += str.slice(cursor, idx) + (results[i] != null ? results[i] : match);
+        cursor = idx + match.length;
+        i++;
+        return '';
+    });
+    out += str.slice(cursor);
+    return out;
+}
+
+// ---- "Use their server" proxy-bridge bootstrap -----------------------------
+
+/**
+ * Pick http vs https for the proxy base URL. We honor the request's
+ * own protocol (via X-Forwarded-Proto when behind a reverse proxy,
+ * or req.connection.encrypted otherwise) so the bridge doesn't end
+ * up mixing protocols when the deployed copy talks back to the
+ * rammerhead host. Localhost defaults to http; anything else
+ * defaults to https when we don't have explicit info.
+ */
+function resolveProxyProtocol(opts) {
+    if (opts && opts.proxyProtocol === 'http') return 'http';
+    if (opts && opts.proxyProtocol === 'https') return 'https';
+    const host = (opts && opts.proxyHostHeader) || '';
+    if (host.startsWith('localhost') || /^127\./.test(host) || /^0\.0\.0\.0/.test(host)) return 'http';
+    return 'https';
+}
+
+
+/**
+ * Returns a tiny self-contained JS string. When the deployed copy of
+ * the export runs, it overrides `fetch`, `XMLHttpRequest`, and
+ * `WebSocket` so any absolute URL still flows through the rammerhead
+ * proxy that built the export. That makes dynamic backends keep
+ * working even when the user opens the file from `file://` or hosts
+ * it on a different origin.
+ *
+ * The proxy host is templated as `__BASE__` and substituted by the
+ * caller; passing it as a parameter would require the bridge to know
+ * its own host dynamically, which adds complexity for no gain.
+ *
+ * The bridge intentionally fails open: if the rammerhead host is
+ * unreachable the original fetch/XHR/WebSocket still runs against the
+ * absolute URL (which will probably hit CORS). That's better than
+ * silently breaking the exported page.
+ */
+function buildProxyBridgeScript(proxyBase) {
+    // BASE must already include `<host>/<sessionId>` — see the
+    // resolveProxyProtocol/proxyBase wiring in the callers. The
+    // bridge then forms `${BASE}/${absoluteUrl}` for HTTP requests
+    // and the matching `wss?` form for WebSockets.
+    return ';(function(){\n' +
+        '  var BASE = ' + JSON.stringify(proxyBase) + ';\n' +
+        '  if (!BASE) return;\n' +
+        '  // BASE looks like "https://rammerhead.example.com/<sessionId>".\n' +
+        '  // Trailing slashes are tolerated.\n' +
+        '  BASE = BASE.replace(/\\/+$/, "");\n' +
+        '  function rh_proxy(u){\n' +
+        '    if (typeof u !== "string") return u;\n' +
+        '    if (!/^https?:\\/\\//i.test(u)) return u;\n' +
+        '    if (u.indexOf(BASE + "/") === 0) return u;\n' +
+        '    return BASE + "/" + u;\n' +
+        '  }\n' +
+        '  function rh_proxy_ws(u){\n' +
+        '    if (typeof u !== "string") return u;\n' +
+        '    if (!/^wss?:\\/\\//i.test(u)) return u;\n' +
+        '    var http = u.replace(/^ws:/i,"http:").replace(/^wss:/i,"https:");\n' +
+        '    var proxied = rh_proxy(http);\n' +
+        '    // Match the source scheme on the way back so a wss://\n' +
+        '    // call stays secure once routed through the proxy.\n' +
+        '    return /^wss:/i.test(u) ? proxied.replace(/^http:/i,"wss:").replace(/^https:/i,"wss:")\n' +
+        '                            : proxied.replace(/^https:/i,"ws:").replace(/^http:/i,"ws:");\n' +
+        '  }\n' +
+        '  try {\n' +
+        '    var origFetch = window.fetch;\n' +
+        '    if (origFetch) window.fetch = function(input, init){\n' +
+        '      try {\n' +
+        '        if (typeof input === "string") input = rh_proxy(input);\n' +
+        '        else if (input && input.url) input = new Request(rh_proxy(input.url), input);\n' +
+        '      } catch(_){}\n' +
+        '      return origFetch.call(this, input, init);\n' +
+        '    };\n' +
+        '  } catch(_){}\n' +
+        '  try {\n' +
+        '    var origOpen = XMLHttpRequest.prototype.open;\n' +
+        '    XMLHttpRequest.prototype.open = function(method, url){\n' +
+        '      try { url = rh_proxy(url); } catch(_){}\n' +
+        '      var args = [method, url].concat(Array.prototype.slice.call(arguments, 2));\n' +
+        '      return origOpen.apply(this, args);\n' +
+        '    };\n' +
+        '  } catch(_){}\n' +
+        '  try {\n' +
+        '    var OrigWS = window.WebSocket;\n' +
+        '    if (OrigWS) {\n' +
+        '      var WrappedWS = function(url, protocols){\n' +
+        '        try { url = rh_proxy_ws(url); } catch(_){}\n' +
+        '        return protocols ? new OrigWS(url, protocols) : new OrigWS(url);\n' +
+        '      };\n' +
+        '      WrappedWS.prototype = OrigWS.prototype;\n' +
+        '      WrappedWS.CONNECTING = OrigWS.CONNECTING; WrappedWS.OPEN = OrigWS.OPEN;\n' +
+        '      WrappedWS.CLOSING = OrigWS.CLOSING; WrappedWS.CLOSED = OrigWS.CLOSED;\n' +
+        '      window.WebSocket = WrappedWS;\n' +
+        '    }\n' +
+        '  } catch(_){}\n' +
+        '  // For navigations (clicks on <a href>), best-effort: rewrite\n' +
+        '  // top-level navigations so the deployed copy stays browseable\n' +
+        '  // through the proxy. Form submissions use the same hook.\n' +
+        '  try {\n' +
+        '    document.addEventListener("click", function(e){\n' +
+        '      var el = e.target && e.target.closest && e.target.closest("a[href]");\n' +
+        '      if (!el) return;\n' +
+        '      var href = el.getAttribute("href");\n' +
+        '      if (!/^https?:\\/\\//i.test(href)) return;\n' +
+        '      el.setAttribute("href", rh_proxy(href));\n' +
+        '    }, true);\n' +
+        '  } catch(_){}\n' +
+        '})();\n';
+}
+
 module.exports = {
     fetchUrl,
     probeUrl,
     buildStaticSite,
     buildLocalSite,
+    buildSingleFileSite,
     urlToZipPath,
     relativePath,
     DEFAULTS

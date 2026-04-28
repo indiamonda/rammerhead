@@ -595,6 +595,279 @@ if(document.head)document.head.appendChild(_s);
 else document.addEventListener("DOMContentLoaded",function(){document.head.appendChild(_s)});
 })()</script>`;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// KEYWORD-FILTER PREVENTION (LIGHTSPEED / GOGUARDIAN / LINEWIZE / SECURLY)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// School content-filter products scan proxied responses for telltale strings
+// like `unblocked`, `proxy`, `rammerhead`, `lightspeed`, etc. — both in raw
+// HTML/JS source AND in DOM textContent after JS runs (some products inject
+// agents into the browser that re-scan the rendered DOM).
+//
+// We defeat both vectors with two complementary techniques (lifted from
+// jimmyqrg.github.io's `PreventKeywordFilter.md`, generalised to apply to
+// arbitrary proxied content):
+//
+//   1.  `_t(s)`  — wraps every other character of `s` with a `<s>` element
+//                  set to `font-size:0; opacity:0; pointer-events:none;
+//                  user-select:none` containing 1-2 random letters. Visually
+//                  identical, but `textContent` returns gibberish (e.g.
+//                  `Lightspeed` → `Lxhipgheqtbsspqnemzed`) and Ctrl+F
+//                  in-page search no longer matches.
+//
+//   2.  `_(b64)` — runtime `atob` shorthand. JS string literals that contain
+//                  flaggable keywords can be rewritten as `_('TGlnaHRzcGVlZA==')`
+//                  so the raw bytes never appear in the served bundle.
+//
+// We expose BOTH globally on `window` (the user explicitly requested this:
+// "make sure that use prevent keyword filter for everything … it uses some
+// functions defined in their scripts, that doesn't work globally"). Then a
+// single MutationObserver-driven runtime walks the DOM and applies `_t()` to
+// any visible text node / sensitive attribute that contains a keyword.
+//
+// Keyword list: kept INTENTIONALLY narrow — only universally-flagged proxy
+// markers (`rammerhead`, `unblocker`, `bypass`, …) plus the names of the
+// filter products themselves. Generic words (`game`, `school`) are NOT
+// included because they appear naturally in legitimate content.
+const KEYWORD_FILTER_SCRIPT = `<script>(function(){
+if(typeof window==="undefined"||window.__rhKF)return;window.__rhKF=1;
+// Globals — many of the techniques in PreventKeywordFilter.md depend on
+// these being callable from arbitrary inline scripts. We define them with
+// non-enumerable descriptors so they don't show up in \`Object.keys(window)\`
+// / \`for...in\` and don't ping content-scanners that watch the window keyset.
+function _atobSafe(s){try{return atob(s)}catch(e){return s}}
+// _t() — exactly the algorithm from jimmyqrg.github.io/PreventKeywordFilter.md.
+// Probabilistic for visual variety (the original uses Math.random()>.4 to keep
+// some pairs unbroken so the rendered text doesn't look unnaturally spaced
+// when the <s> tags collapse). Used by inline scripts that imported _t from
+// the original site.
+function _t(s){if(s==null)return"";s=String(s);var r="",i,j,c,l;for(i=0;i<s.length;i++){r+=s.charAt(i);if(i<s.length-1&&Math.random()>.4){c="";l=1+(Math.random()*2|0);for(j=0;j<l;j++)c+=String.fromCharCode(97+(Math.random()*26|0));r+='<s style="font-size:0;position:absolute;opacity:0;pointer-events:none;user-select:none">'+c+'</s>'}}return r}
+// _t() variant used INTERNALLY by the runtime mangler. Inserts junk between
+// EVERY pair of characters so the resulting textContent is guaranteed to
+// not match the keyword (e.g. "proxy" → "p\0r\0o\0x\0y" — 0% chance any
+// random sample stays unmangled). Without this, ~2.5% of keyword instances
+// stayed intact (P(no junk on all 4 gaps of a 5-char word)=0.4^4≈2.5%) and
+// Ctrl+F still matched a few results on long pages.
+function _tStrong(s){if(s==null)return"";s=String(s);var r="",i,j,c,l;for(i=0;i<s.length;i++){r+=s.charAt(i);if(i<s.length-1){c="";l=1+(Math.random()*2|0);for(j=0;j<l;j++)c+=String.fromCharCode(97+(Math.random()*26|0));r+='<s style="font-size:0;position:absolute;opacity:0;pointer-events:none;user-select:none">'+c+'</s>'}}return r}
+try{
+  var d1={value:_atobSafe,configurable:true,writable:true,enumerable:false};
+  var d2={value:_t,configurable:true,writable:true,enumerable:false};
+  if(!('_' in window))Object.defineProperty(window,'_',d1);
+  if(!('_t' in window))Object.defineProperty(window,'_t',d2);
+}catch(e){window._=_atobSafe;window._t=_t}
+// Master keyword list. Lower-case; matched case-insensitively. Sorted
+// longest-first at runtime so partial-overlapping matches don't double-hit.
+var KW=[
+  // Proxy / bypass identifiers (highest signal for filters).
+  "rammerhead","hammerhead","ultraviolet","scramjet","corrosion",
+  "unblocker","unblocked","unblocking","unblock",
+  "proxies","proxy",
+  "bypass","noblock","noblocker",
+  "cloak","cloaking","cloaker",
+  "panickey","panic key",
+  // Filter-product brand names — when a filter agent sees its OWN name it
+  // immediately escalates ("definitely a proxy if it talks about us").
+  "goguardian","linewize","securly","lightspeed",
+  "contentkeeper","iboss","barracuda","fortiguard","cisco umbrella",
+  "bark","smoothwall","cipa","blocksi","deledao","gaggle","mosyle",
+  // Sites/services frequently flagged together.
+  "hackwize","jimmyqrg","jqrg","gn-math","tampermonkey",
+  // Safety net: we ALSO mangle the proxy hostname & well-known proxy hubs
+  // so DPI scanners that sniff for them (rare but possible) come up empty.
+  "rammerhead.org","rammerhead.fly.dev"
+];
+KW.sort(function(a,b){return b.length-a.length});
+var KW_RE=null;
+function _esc(s){return s.replace(/[.*+?^\${}()|[\\]\\\\]/g,"\\\\$&")}
+function _buildRe(){if(KW_RE)return KW_RE;KW_RE=new RegExp("("+KW.map(_esc).join("|")+")","gi");return KW_RE}
+function _mangleText(t){if(!t)return null;if(t.length<3)return null;var lo=t.toLowerCase(),hit=false,i;for(i=0;i<KW.length;i++){if(lo.indexOf(KW[i])!==-1){hit=true;break}}if(!hit)return null;return t.replace(_buildRe(),function(m){return _tStrong(m)})}
+// Plain-text version (no <s> tags) for places the browser parses as plain
+// text — like document.title and meta description.
+function _maskText(t){if(!t)return t;return t.replace(_buildRe(),function(m){return m.charAt(0)+m.charAt(m.length-1)})}
+// Skip: <script>, <style>, <textarea>, contenteditable, <input>/<select>
+// values, and anything inside a Hammerhead shadow-UI. (Their text isn't
+// shown to the user OR is a value the page reads back — mangling would
+// either be wasted work or break functionality.)
+var SKIP_TAGS={SCRIPT:1,STYLE:1,TEXTAREA:1,NOSCRIPT:1,IFRAME:1,CODE:1,PRE:1};
+function _skip(node){var p=node.parentNode;while(p&&p.nodeType===1){if(SKIP_TAGS[p.tagName])return true;if(p.isContentEditable)return true;p=p.parentNode}return false}
+function _walk(root){
+  if(!root||!root.nodeType)return;
+  var d=root.ownerDocument||document;
+  if(!d.createTreeWalker)return;
+  try{
+    var w=d.createTreeWalker(root,NodeFilter.SHOW_TEXT,null);
+    var nodes=[],n;
+    while(n=w.nextNode())nodes.push(n);
+    for(var i=0;i<nodes.length;i++){
+      var node=nodes[i];
+      if(!node||!node.nodeValue||node.nodeValue.length<4)continue;
+      if(_skip(node))continue;
+      var mangled=_mangleText(node.nodeValue);
+      if(mangled===null||mangled===node.nodeValue)continue;
+      var tpl=d.createElement("span");
+      tpl.innerHTML=mangled;
+      node.parentNode.replaceChild(tpl,node);
+    }
+  }catch(e){}
+}
+// Mangle high-risk attributes (alt, title, aria-label, placeholder).
+var ATTR_LIST=["alt","title","aria-label","placeholder"];
+function _walkAttrs(root){
+  if(!root||root.nodeType!==1)return;
+  try{
+    var all=root.querySelectorAll?root.querySelectorAll("*"):[];
+    for(var i=0;i<all.length;i++){
+      var el=all[i];
+      for(var j=0;j<ATTR_LIST.length;j++){
+        var a=ATTR_LIST[j];
+        if(!el.hasAttribute||!el.hasAttribute(a))continue;
+        var v=el.getAttribute(a);
+        var masked=_mangleText(v);
+        if(masked!==null&&masked!==v){
+          // strip <s> tags — attributes can't host HTML — fall back to mask.
+          el.setAttribute(a,_maskText(v));
+        }
+      }
+    }
+    // Also check the root itself.
+    if(root.hasAttribute){
+      for(var k=0;k<ATTR_LIST.length;k++){
+        var aa=ATTR_LIST[k];
+        if(!root.hasAttribute(aa))continue;
+        var vv=root.getAttribute(aa);
+        var mm=_mangleText(vv);
+        if(mm!==null&&mm!==vv)root.setAttribute(aa,_maskText(vv));
+      }
+    }
+  }catch(e){}
+}
+function _mangleTitle(){try{
+  if(!document.title)return;
+  var masked=_maskText(document.title);
+  if(masked&&masked!==document.title)document.title=masked;
+  // <meta name="description" content="...">
+  var metas=document.head?document.head.querySelectorAll('meta[name="description"],meta[name="keywords"]'):[];
+  for(var i=0;i<metas.length;i++){
+    var c=metas[i].getAttribute("content");
+    var m=_maskText(c||"");
+    if(m&&m!==c)metas[i].setAttribute("content",m);
+  }
+}catch(e){}}
+function _init(){
+  _mangleTitle();
+  _walk(document.body||document.documentElement);
+  _walkAttrs(document.body||document.documentElement);
+  try{
+    var mo=new MutationObserver(function(muts){
+      for(var i=0;i<muts.length;i++){
+        var m=muts[i];
+        if(m.type==="childList"){
+          for(var j=0;j<m.addedNodes.length;j++){
+            var node=m.addedNodes[j];
+            if(node.nodeType===3){
+              if(_skip(node))continue;
+              var v=_mangleText(node.nodeValue);
+              if(v===null||v===node.nodeValue)continue;
+              var s=document.createElement("span");
+              s.innerHTML=v;
+              node.parentNode&&node.parentNode.replaceChild(s,node);
+            } else if(node.nodeType===1){
+              _walk(node);
+              _walkAttrs(node);
+            }
+          }
+        } else if(m.type==="characterData"){
+          if(!m.target||_skip(m.target))continue;
+          var t=m.target;
+          var v2=_mangleText(t.nodeValue);
+          if(v2===null||v2===t.nodeValue)continue;
+          var s2=document.createElement("span");
+          s2.innerHTML=v2;
+          t.parentNode&&t.parentNode.replaceChild(s2,t);
+        } else if(m.type==="attributes"){
+          if(ATTR_LIST.indexOf(m.attributeName)===-1)continue;
+          if(!m.target||!m.target.getAttribute)continue;
+          var av=m.target.getAttribute(m.attributeName);
+          var am=_mangleText(av);
+          if(am!==null&&am!==av)m.target.setAttribute(m.attributeName,_maskText(av));
+        }
+      }
+    });
+    mo.observe(document.documentElement,{
+      childList:true,subtree:true,characterData:true,
+      attributes:true,attributeFilter:ATTR_LIST
+    });
+    // Re-mangle title whenever it changes (SPAs update document.title
+    // without a navigation, and the new value may contain a keyword).
+    var titleObserver=new MutationObserver(_mangleTitle);
+    if(document.head){
+      var titleEl=document.head.querySelector("title");
+      if(titleEl)titleObserver.observe(titleEl,{childList:true,characterData:true,subtree:true});
+    }
+  }catch(e){}
+}
+if(document.readyState==="loading"){
+  document.addEventListener("DOMContentLoaded",_init);
+}else{_init()}
+})()</script>`;
+
+// Server-side mangle: walk the response HTML and replace flaggable keywords
+// in places that the browser surfaces BEFORE our injected script runs —
+// `<title>`, `<meta name="description"|"keywords">`. We mask using
+// "first-letter + last-letter" (so "rammerhead" → "rd") which keeps the
+// title roughly the same length / readable shape but no longer matches the
+// flagged keyword.
+const _KW_LIST_FOR_SERVER = [
+    'rammerhead', 'hammerhead', 'ultraviolet', 'scramjet', 'corrosion',
+    'unblocker', 'unblocked', 'unblocking', 'unblock',
+    'proxies', 'proxy', 'bypass',
+    'cloak', 'cloaking', 'cloaker',
+    'noblock', 'noblocker',
+    'goguardian', 'linewize', 'securly', 'lightspeed',
+    'contentkeeper', 'iboss', 'barracuda', 'fortiguard',
+    'bark', 'smoothwall', 'blocksi', 'deledao', 'gaggle', 'mosyle',
+    'hackwize', 'jimmyqrg', 'jqrg',
+    'panickey', 'panic key',
+];
+_KW_LIST_FOR_SERVER.sort((a, b) => b.length - a.length);
+const _KW_SERVER_RE = new RegExp(
+    '(' + _KW_LIST_FOR_SERVER.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')',
+    'gi'
+);
+function _serverMaskKeyword(match) {
+    if (!match || match.length < 2) return match;
+    return match.charAt(0) + match.charAt(match.length - 1);
+}
+function _serverMaskText(s) {
+    if (!s) return s;
+    return s.replace(_KW_SERVER_RE, _serverMaskKeyword);
+}
+function _stripKeywordsFromMeta(html) {
+    if (typeof html !== 'string') return html;
+    // <title>…</title>
+    html = html.replace(/<title\b[^>]*>([\s\S]*?)<\/title>/gi, (m, body) => {
+        const masked = _serverMaskText(body);
+        return masked === body ? m : m.replace(body, masked);
+    });
+    // <meta name="description|keywords|application-name|apple-mobile-web-app-title" content="…">
+    html = html.replace(
+        /<meta\b([^>]*\bname\s*=\s*["'](?:description|keywords|application-name|apple-mobile-web-app-title|twitter:title|og:title|og:description|twitter:description)["'][^>]*\bcontent\s*=\s*["'])([^"']*)(["'][^>]*>)/gi,
+        (m, pre, content, post) => {
+            const masked = _serverMaskText(content);
+            return masked === content ? m : pre + masked + post;
+        }
+    );
+    // <meta property="og:title|og:description|twitter:title" content="…">
+    html = html.replace(
+        /<meta\b([^>]*\bproperty\s*=\s*["'](?:og:title|og:description|twitter:title|twitter:description)["'][^>]*\bcontent\s*=\s*["'])([^"']*)(["'][^>]*>)/gi,
+        (m, pre, content, post) => {
+            const masked = _serverMaskText(content);
+            return masked === content ? m : pre + masked + post;
+        }
+    );
+    return html;
+}
+
 // DDG HTML search: rewrite //duckduckgo.com/l/?uddg=<encoded-url>&rut=... → direct URL.
 // Must happen BEFORE Hammerhead processes the page (URL shuffling corrupts uddg values).
 const DDG_LINK_RE = /href="(\/\/duckduckgo\.com\/l\/\?[^"]*)"/gi;
@@ -789,6 +1062,31 @@ function _liteProcess(html, ctx, inject) {
 
     // Single-pass rewrite for href/src/action/poster/data attributes, srcset, and CSS url()
     const ATTR_AND_URL_RE = /((?:href|src|action|poster|data)\s*=\s*["'])(\/\/[^"']+|\/(?!\/)[^"']*|https?:\/\/[^"']+)(["'])|(srcset\s*=\s*")([^"]*)(")|(url\(\s*['"]?)((?:https?:)?\/\/[^'")]+)(['"]?\s*\))/gi;
+
+    // CRITICAL: extract <script>…</script> blocks before running ATTR_AND_URL_RE.
+    //
+    // Without this, the attribute regex matches inside JS regex literals and
+    // string contents that LOOK like HTML attributes (e.g. an inline AWS WAF
+    // challenge.js often contains `/href="https:\/\/…\/"/g`-shaped regexes that
+    // detect outbound URLs in the page). The regex matches `href="…"`, our
+    // rewriter inserts `/<sid>/origin` between the quote and the URL, and the
+    // mutated regex literal becomes `/href="/<sid>/https:\/\/…\//g` — which
+    // the browser parses as `/href="/` followed by `<` as a regex flag,
+    // producing the well-known SyntaxError ("Invalid regular expression
+    // flags") that bricks AWS WAF / DataDome / Cloudflare challenges.
+    //
+    // We replace each <script>…</script> with an opaque placeholder, run the
+    // attribute rewriter on the remaining HTML, then restore the script
+    // bodies untouched. The follow-up `<script>…</script>` rewriter (below)
+    // is the ONLY place that should mutate inline script content.
+    const _scriptBlocks = [];
+    const _SCRIPT_PLACEHOLDER_RE = /\u0000RH_S\u0000(\d+)\u0000/g;
+    html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, (m) => {
+        const idx = _scriptBlocks.length;
+        _scriptBlocks.push(m);
+        return `\u0000RH_S\u0000${idx}\u0000`;
+    });
+
     html = html.replace(ATTR_AND_URL_RE, (_m, aPre, aUrl, aPost, ssPre, ssVal, ssPost, uPre, uUrl, uPost) => {
         if (aPre) {
             if (aUrl.startsWith('//')) return aPre + relPrefix + 'https:' + aUrl + aPost;
@@ -808,6 +1106,8 @@ function _liteProcess(html, ctx, inject) {
         }
         return _m;
     });
+
+    html = html.replace(_SCRIPT_PLACEHOLDER_RE, (_m, idx) => _scriptBlocks[parseInt(idx, 10)] || _m);
 
     // Rewrite paths in ALL inline scripts — both module imports and JSON data
     // like __reactRouterManifest which contains "/cdn/assets/..." paths that
@@ -881,8 +1181,8 @@ function _rhIsChallengePage(){try{
   if(window.dataDomeOptions||window._cfa)return true;
   var html=document.documentElement&&document.documentElement.outerHTML||'';
   if(html.length<150000){
-    if(/awswaf\.com|aws-waf-token|AwsWafIntegration/i.test(html))return true;
-    if(/challenges\.cloudflare\.com|cdn-cgi\/challenge-platform|turnstile/i.test(html))return true;
+    if(/awswaf\\.com|aws-waf-token|AwsWafIntegration/i.test(html))return true;
+    if(/challenges\\.cloudflare\\.com|cdn-cgi\\/challenge-platform|turnstile/i.test(html))return true;
     if(/datadome|captcha-delivery/i.test(html))return true;
     if(/perimeterx|px-captcha|human-challenge/i.test(html))return true;
   }
@@ -1125,10 +1425,14 @@ const _DEV = !!process.env.DEVELOPMENT;
 const _AD_SCRIPT_ENABLED  = AD_BLOCKER_SCRIPT.replace(/__RH_AB_OFF__/g, 'false');
 const _AD_SCRIPT_DISABLED = AD_BLOCKER_SCRIPT.replace(/__RH_AB_OFF__/g, 'true');
 
-const INJECT_PROD_ENABLED  = ANTIDETECT_SCRIPT + _AD_SCRIPT_ENABLED;
-const INJECT_PROD_DISABLED = ANTIDETECT_SCRIPT + _AD_SCRIPT_DISABLED;
-const INJECT_DEV_ENABLED   = ANTIDETECT_SCRIPT + _AD_SCRIPT_ENABLED  + DEVTOOLS_SCRIPT;
-const INJECT_DEV_DISABLED  = ANTIDETECT_SCRIPT + _AD_SCRIPT_DISABLED + DEVTOOLS_SCRIPT;
+// KEYWORD_FILTER_SCRIPT is included in EVERY injection bundle: it's the only
+// thing that exposes `window._` / `window._t` to proxied JS, and it's also
+// what mangles flagged keywords in the runtime DOM. We put it FIRST so
+// any other injected scripts that happen to call `_(…)` already see it.
+const INJECT_PROD_ENABLED  = KEYWORD_FILTER_SCRIPT + ANTIDETECT_SCRIPT + _AD_SCRIPT_ENABLED;
+const INJECT_PROD_DISABLED = KEYWORD_FILTER_SCRIPT + ANTIDETECT_SCRIPT + _AD_SCRIPT_DISABLED;
+const INJECT_DEV_ENABLED   = KEYWORD_FILTER_SCRIPT + ANTIDETECT_SCRIPT + _AD_SCRIPT_ENABLED  + DEVTOOLS_SCRIPT;
+const INJECT_DEV_DISABLED  = KEYWORD_FILTER_SCRIPT + ANTIDETECT_SCRIPT + _AD_SCRIPT_DISABLED + DEVTOOLS_SCRIPT;
 
 // Resolve the user's ad-blocker preference for this specific request. The
 // __rh_ab cookie is set on the proxy origin by the parent UI (toolbar +
@@ -1166,6 +1470,11 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
         // Strip integrity/nonce for full processing too
         html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
         html = html.replace(/\s+nonce\s*=\s*["'][^"']*["']/gi, '');
+        // Server-side keyword-filter prevention: mask flagged terms inside
+        // <title>, og:/twitter:/description/keywords/application-name meta tags.
+        // These are the surfaces the browser shows BEFORE our runtime DOM
+        // mangler can reach the document, so they MUST be cleaned here.
+        html = _stripKeywordsFromMeta(html);
     }
 
     // Challenge-iframe early-return: when the destination *is* the challenge SDK
