@@ -122,7 +122,7 @@ const CF_SKIP_RE = new RegExp([
     // hCaptcha
     'hcaptcha\\.com',
     // AWS WAF
-    'aws-waf-token', 'awswaf\\.com', 'challenge\\.js',
+    'aws-waf-token',
     // PerimeterX / HUMAN
     'px-cdn\\.net', 'px-cloud\\.net', 'perimeterx', 'human-challenge',
     // DataDome

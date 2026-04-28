@@ -1005,33 +1005,37 @@ function _liteProcess(html, ctx, inject) {
     // attribute rewriter on the remaining HTML, then restore the script
     // bodies untouched. The follow-up `<script>…</script>` rewriter (below)
     // is the ONLY place that should mutate inline script content.
-    const _scriptBlocks = [];
-    const _SCRIPT_PLACEHOLDER_RE = /\u0000RH_S\u0000(\d+)\u0000/g;
-    html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, (m) => {
-        const idx = _scriptBlocks.length;
-        _scriptBlocks.push(m);
-        return `\u0000RH_S\u0000${idx}\u0000`;
-    });
-
-    html = html.replace(ATTR_AND_URL_RE, (_m, aPre, aUrl, aPost, ssPre, ssVal, ssPost, uPre, uUrl, uPost) => {
+    const getAttrReplacer = (isScript) => (_m, aPre, aUrl, aPost, ssPre, ssVal, ssPost, uPre, uUrl, uPost) => {
+        const prefix = isScript ? '/' + sid + '!s/' : relPrefix;
         if (aPre) {
-            if (aUrl.startsWith('//')) return aPre + relPrefix + 'https:' + aUrl + aPost;
-            if (/^https?:\/\//i.test(aUrl)) return aUrl.startsWith(proxyOrigin) ? _m : aPre + relPrefix + aUrl + aPost;
-            if (origin && aUrl.startsWith('/')) return aPre + relPrefix + origin + aUrl + aPost;
+            if (aUrl.startsWith('//')) return aPre + prefix + 'https:' + aUrl + aPost;
+            if (/^https?:\/\//i.test(aUrl)) return aUrl.startsWith(proxyOrigin) ? _m : aPre + prefix + aUrl + aPost;
+            if (origin && aUrl.startsWith('/')) return aPre + prefix + origin + aUrl + aPost;
             return _m;
         }
         if (ssPre) return ssPre + ssVal.replace(/((?:https?:)?\/\/[^\s,]+)/gi, u => {
             if (u.startsWith(proxyOrigin)) return u;
-            if (u.startsWith('//')) return relPrefix + 'https:' + u;
-            return relPrefix + u;
+            if (u.startsWith('//')) return prefix + 'https:' + u;
+            return prefix + u;
         }) + ssPost;
         if (uPre) {
             if (uUrl.startsWith(proxyOrigin)) return _m;
-            if (uUrl.startsWith('//')) return uPre + relPrefix + 'https:' + uUrl + uPost;
-            return uPre + relPrefix + uUrl + uPost;
+            if (uUrl.startsWith('//')) return uPre + prefix + 'https:' + uUrl + uPost;
+            return uPre + prefix + uUrl + uPost;
         }
         return _m;
+    };
+
+    const _scriptBlocks = [];
+    const _SCRIPT_PLACEHOLDER_RE = /\u0000RH_S\u0000(\d+)\u0000/g;
+    html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, (m) => {
+        const idx = _scriptBlocks.length;
+        const rewrittenM = m.replace(/^<script\b[^>]*>/i, tag => tag.replace(ATTR_AND_URL_RE, getAttrReplacer(true)));
+        _scriptBlocks.push(rewrittenM);
+        return `\u0000RH_S\u0000${idx}\u0000`;
     });
+
+    html = html.replace(ATTR_AND_URL_RE, getAttrReplacer(false));
 
     html = html.replace(_SCRIPT_PLACEHOLDER_RE, (_m, idx) => _scriptBlocks[parseInt(idx, 10)] || _m);
 
@@ -1157,6 +1161,16 @@ try{var du=new URL(D);var DO=du.origin;
 window.__rhDestUrl=du.href;
 function isRel(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/'&&u.indexOf('/'+S+'/')!==0}
 function pxRel(u){return O+'/'+S+'/'+DO+u}
+function pxScript(u){return _OP+S+'!s/'+u}
+function pxRelScript(u){var _u=u.charAt(0)==='/'?u:'/'+u;return _OP+S+'!s/'+DO+_u}
+function rwScript(u){if(!u||typeof u!=='string')return u;u=u.trim();
+if(u.indexOf(_SP)===0)return u;
+if(u.indexOf(_OP)===0){
+  var rest=u.substring(O.length);
+  if(_isProxyInternal(rest))return u;
+  return pxRelScript(rest);
+}
+if(isProto(u))return pxScript('https:'+u);if(isExt(u))return pxScript(u);if(isRel(u))return pxRelScript(u);return u}
 function _destFromPath(p){var sp='/'+S+'/';if(!p||p.indexOf(sp)!==0)return null;var r=p.substring(sp.length);if(/^https?:\\/\\//i.test(r))return r;return null}
 var _rl=window.location,_rr=_rl.replace.bind(_rl),_ra=_rl.assign.bind(_rl),_rrl=_rl.reload.bind(_rl);
 function _rhSafeNav(fn,arg){if(_rhBlocked){try{console.warn('[nav] navigation blocked (reload-loop guard active)')}catch(e){}return}return fn(arg)}
@@ -1179,6 +1193,8 @@ o[Symbol.toPrimitive]=function(){return du.href};_locCache=o;_locHref=h;return o
 set:function(v){_rhSafeNav(_rr,rw(''+v)||(''+v))}})}catch(e){}
 try{Object.defineProperty(document,'location',{configurable:true,enumerable:true,
 get:function(){return window.location},set:function(v){window.location=v}})}catch(e){}
+try{Object.defineProperty(document,'URL',{get:function(){return du.href},configurable:true})}catch(e){}
+try{Object.defineProperty(document,'documentURI',{get:function(){return du.href},configurable:true})}catch(e){}
 try{Object.defineProperty(document,'domain',{get:function(){return du.hostname},set:function(){},configurable:true})}catch(e){}
 try{Object.defineProperty(document,'referrer',{get:function(){return ''},configurable:true})}catch(e){}
 var oF=window.fetch;if(oF)window.fetch=function(u,o){
@@ -1237,7 +1253,9 @@ if(r){du=new URL(r+(_rl.search||'')+(_rl.hash||''));window.__rhDestUrl=du.href}
 else{du=new URL(_rl.pathname+(_rl.search||'')+(_rl.hash||''),DO+'/');window.__rhDestUrl=du.href}
 }catch(e){}});
 try{var sSA=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){
-var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')&&typeof v==='string'){v=rw(v);v=_fixCaptchaParams(v)}
+var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')&&typeof v==='string'){
+if(this.tagName==='SCRIPT'&&nl==='src'){v=rwScript(v)}else{v=rw(v)}
+v=_fixCaptchaParams(v)}
 return sSA.call(this,n,v)};
 var oGA=Element.prototype.getAttribute;Element.prototype.getAttribute=function(n){
 var v=oGA.call(this,n);if(v&&typeof v==='string'){var nl=n.toLowerCase();
@@ -1261,7 +1279,9 @@ els.forEach(function(E){if(!E||!E.prototype)return;
 var d=Object.getOwnPropertyDescriptor(E.prototype,attr);
 if(d&&d.set){var oSet=d.set,oGet=d.get;Object.defineProperty(E.prototype,attr,{configurable:true,enumerable:true,
 get:function(){return _stripProxy(oGet?oGet.call(this):undefined)},
-set:function(v){if(typeof v==='string'){v=rw(v);v=_fixCaptchaParams(v)}oSet.call(this,v)}})}})
+set:function(v){if(typeof v==='string'){
+if(E===HTMLScriptElement&&attr==='src'){v=rwScript(v)}else{v=rw(v)}
+v=_fixCaptchaParams(v)}oSet.call(this,v)}})}})
 })}catch(e){}
 try{var dCookie=Object.getOwnPropertyDescriptor(Document.prototype,'cookie');
 if(dCookie){var ogSet=dCookie.set,ogGet=dCookie.get;
@@ -1272,7 +1292,7 @@ function _pCk(v){var p={};var parts=String(v).split(';');for(var i=0;i<parts.len
 function _fSync(c){if(!c)return c;var seen={};var out=[];var parts=c.split(/;\\s*/);
 for(var i=0;i<parts.length;i++){var p=parts[i];if(!p)continue;
 if(p.indexOf('__rh_')===0)continue;
-var m=p.match(/^c\\|[^|]+\\|([^|]+)\\|[^|]*\\|[^|]*\\|[^|]*\\|[^|]*\\|[^=]*=(.*)$/);
+var m=p.match(/^[scw]+\\|[^|]+\\|([^|]+)\\|[^|]*\\|[^|]*\\|[^|]*\\|[^|]*\\|[^=]*=(.*)$/);
 if(m){var nm;try{nm=decodeURIComponent(m[1])}catch(e){nm=m[1]}
 if(!seen[nm]){seen[nm]=1;out.push(nm+'='+m[2])}continue}
 if(/^[scw]+\\|/.test(p))continue;
