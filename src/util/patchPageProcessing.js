@@ -648,11 +648,9 @@ if(typeof window==="undefined"||window.__rhKF)return;window.__rhKF=1;
 // non-enumerable descriptors so they don't show up in \`Object.keys(window)\`
 // / \`for...in\` and don't ping content-scanners that watch the window keyset.
 function _atobSafe(s){try{return atob(s)}catch(e){return s}}
-// _t() — exactly the algorithm from jimmyqrg.github.io/PreventKeywordFilter.md.
-// Probabilistic for visual variety (the original uses Math.random()>.4 to keep
-// some pairs unbroken so the rendered text doesn't look unnaturally spaced
-// when the <s> tags collapse). Used by inline scripts that imported _t from
-// the original site.
+// _t() — probabilistic char-wrapper. Inserts an invisible <s> with random
+// junk between ~60% of character pairs. Visually identical, but textContent
+// scrapes return gibberish so DOM-level keyword scanners can't match.
 function _t(s){if(s==null)return"";s=String(s);var r="",i,j,c,l;for(i=0;i<s.length;i++){r+=s.charAt(i);if(i<s.length-1&&Math.random()>.4){c="";l=1+(Math.random()*2|0);for(j=0;j<l;j++)c+=String.fromCharCode(97+(Math.random()*26|0));r+='<s style="font-size:0;position:absolute;opacity:0;pointer-events:none;user-select:none">'+c+'</s>'}}return r}
 // _t() variant used INTERNALLY by the runtime mangler. Inserts junk between
 // EVERY pair of characters so the resulting textContent is guaranteed to
@@ -674,69 +672,16 @@ try{
 var KW=_atobSafe("cmFtbWVyaGVhZCxoYW1tZXJoZWFkLHVsdHJhdmlvbGV0LHNjcmFtamV0LGNvcnJvc2lvbix1bmJsb2NrZXIsdW5ibG9ja2VkLHVuYmxvY2tpbmcsdW5ibG9jayxwcm94aWVzLHByb3h5LGJ5cGFzcyxub2Jsb2NrLG5vYmxvY2tlcixjbG9hayxjbG9ha2luZyxjbG9ha2VyLHBhbmlja2V5LHBhbmljIGtleSxnb2d1YXJkaWFuLGxpbmV3aXplLHNlY3VybHksbGlnaHRzcGVlZCxjb250ZW50a2VlcGVyLGlib3NzLGJhcnJhY3VkYSxmb3J0aWd1YXJkLGNpc2NvIHVtYnJlbGxhLGJhcmssc21vb3Rod2FsbCxjaXBhLGJsb2Nrc2ksZGVsZWRhbyxnYWdnbGUsbW9zeWxlLGhhY2t3aXplLGppbW15cXJnLGpxcmcsZ24tbWF0aCx0YW1wZXJtb25rZXkscmFtbWVyaGVhZC5vcmcscmFtbWVyaGVhZC5mbHkuZGV2").split(",");
 KW.sort(function(a,b){return b.length-a.length});
 var KW_RE=null;
+// Quick pre-check: a plain string scan that's ~10x faster than running the
+// full alternation regex on every node. Only build the regex on the first
+// real hit. Skips nodes that obviously don't contain any sensitive keyword.
+function _hasKw(s){if(!s)return false;var lo=s.toLowerCase();for(var i=0;i<KW.length;i++){if(lo.indexOf(KW[i])!==-1)return true}return false}
 function _esc(s){return s.replace(/[.*+?^\${}()|[\\]\\\\]/g,"\\\\$&")}
 function _buildRe(){if(KW_RE)return KW_RE;KW_RE=new RegExp("("+KW.map(_esc).join("|")+")","gi");return KW_RE}
-function _mangleText(t){if(!t)return null;if(t.length<3)return null;var lo=t.toLowerCase(),hit=false,i;for(i=0;i<KW.length;i++){if(lo.indexOf(KW[i])!==-1){hit=true;break}}if(!hit)return null;return t.replace(_buildRe(),function(m){return _tStrong(m)})}
+function _mangleText(t){if(!t)return null;if(t.length<3)return null;if(!_hasKw(t))return null;return t.replace(_buildRe(),function(m){return _tStrong(m)})}
 // Plain-text version (no <s> tags) for places the browser parses as plain
 // text — like document.title and meta description.
-function _maskText(t){if(!t)return t;return t.replace(_buildRe(),function(m){return m.charAt(0)+m.charAt(m.length-1)})}
-// Skip: <script>, <style>, <textarea>, contenteditable, <input>/<select>
-// values, and anything inside a Hammerhead shadow-UI. (Their text isn't
-// shown to the user OR is a value the page reads back — mangling would
-// either be wasted work or break functionality.)
-var SKIP_TAGS={SCRIPT:1,STYLE:1,TEXTAREA:1,NOSCRIPT:1,IFRAME:1,CODE:1,PRE:1};
-function _skip(node){var p=node.parentNode;while(p&&p.nodeType===1){if(SKIP_TAGS[p.tagName])return true;if(p.isContentEditable)return true;p=p.parentNode}return false}
-function _walk(root){
-  if(!root||!root.nodeType)return;
-  var d=root.ownerDocument||document;
-  if(!d.createTreeWalker)return;
-  try{
-    var w=d.createTreeWalker(root,NodeFilter.SHOW_TEXT,null);
-    var nodes=[],n;
-    while(n=w.nextNode())nodes.push(n);
-    for(var i=0;i<nodes.length;i++){
-      var node=nodes[i];
-      if(!node||!node.nodeValue||node.nodeValue.length<4)continue;
-      if(_skip(node))continue;
-      var mangled=_mangleText(node.nodeValue);
-      if(mangled===null||mangled===node.nodeValue)continue;
-      var tpl=d.createElement("span");
-      tpl.innerHTML=mangled;
-      node.parentNode.replaceChild(tpl,node);
-    }
-  }catch(e){}
-}
-// Mangle high-risk attributes (alt, title, aria-label, placeholder).
-var ATTR_LIST=["alt","title","aria-label","placeholder"];
-function _walkAttrs(root){
-  if(!root||root.nodeType!==1)return;
-  try{
-    var all=root.querySelectorAll?root.querySelectorAll("*"):[];
-    for(var i=0;i<all.length;i++){
-      var el=all[i];
-      for(var j=0;j<ATTR_LIST.length;j++){
-        var a=ATTR_LIST[j];
-        if(!el.hasAttribute||!el.hasAttribute(a))continue;
-        var v=el.getAttribute(a);
-        var masked=_mangleText(v);
-        if(masked!==null&&masked!==v){
-          // strip <s> tags — attributes can't host HTML — fall back to mask.
-          el.setAttribute(a,_maskText(v));
-        }
-      }
-    }
-    // Also check the root itself.
-    if(root.hasAttribute){
-      for(var k=0;k<ATTR_LIST.length;k++){
-        var aa=ATTR_LIST[k];
-        if(!root.hasAttribute(aa))continue;
-        var vv=root.getAttribute(aa);
-        var mm=_mangleText(vv);
-        if(mm!==null&&mm!==vv)root.setAttribute(aa,_maskText(vv));
-      }
-    }
-  }catch(e){}
-}
+function _maskText(t){if(!t)return t;if(!_hasKw(t))return t;return t.replace(_buildRe(),function(m){return m.charAt(0)+m.charAt(m.length-1)})}
 function _mangleTitle(){try{
   if(!document.title)return;
   var masked=_maskText(document.title);
@@ -749,56 +694,41 @@ function _mangleTitle(){try{
     if(m&&m!==c)metas[i].setAttribute("content",m);
   }
 }catch(e){}}
+// LIGHTWEIGHT runtime mangler.
+//
+// Earlier versions did a deep TreeWalker over <body> on init and then re-
+// walked every added subtree on every MutationObserver burst. On dense SPAs
+// (Discord chat, Bilibili feed, Reddit, etc.) that ran for hundreds of
+// milliseconds per frame and made pages hang.
+//
+// In practice, the only DOM surfaces a content-filter actually scans are
+// (a) document.title and (b) meta tags — both of which the SERVER-SIDE
+// mangler (\`_stripKeywordsFromMeta\`) already cleans before bytes leave
+// the proxy. The runtime walker is only useful for the rare case of a
+// page-script setting document.title later, or injecting a keyword into
+// rendered HTML that the server didn't see.
+//
+// We keep both \`_\` (atob) and \`_t\` exposed globally so PreventKeywordFilter
+// scripts that import them keep working, but we DROP the heavy DOM walker
+// in favour of two small observers: one watches \`<title>\`, the other
+// watches \`<meta>\` description/keywords. Anything else is a corner case
+// not worth pegging the main thread for.
 function _init(){
   _mangleTitle();
-  _walk(document.body||document.documentElement);
-  _walkAttrs(document.body||document.documentElement);
   try{
-    var mo=new MutationObserver(function(muts){
-      for(var i=0;i<muts.length;i++){
-        var m=muts[i];
-        if(m.type==="childList"){
-          for(var j=0;j<m.addedNodes.length;j++){
-            var node=m.addedNodes[j];
-            if(node.nodeType===3){
-              if(_skip(node))continue;
-              var v=_mangleText(node.nodeValue);
-              if(v===null||v===node.nodeValue)continue;
-              var s=document.createElement("span");
-              s.innerHTML=v;
-              node.parentNode&&node.parentNode.replaceChild(s,node);
-            } else if(node.nodeType===1){
-              _walk(node);
-              _walkAttrs(node);
-            }
-          }
-        } else if(m.type==="characterData"){
-          if(!m.target||_skip(m.target))continue;
-          var t=m.target;
-          var v2=_mangleText(t.nodeValue);
-          if(v2===null||v2===t.nodeValue)continue;
-          var s2=document.createElement("span");
-          s2.innerHTML=v2;
-          t.parentNode&&t.parentNode.replaceChild(s2,t);
-        } else if(m.type==="attributes"){
-          if(ATTR_LIST.indexOf(m.attributeName)===-1)continue;
-          if(!m.target||!m.target.getAttribute)continue;
-          var av=m.target.getAttribute(m.attributeName);
-          var am=_mangleText(av);
-          if(am!==null&&am!==av)m.target.setAttribute(m.attributeName,_maskText(av));
-        }
-      }
-    });
-    mo.observe(document.documentElement,{
-      childList:true,subtree:true,characterData:true,
-      attributes:true,attributeFilter:ATTR_LIST
-    });
-    // Re-mangle title whenever it changes (SPAs update document.title
-    // without a navigation, and the new value may contain a keyword).
     var titleObserver=new MutationObserver(_mangleTitle);
     if(document.head){
       var titleEl=document.head.querySelector("title");
       if(titleEl)titleObserver.observe(titleEl,{childList:true,characterData:true,subtree:true});
+      // Watch for new <title> elements appearing later (some SPAs replace it).
+      new MutationObserver(function(ml){
+        for(var i=0;i<ml.length;i++){var an=ml[i].addedNodes;for(var j=0;j<an.length;j++){
+          var n=an[j];if(n&&n.nodeType===1&&n.tagName==="TITLE"){
+            try{titleObserver.observe(n,{childList:true,characterData:true,subtree:true})}catch(e){}
+            _mangleTitle();
+          }
+        }}
+      }).observe(document.head,{childList:true});
     }
   }catch(e){}
 }
@@ -1349,17 +1279,35 @@ if(/^[scw]+\\|/.test(p))continue;
 var eq=p.indexOf('=');var nm2=eq>=0?p.substring(0,eq):p;
 if(!seen[nm2]){seen[nm2]=1;out.push(p)}}
 return out.join('; ')}
+// Captured proxy host (raw, BEFORE bridge spoofs anything). When a script
+// derives a cookie domain from \`location.hostname\` (which on proxied pages
+// is the proxy host itself — \`localhost\`, \`rammerhead.fly.dev\`, etc.), we
+// rewrite it back to the destination's real hostname so the cookie sticks
+// to the upstream's cookie jar instead of the proxy's. This is what unbreaks
+// AWS WAF / challenge cookies that use \`document.cookie = "name=v; domain=" + location.hostname\`.
+var _RH_PROXY_HOST_RAW;try{_RH_PROXY_HOST_RAW=(window.top&&window.top.location&&window.top.location.hostname)||location.hostname}catch(e){_RH_PROXY_HOST_RAW=location.hostname}
+function _rwCookieDom(d){if(!d)return d;
+var lc=d.toLowerCase();if(lc.charAt(0)==='.')lc=lc.substring(1);
+if(lc===_RH_PROXY_HOST_RAW||lc==='localhost'||lc==='127.0.0.1'||lc==='::1')return du.hostname;
+return d}
 Object.defineProperty(document,'cookie',{configurable:true,
 get:function(){return _fSync(ogGet.call(this))},
 set:function(v){
 try{var p=_pCk(v);
 if(p.name&&p.name.charAt(0)!=='_'&&!/^[scw]+\\|/.test(p.name)){
-var dom=p.domain||du.hostname;if(dom.charAt(0)==='.')dom=dom.substring(1);
+var dom=_rwCookieDom(p.domain)||du.hostname;if(dom.charAt(0)==='.')dom=dom.substring(1);
 var path=p.path||'/';
 var exp='';if(p.expires){try{var t=Date.parse(p.expires);if(!isNaN(t))exp=t.toString(36)}catch(e){}}
 var ma='';if(p.maxAge){var mn=parseInt(p.maxAge,10);if(!isNaN(mn))ma=mn.toString(36)}
 var now=Date.now().toString(36);
-var sk='c|'+S+'|'+encodeURIComponent(p.name)+'|'+encodeURIComponent(dom)+'|'+encodeURIComponent(path)+'|'+exp+'|'+now+'|'+ma;
+// Use 'cw|' (client+window-sync) prefix instead of plain 'c|'. Hammerhead's
+// generateSyncCookie auto-DELETES \`isClientSync && !isWindowSync\` cookies on
+// every response (the assumption is the page's window-sync will promote them
+// to \`cw|\` later). When we wrap document.cookie writes ourselves we have to
+// emit the already-window-synced form or the proxy strips the cookie before
+// it ever reaches the destination — that breaks AWS WAF tokens, hCaptcha
+// session cookies, and any other JS-written persistent cookie.
+var sk='cw|'+S+'|'+encodeURIComponent(p.name)+'|'+encodeURIComponent(dom)+'|'+encodeURIComponent(path)+'|'+exp+'|'+now+'|'+ma;
 var attrs=';path=/';
 if(p.maxAge)attrs+=';max-age='+p.maxAge;
 if(p.expires)attrs+=';expires='+p.expires;
