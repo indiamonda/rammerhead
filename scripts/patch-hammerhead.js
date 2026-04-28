@@ -488,6 +488,16 @@ const BRAND_REPLACEMENTS = [
     // CSS processing markers wrapped around every processed <style> block.
     ['/*hammerhead|stylesheet|start*/', '/*_d|css|s*/'],
     ['/*hammerhead|stylesheet|end*/', '/*_d|css|e*/'],
+    // Script-processing markers wrapped around every processed <script>.
+    // header.js exports these literal strings AND derives HEADER_RE from
+    // them, so as long as we rename the source/target literal in the
+    // exact same string, both add() and remove() stay consistent.
+    // We rebrand these three ahead of the catch-all `hammerhead|` rule
+    // so the resulting markers are SHORT and look like generic comments
+    // (no `script` word), reducing fingerprint surface.
+    ['/*hammerhead|script|processing-header-end*/', '/*_a|h*/'],
+    ['/*hammerhead|script|start*/', '/*_a|s*/'],
+    ['/*hammerhead|script|end*/', '/*_a|e*/'],
     // Embedded `hammerhead-` substring inside an internal event name.
     ['eval-hammerhead-script', 'eval-_d-script'],
     // document.write begin/end markers (visible in DOM during streaming writes).
@@ -571,6 +581,22 @@ const BRAND_REPLACEMENTS = [
 const BRAND_FILES = [
     // server-side
     'processing/style.js',
+    // header.js holds /*hammerhead|script|start*/ , /*hammerhead|script|end*/
+    // and /*hammerhead|script|processing-header-end*/ — these wrap EVERY
+    // script the proxy injects and were the most visible brand leak in the
+    // proxied response body (visible to keyword filters and to anyone
+    // viewing source). The regex constants HEADER_RE / PROCESSING_END_COMMENT_RE
+    // are derived from the same string literals so renaming them keeps
+    // remove() / add() functioning unchanged.
+    'processing/script/header.js',
+    // session/command.js — internal `hammerhead|command|*` markers used by
+    // the SERVICE-FRAME postMessage protocol (cookie sync, file upload).
+    // Visible in iframe service routes and stringified messages.
+    'session/command.js',
+    // processing/dom/index.js — `hammerhead|element-processed` and
+    // `hammerhead|autocomplete-attribute-absence-marker` are stamped on
+    // every processed DOM element / attribute.
+    'processing/dom/index.js',
     'processing/dom/internal-attributes.js',
     'processing/dom/internal-properties.js',
     'utils/get-storage-key.js',

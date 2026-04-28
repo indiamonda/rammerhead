@@ -464,7 +464,19 @@ const ANTIDETECT_SCRIPT = [
     'try{Object.defineProperty(window,"%_isd%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
     // Unconditional top/parent/self spoof so anti-iframe guards (TurboWarp, ad networks, etc.)
     // see top === self === parent even when hammerhead\'s own wrapping is still settling.
-    'try{Object.defineProperty(window,"top",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"parent",{get:function(){return window.self},configurable:true});Object.defineProperty(window,"frameElement",{get:function(){return null},configurable:true});}catch(e){}',
+    // CRITICAL: each spoof MUST be in its own try/catch. The previous combined
+    // version (single try/catch covering all three) silently aborted after
+    // `top` threw "Cannot redefine property: top" in same-origin iframes,
+    // leaving `parent` and `frameElement` untouched. That made every site
+    // running an iframe-detection guard (TurboWarp\'s "Invalid Embed" page,
+    // various ad networks, Facebook embed warnings, ...) believe the proxy
+    // page was running inside an iframe — which it IS, since the proxy UI
+    // wraps everything in <iframe>s for tab management. Splitting them
+    // ensures `parent` always succeeds (it\'s configurable on Chrome/FF) and
+    // we get the most important spoof for free.
+    'try{Object.defineProperty(window,"top",{get:function(){return window.self},configurable:true})}catch(e){}',
+    'try{Object.defineProperty(window,"parent",{get:function(){return window.self},configurable:true})}catch(e){}',
+    'try{Object.defineProperty(window,"frameElement",{get:function(){return null},configurable:true})}catch(e){}',
     'try{if(typeof crypto!=="undefined"&&!crypto.randomUUID){crypto.randomUUID=function(){var b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=(b[6]&0x0f)|0x40;b[8]=(b[8]&0x3f)|0x80;var h="";for(var i=0;i<16;i++){h+=(b[i]<16?"0":"")+b[i].toString(16);if(i===3||i===5||i===7||i===9)h+="-"}return h}}}catch(e){}',
     'try{if(!window.__tcfapi){window.__tcfapi=function(cmd,ver,cb){if(typeof cb==="function"){cb({cmpId:0,cmpVersion:0,gdprApplies:false,tcfPolicyVersion:2,cmpStatus:"error",eventStatus:"cmpuishown",tcString:"",isServiceSpecific:true,purposeOneTreatment:false,publisherCC:"US"},false)}}}}catch(e){}',
     // Fix cross-origin postMessage for captcha widgets (hCaptcha, reCAPTCHA, Turnstile, etc.).
@@ -655,27 +667,11 @@ try{
   if(!('_' in window))Object.defineProperty(window,'_',d1);
   if(!('_t' in window))Object.defineProperty(window,'_t',d2);
 }catch(e){window._=_atobSafe;window._t=_t}
-// Master keyword list. Lower-case; matched case-insensitively. Sorted
-// longest-first at runtime so partial-overlapping matches don't double-hit.
-var KW=[
-  // Proxy / bypass identifiers (highest signal for filters).
-  "rammerhead","hammerhead","ultraviolet","scramjet","corrosion",
-  "unblocker","unblocked","unblocking","unblock",
-  "proxies","proxy",
-  "bypass","noblock","noblocker",
-  "cloak","cloaking","cloaker",
-  "panickey","panic key",
-  // Filter-product brand names — when a filter agent sees its OWN name it
-  // immediately escalates ("definitely a proxy if it talks about us").
-  "goguardian","linewize","securly","lightspeed",
-  "contentkeeper","iboss","barracuda","fortiguard","cisco umbrella",
-  "bark","smoothwall","cipa","blocksi","deledao","gaggle","mosyle",
-  // Sites/services frequently flagged together.
-  "hackwize","jimmyqrg","jqrg","gn-math","tampermonkey",
-  // Safety net: we ALSO mangle the proxy hostname & well-known proxy hubs
-  // so DPI scanners that sniff for them (rare but possible) come up empty.
-  "rammerhead.org","rammerhead.fly.dev"
-];
+// Master keyword list — stored base64-encoded so the served HTML bytes
+// never literally contain the words being mangled (a content scanner that
+// looks for its own brand in response bodies would otherwise hit a 100%
+// match on the mangling script itself).
+var KW=_atobSafe("cmFtbWVyaGVhZCxoYW1tZXJoZWFkLHVsdHJhdmlvbGV0LHNjcmFtamV0LGNvcnJvc2lvbix1bmJsb2NrZXIsdW5ibG9ja2VkLHVuYmxvY2tpbmcsdW5ibG9jayxwcm94aWVzLHByb3h5LGJ5cGFzcyxub2Jsb2NrLG5vYmxvY2tlcixjbG9hayxjbG9ha2luZyxjbG9ha2VyLHBhbmlja2V5LHBhbmljIGtleSxnb2d1YXJkaWFuLGxpbmV3aXplLHNlY3VybHksbGlnaHRzcGVlZCxjb250ZW50a2VlcGVyLGlib3NzLGJhcnJhY3VkYSxmb3J0aWd1YXJkLGNpc2NvIHVtYnJlbGxhLGJhcmssc21vb3Rod2FsbCxjaXBhLGJsb2Nrc2ksZGVsZWRhbyxnYWdnbGUsbW9zeWxlLGhhY2t3aXplLGppbW15cXJnLGpxcmcsZ24tbWF0aCx0YW1wZXJtb25rZXkscmFtbWVyaGVhZC5vcmcscmFtbWVyaGVhZC5mbHkuZGV2").split(",");
 KW.sort(function(a,b){return b.length-a.length});
 var KW_RE=null;
 function _esc(s){return s.replace(/[.*+?^\${}()|[\\]\\\\]/g,"\\\\$&")}

@@ -232,14 +232,21 @@
         if (!shuffleDict) return;
 
         // Mirror of src/util/StrShuffler.js. The v2 length-prefixed format
-        // (`_rh1<5hex>:<body>`) lets the unshuffler know exactly where the
+        // (`_p1<5hex>:<body>`) lets the unshuffler know exactly where the
         // shuffled portion ends so any text appended by in-page JS (e.g.
         // `proxyUrl + "/chunk-name"`) survives the round trip without being
         // mangled by the position-dependent cipher.
+        // Indicator strings are intentionally short, generic, and contain no
+        // brand prefix (was `_rh1`/`_rhs`) so they don't fingerprint the
+        // proxy in every URL of every page.
         const mod = (n, m) => ((n % m) + m) % m;
         const baseDictionary = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
-        const shuffledIndicator = '_rhs';
-        const shuffledIndicatorV2 = '_rh1';
+        const shuffledIndicator = '_ps';
+        const shuffledIndicatorV2 = '_p1';
+        // Legacy indicators we still ACCEPT (but never emit) for back-compat
+        // with URLs saved/shared before the rename.
+        const _LEGACY_V1 = '_rhs';
+        const _LEGACY_V2 = '_rh1';
         const LEN_DIGITS = 5;
         const SEPARATOR = ':';
         const MAX_LEN = (1 << (LEN_DIGITS * 4)) - 1;
@@ -261,7 +268,12 @@
             }
             shuffle(str) {
                 if (typeof str !== 'string') return str;
-                if (str.startsWith(shuffledIndicatorV2) || str.startsWith(shuffledIndicator)) {
+                if (
+                    str.startsWith(shuffledIndicatorV2) ||
+                    str.startsWith(shuffledIndicator) ||
+                    str.startsWith(_LEGACY_V2) ||
+                    str.startsWith(_LEGACY_V1)
+                ) {
                     return str;
                 }
                 let shuffledStr = '';
@@ -303,12 +315,16 @@
             }
             unshuffle(str) {
                 if (typeof str !== 'string') return str;
-                if (str.startsWith(shuffledIndicatorV2)) {
-                    const headerLen = shuffledIndicatorV2.length + LEN_DIGITS + SEPARATOR.length;
+                // Pick whichever v2 indicator (new or legacy) starts the URL.
+                let _v2 = null;
+                if (str.startsWith(shuffledIndicatorV2)) _v2 = shuffledIndicatorV2;
+                else if (str.startsWith(_LEGACY_V2)) _v2 = _LEGACY_V2;
+                if (_v2) {
+                    const headerLen = _v2.length + LEN_DIGITS + SEPARATOR.length;
                     if (str.length < headerLen) return str;
-                    const lenHex = str.substr(shuffledIndicatorV2.length, LEN_DIGITS);
+                    const lenHex = str.substr(_v2.length, LEN_DIGITS);
                     if (!/^[0-9a-f]{5}$/i.test(lenHex)) return str;
-                    if (str.charAt(shuffledIndicatorV2.length + LEN_DIGITS) !== SEPARATOR) return str;
+                    if (str.charAt(_v2.length + LEN_DIGITS) !== SEPARATOR) return str;
                     const declaredLen = parseInt(lenHex, 16);
                     const bodyStart = headerLen;
                     const fullPayload = str.substring(bodyStart);
@@ -347,6 +363,9 @@
                 }
                 if (str.startsWith(shuffledIndicator)) {
                     return this._unshuffleBody(str.slice(shuffledIndicator.length));
+                }
+                if (str.startsWith(_LEGACY_V1)) {
+                    return this._unshuffleBody(str.slice(_LEGACY_V1.length));
                 }
                 return str;
             }

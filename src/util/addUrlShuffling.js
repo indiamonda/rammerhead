@@ -2,7 +2,10 @@ const RequestPipelineContext = require('testcafe-hammerhead/lib/request-pipeline
 const StrShuffler = require('./StrShuffler');
 const getSessionId = require('./getSessionId');
 
-const SHUFFLED_INDICATOR_RE = /_rh1[0-9a-f]{5}:|_rhs/i;
+// Matches both the new (`_p1`/`_ps`) and legacy (`_rh1`/`_rhs`) shuffler
+// indicators. Including the legacy form keeps any old saved/shared proxy
+// URL working after the brand-strip rename.
+const SHUFFLED_INDICATOR_RE = /(?:_p1|_rh1)[0-9a-f]{5}:|_(?:ps|rhs)/i;
 
 /**
  * Recover the shuffled URL form from a path that may have been re-encoded by an

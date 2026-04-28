@@ -30,11 +30,15 @@ const mod = (n, m) => ((n % m) + m) % m;
 const baseDictionary = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
 // Legacy indicator (no length prefix). We still RECOGNIZE this format on input
 // for old shared/saved URLs but never emit it any more.
-const shuffledIndicator = '_rhs';
+// Switched from `_rhs` → `_ps` to drop the "rh" (rammerhead) brand prefix that
+// was visible in every proxied URL of every page source. The replacement is
+// 1 char shorter and looks like a generic path-style ID.
+const shuffledIndicator = '_ps';
 // Versioned indicator. Emitted output looks like
-//   _rh1<HHHHH>:<shuffled-body>
+//   _p1<HHHHH>:<shuffled-body>
 // where HHHHH is the body length encoded as 5 lowercase hex digits.
-const shuffledIndicatorV2 = '_rh1';
+// (Was `_rh1` — same brand-strip rationale as above.)
+const shuffledIndicatorV2 = '_p1';
 const LEN_DIGITS = 5;
 const SEPARATOR = ':';
 const MAX_LEN = (1 << (LEN_DIGITS * 4)) - 1; // 0xFFFFF == 1048575
@@ -78,13 +82,22 @@ class StrShuffler {
     }
 
     /**
-     * Encode `str` into `_rh1<len>:<shuffled>` form. If the input is already
+     * Encode `str` into `_p1<len>:<shuffled>` form. If the input is already
      * shuffled (starts with the legacy or versioned indicator) it's returned
      * unchanged so we don't double-shuffle.
+     *
+     * Backward compat: also recognizes the OLD brand-prefixed indicators
+     * (`_rh1`, `_rhs`) so saved/shared URLs from before the rebrand still
+     * work without re-encoding.
      */
     shuffle(str) {
         if (typeof str !== 'string') return str;
-        if (str.startsWith(shuffledIndicatorV2) || str.startsWith(shuffledIndicator)) {
+        if (
+            str.startsWith(shuffledIndicatorV2) ||
+            str.startsWith(shuffledIndicator) ||
+            str.startsWith('_rh1') ||
+            str.startsWith('_rhs')
+        ) {
             return str;
         }
         let shuffledStr = '';
@@ -135,12 +148,19 @@ class StrShuffler {
     unshuffle(str) {
         if (typeof str !== 'string') return str;
 
-        if (str.startsWith(shuffledIndicatorV2)) {
-            const headerLen = shuffledIndicatorV2.length + LEN_DIGITS + SEPARATOR.length;
+        // Recognize either the new (`_p1`) or legacy (`_rh1`) v2 indicator.
+        // Saved URLs from before the brand-strip used `_rh1`; we still
+        // decode them so old links keep working.
+        let v2Indicator = null;
+        if (str.startsWith(shuffledIndicatorV2)) v2Indicator = shuffledIndicatorV2;
+        else if (str.startsWith('_rh1')) v2Indicator = '_rh1';
+
+        if (v2Indicator) {
+            const headerLen = v2Indicator.length + LEN_DIGITS + SEPARATOR.length;
             if (str.length < headerLen) return str;
-            const lenHex = str.substr(shuffledIndicatorV2.length, LEN_DIGITS);
+            const lenHex = str.substr(v2Indicator.length, LEN_DIGITS);
             if (!/^[0-9a-f]{5}$/i.test(lenHex)) return str;
-            if (str.charAt(shuffledIndicatorV2.length + LEN_DIGITS) !== SEPARATOR) return str;
+            if (str.charAt(v2Indicator.length + LEN_DIGITS) !== SEPARATOR) return str;
             const declaredLen = parseInt(lenHex, 16);
             const bodyStart = headerLen;
             const fullPayload = str.substring(bodyStart);
@@ -189,8 +209,13 @@ class StrShuffler {
             return declaredOut;
         }
 
+        // Legacy unsized indicator: accept both new (`_ps`) and old (`_rhs`)
+        // for the same backward-compat reason.
         if (str.startsWith(shuffledIndicator)) {
             return this._unshuffleBody(str.slice(shuffledIndicator.length));
+        }
+        if (str.startsWith('_rhs')) {
+            return this._unshuffleBody(str.slice(4));
         }
 
         return str;
@@ -224,11 +249,16 @@ StrShuffler.generateDictionary = generateDictionary;
 /**
  * Quick check whether `str` looks like a shuffled URL fragment in either
  * format. Used by callers that only need to decide "is this shuffled?"
- * without actually decoding it.
+ * without actually decoding it. Also recognizes the legacy brand-prefixed
+ * indicators (`_rh1`, `_rhs`) so old saved/shared URLs are still routed
+ * to the unshuffler instead of being treated as plain destination paths.
  */
 StrShuffler.isShuffled = function isShuffled(str) {
     return typeof str === 'string' && (
-        str.startsWith(shuffledIndicatorV2) || str.startsWith(shuffledIndicator)
+        str.startsWith(shuffledIndicatorV2) ||
+        str.startsWith(shuffledIndicator) ||
+        str.startsWith('_rh1') ||
+        str.startsWith('_rhs')
     );
 };
 

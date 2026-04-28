@@ -2457,16 +2457,28 @@
 
                             // --- Intercept <a> clicks & <form> submits that would escape the iframe ---
                             try {
+                                function _shouldOpenInNewProxyTab(e, a) {
+                                    var tgt = (a.getAttribute('target') || '').toLowerCase();
+                                    if (tgt === '_blank') return true;
+                                    // Modifier-driven new tab requests (Ctrl/Cmd-click, Shift-click)
+                                    if (e && (e.ctrlKey || e.metaKey || e.shiftKey)) return true;
+                                    // Middle-click (auxclick with button === 1)
+                                    if (e && e.button === 1) return true;
+                                    return false;
+                                }
                                 function handleLinkClick(e) {
                                     var a = e.target.closest ? e.target.closest('a[href]') : null;
                                     if (!a) return;
-                                    var tgt = (a.getAttribute('target') || '').toLowerCase();
                                     var href = a.getAttribute('href');
                                     if (!href || href.startsWith('javascript:')) return;
+                                    var tgt = (a.getAttribute('target') || '').toLowerCase();
 
-                                    if (tgt === '_blank') {
+                                    if (_shouldOpenInNewProxyTab(e, a)) {
                                         e.preventDefault();
                                         e.stopPropagation();
+                                        if (typeof e.stopImmediatePropagation === 'function') {
+                                            try { e.stopImmediatePropagation(); } catch(_) {}
+                                        }
                                         createTab(normalizeUrl(resolveUrl(href)));
                                     } else if (tgt === '_top' || tgt === '_parent') {
                                         e.preventDefault();
@@ -2474,6 +2486,21 @@
                                         loadTabContent(tabId, normalizeUrl(resolveUrl(href)));
                                     }
                                     // _self or no target — let the iframe handle it normally (stays inside iframe)
+                                }
+                                // auxclick fires for middle-click (button===1) and right-click (button===2);
+                                // we only act on middle-click because right-click is the context menu.
+                                function handleAuxClick(e) {
+                                    if (e.button !== 1) return;
+                                    var a = e.target.closest ? e.target.closest('a[href]') : null;
+                                    if (!a) return;
+                                    var href = a.getAttribute('href');
+                                    if (!href || href.startsWith('javascript:')) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (typeof e.stopImmediatePropagation === 'function') {
+                                        try { e.stopImmediatePropagation(); } catch(_) {}
+                                    }
+                                    createTab(normalizeUrl(resolveUrl(href)));
                                 }
 
                                 function handleFormSubmit(e) {
@@ -2501,6 +2528,7 @@
                                 }
 
                                 iframeDoc.addEventListener('click', handleLinkClick, true);
+                                iframeDoc.addEventListener('auxclick', handleAuxClick, true);
                                 iframeDoc.addEventListener('submit', handleFormSubmit, true);
 
                                 // Watch for dynamically-added elements too
