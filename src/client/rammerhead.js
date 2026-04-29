@@ -157,7 +157,7 @@
         }
         function getSyncStorageEndpoint() {
             return (
-                '/syncLocalStorage?sessionId=' + encodeURIComponent(sessionId) + '&origin=' + encodeURIComponent(origin)
+                '/_a/ls?sessionId=' + encodeURIComponent(sessionId) + '&origin=' + encodeURIComponent(origin)
             );
         }
         function localStorageRequest(data, callback) {

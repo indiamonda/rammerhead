@@ -81,7 +81,11 @@ RequestPipelineContext.prototype.dispatch = function (openSessions) {
     }
     if (session && session.shuffleDict) {
         const shuffler = new StrShuffler(session.shuffleDict);
+        const beforeUrl = this.req.url;
         this.req.url = replaceUrl(this.req.url, (url) => shuffler.unshuffle(url));
+        if (process.env.RH_DEBUG_URL && /chatgpt/i.test(this.req.url)) {
+            process.stdout.write('[REQ] ' + this.req.url.slice(-100) + '\n');
+        }
         let ref = this.req.headers[BUILTIN_HEADERS.referer];
         if (Array.isArray(ref)) ref = ref[0];
         if (getSessionId(ref) === sessionId) {

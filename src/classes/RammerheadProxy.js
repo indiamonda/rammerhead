@@ -23,6 +23,8 @@ require('../util/addUrlShuffling');
 require('../util/patchAsyncResourceProcessor');
 require('../util/patchTlsFingerprint');
 require('../util/patchEsotopeCodegen');
+require('../util/patchModuleScriptParsing');
+require('../util/patchDynamicImport');
 require('../util/patchScriptProcessing');
 require('../util/patchSameOriginPolicy');
 require('../util/patchResponseHeaders');
@@ -553,7 +555,7 @@ class RammerheadProxy extends Proxy {
      * @private
      */
     _setupLocalStorageServiceRoutes(disableSync) {
-        this.POST('/syncLocalStorage', async (req, res) => {
+        const localStorageSyncHandler = async (req, res) => {
             if (disableSync) {
                 sendErrorPage(req, res, 404, {
                     description: 'localStorage syncing is disabled on this server.',
@@ -658,7 +660,13 @@ class RammerheadProxy extends Proxy {
                 default:
                     return badRequest('unknown type ' + parsed.type);
             }
-        });
+        };
+        // New CDN-shaped path is the primary served URL — `_a/ls` is opaque
+        // and doesn't reveal the proxy's purpose. The legacy path keeps
+        // working so old cached pages (and any users on a previous build)
+        // can still sync their localStorage on first reload.
+        this.POST('/_a/ls', localStorageSyncHandler);
+        this.POST('/syncLocalStorage', localStorageSyncHandler);
     }
 
     openSession() {
