@@ -30,8 +30,8 @@
 
 const esotope = require('esotope-hammerhead');
 
-if (!esotope.__rhCodegenPatched) {
-    Object.defineProperty(esotope, '__rhCodegenPatched', { value: true });
+if (!esotope._a_codegenPatched) {
+    Object.defineProperty(esotope, '_a_codegenPatched', { value: true });
 
     const SKIP_KEYS = new Set(['loc', 'range', 'parent', 'leadingComments', 'trailingComments']);
 

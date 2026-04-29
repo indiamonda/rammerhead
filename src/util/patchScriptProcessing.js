@@ -43,7 +43,7 @@ const FALLBACK = [
 // Uses MutationObserver to detect iframes with unproxied src attributes.
 // Fallback chain: proxy URL → blob URL (proxy content) → blob URL (raw content via /__rh_raw with bridge).
 const IFRAME_PROXY = [
-    'if(typeof window!=="undefined"&&typeof document!=="undefined"&&!window.__rhIframe){window.__rhIframe=1;(function(){',
+    'if(typeof window!=="undefined"&&typeof document!=="undefined"&&!window._a_ifi){window._a_ifi=1;(function(){',
     'function getHH(){try{return window["%_d%"]}catch(e){return null}}',
     'var _pOrig,_sid;',
     'function getCtx(){',
@@ -70,11 +70,11 @@ const IFRAME_PROXY = [
       'try{el.src=URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}))}catch(e){}',
     '}',
     'function fixIframe(el){',
-    'if(!el||el.tagName!=="IFRAME"||el.__rhIf)return;',
+    'if(!el||el.tagName!=="IFRAME"||el._a_if)return;',
     'var src=el.getAttribute("src")||"";',
     'if(!isAbs(src))return;',
     'if(getCtx()&&src.indexOf(_pOrig)===0)return;',
-    'el.__rhIf=1;',
+    'el._a_if=1;',
     'if(!getHH()){var p=proxyUrl(src);if(p)try{el.setAttribute("src",p)}catch(e){}}',
     'var pu=proxyUrl(src);if(!pu)return;',
       'el.addEventListener("error",function(){',
@@ -101,7 +101,7 @@ const IFRAME_PROXY = [
               'else try{var f=n.getElementsByTagName("iframe");',
               'for(var k=0;k<f.length;k++)fixIframe(f[k])}catch(e){}}',
           '}else if(m.type==="attributes"&&m.target&&m.target.tagName==="IFRAME"){',
-            'var _ns=m.target.getAttribute("src")||"";if(isAbs(_ns)&&(!getCtx()||_ns.indexOf(_pOrig)!==0)){m.target.__rhIf=0;fixIframe(m.target)}}',
+            'var _ns=m.target.getAttribute("src")||"";if(isAbs(_ns)&&(!getCtx()||_ns.indexOf(_pOrig)!==0)){m.target._a_if=0;fixIframe(m.target)}}',
         '}',
       '}).observe(root,{childList:true,subtree:true,attributes:true,attributeFilter:["src"]})}catch(e){}',
     '}',

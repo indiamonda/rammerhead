@@ -41,7 +41,7 @@ httpUtil.respond404 = function patchedRespond404(res) {
     }
     return orig404.apply(this, arguments);
 };
-httpUtil.respond404.__rhPatched = true;
+httpUtil.respond404._a_patched = true;
 
 httpUtil.respond500 = function patchedRespond500(res, err) {
     const req = res && res._rhReq;
@@ -55,4 +55,4 @@ httpUtil.respond500 = function patchedRespond500(res, err) {
     }
     return orig500.apply(this, arguments);
 };
-httpUtil.respond500.__rhPatched = true;
+httpUtil.respond500._a_patched = true;

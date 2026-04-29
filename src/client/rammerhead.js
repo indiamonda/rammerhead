@@ -1,9 +1,9 @@
 (function () {
     var hammerhead = window['%_d%'];
-    if (!hammerhead) throw new Error('hammerhead not loaded yet');
+    if (!hammerhead) throw new Error('runtime not loaded yet');
     if (hammerhead.settings._settings.sessionId) {
         // task.js already loaded. this will likely never happen though since this file loads before task.js
-        console.warn('unexpected task.js to load before rammerhead.js. url shuffling cannot be used');
+        console.warn('unexpected task.js load order; url shuffling cannot be used');
         main();
     } else {
         // wait for task.js to load
@@ -26,25 +26,25 @@
         delete window.overrideIsCrossDomainWindows;
 
         // other code if they want to also hook onto hammerhead start //
-        if (window.rammerheadStartListeners) {
-            for (const eachListener of window.rammerheadStartListeners) {
+        if (window._a_startListeners) {
+            for (const eachListener of window._a_startListeners) {
                 try {
                     eachListener();
                 } catch (e) {
                     console.error(e);
                 }
             }
-            delete window.rammerheadStartListeners;
+            delete window._a_startListeners;
         }
 
         // sync localStorage code //
         // disable if other code wants to implement their own localStorage site wrapper
-        if (window.rammerheadDisableLocalStorageImplementation) {
-            delete window.rammerheadDisableLocalStorageImplementation;
+        if (window._a_disableLocalStorageImpl) {
+            delete window._a_disableLocalStorageImpl;
             return;
         }
         // consts
-        var timestampKey = 'rammerhead_synctimestamp';
+        var timestampKey = '_a_synctimestamp';
         var updateInterval = 5000;
         var isSyncing = false;
 
@@ -54,7 +54,7 @@
         // Use originalProxiedLocalStorage for checking internal structure since it has the original Hammerhead proxy
         if (!originalProxiedLocalStorage || !originalProxiedLocalStorage.internal || !originalProxiedLocalStorage.internal.nativeStorage) {
             // localStorage not properly proxied, skip sync
-            console.warn('rammerhead: localStorage not properly proxied, skipping sync');
+            console.warn('runtime: localStorage not properly proxied, skipping sync');
             return;
         }
         var realLocalStorage = originalProxiedLocalStorage.internal.nativeStorage;
@@ -203,16 +203,38 @@
     var noShuffling = false;
     function addUrlShuffling() {
         const request = new XMLHttpRequest();
-        // Session ID is the 32-char hex segment before the destination URL (supports optional /rammerhead base path)
-        const pathMatch = location.pathname.match(/\/(?:rammerhead\/)?([a-f0-9]{32})\//i);
+        // Session ID is the 32-char hex segment before the destination URL.
+        // Detect the proxy's mount-point dynamically from the SCRIPT tag that
+        // loaded us (rather than hard-coding `/rammerhead/`) so the served
+        // bundle never literally contains the brand string. Works for any
+        // base path (`/`, `/proxy/`, `/rammerhead/`, `/foo/bar/`, …).
+        var basePath = '';
+        try {
+            var scripts = document.getElementsByTagName('script');
+            for (var si = 0; si < scripts.length; si++) {
+                var ss = scripts[si].src || '';
+                if (ss.indexOf('/_a/r.js') > -1) {
+                    var u = new URL(ss, location.href);
+                    var pIdx = u.pathname.indexOf('/_a/r.js');
+                    if (pIdx > -1) basePath = u.pathname.slice(0, pIdx);
+                    break;
+                }
+            }
+        } catch (_) {}
+        if (!basePath) {
+            // Fallback: detect from current pathname. Strip /<32hex>/... to find prefix.
+            var pmFallback = location.pathname.match(/^(.*?)\/[a-f0-9]{32}/i);
+            basePath = pmFallback ? pmFallback[1] : '';
+        }
+        const sidRe = new RegExp('^' + basePath.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') + '\\/([a-f0-9]{32})\\/', 'i');
+        const pathMatch = location.pathname.match(sidRe);
         const sessionId = pathMatch ? pathMatch[1] : (location.pathname.slice(1).match(/^[a-f0-9]{32}/i) || [])[0];
         if (!sessionId) {
             console.warn('cannot get session id from url');
             return;
         }
-        const isPrefixed = location.pathname.indexOf('/rammerhead/') === 0;
-        const newPath = (isPrefixed ? '/rammerhead' : '') + '/_a/sd';
-        const oldPath = (isPrefixed ? '/rammerhead' : '') + '/api/shuffleDict';
+        const newPath = basePath + '/_a/sd';
+        const oldPath = basePath + '/api/shuffleDict';
         request.open('GET', newPath + '?id=' + sessionId, false);
         request.send();
         let resp = request;
@@ -495,7 +517,7 @@
         // call is just not viable (mainly memory issues as the garbage collector is sometimes not fast enough)
 
         const getLocHost = win => (new URL(hammerhead.utils.url.parseProxyUrl(win.location.href).destUrl)).host;
-        const prefix = win => `rammerhead|storage-wrapper|${hammerhead.settings._settings.sessionId}|${
+        const prefix = win => `_a|sw|${hammerhead.settings._settings.sessionId}|${
             getLocHost(win)
         }|`;
         const toRealStorageKey = (key = '', win = window) => prefix(win) + key;

@@ -612,6 +612,17 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
 
     const origAccept = req.headers['accept'];
     const origContentType = req.headers['content-type'];
+    // Snapshot the client-set User-Agent and Client-Hints BEFORE we
+    // overwrite them — see the AWS WAF / Cloudflare comment further down.
+    const origUserAgent = req.headers['user-agent'];
+    const origSecChUa = req.headers['sec-ch-ua'];
+    const origSecChUaMobile = req.headers['sec-ch-ua-mobile'];
+    const origSecChUaPlatform = req.headers['sec-ch-ua-platform'];
+    const origSecChUaFull = req.headers['sec-ch-ua-full-version-list'];
+    const origSecChUaArch = req.headers['sec-ch-ua-arch'];
+    const origSecChUaBitness = req.headers['sec-ch-ua-bitness'];
+    const origSecChUaModel = req.headers['sec-ch-ua-model'];
+    const origSecChUaPlatformVersion = req.headers['sec-ch-ua-platform-version'];
     for (const [name, value] of Object.entries(headersToInject)) {
         const lower = name.toLowerCase();
         req.headers[lower] = value;
@@ -622,6 +633,36 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     }
     if (origContentType) {
         req.headers['content-type'] = origContentType;
+    }
+    // CRITICAL: preserve the BROWSER's User-Agent + Client-Hints triplet so
+    // anti-bot WAFs (AWS WAF, Cloudflare, hCaptcha, Datadome, …) can verify
+    // the tokens they issued. Their challenge.js computes a proof in-browser
+    // that includes navigator.userAgent + navigator.userAgentData (sec-ch-ua,
+    // sec-ch-ua-platform, etc.) and BINDS the issued token to that exact
+    // fingerprint. If the proxy then forwards the verification request with
+    // a DIFFERENT UA / sec-ch-ua tuple (e.g. our hardcoded "Windows Chrome
+    // 131" while the user is on "macOS Chrome 130"), AWS WAF returns
+    // Set-Cookie: aws-waf-token=; expires=1970 (deletion) and the page
+    // re-challenges → infinite "Max challenge attempts exceeded" loop on
+    // chat.deepseek.com / amazon.com / aws.amazon.com / etc.
+    //
+    // We only fall back to the spoofed CHROME_UA when:
+    //   - no UA was sent (server-to-server health checks)
+    //   - the UA is from a known automation tool (HeadlessChrome,
+    //     PhantomJS, webdriver) where servers would 403 us anyway.
+    if (origUserAgent && /Mozilla\//.test(origUserAgent) && !/HeadlessChrome|PhantomJS|webdriver/i.test(origUserAgent)) {
+        req.headers['user-agent'] = origUserAgent;
+        // Restore each Client-Hints header that the BROWSER sent. Missing
+        // hints stay missing — sending a fake one would break the proof
+        // just as badly as overriding the real one.
+        if (origSecChUa) req.headers['sec-ch-ua'] = origSecChUa; else delete req.headers['sec-ch-ua'];
+        if (origSecChUaMobile) req.headers['sec-ch-ua-mobile'] = origSecChUaMobile; else delete req.headers['sec-ch-ua-mobile'];
+        if (origSecChUaPlatform) req.headers['sec-ch-ua-platform'] = origSecChUaPlatform; else delete req.headers['sec-ch-ua-platform'];
+        if (origSecChUaFull) req.headers['sec-ch-ua-full-version-list'] = origSecChUaFull; else delete req.headers['sec-ch-ua-full-version-list'];
+        if (origSecChUaArch) req.headers['sec-ch-ua-arch'] = origSecChUaArch; else delete req.headers['sec-ch-ua-arch'];
+        if (origSecChUaBitness) req.headers['sec-ch-ua-bitness'] = origSecChUaBitness; else delete req.headers['sec-ch-ua-bitness'];
+        if (origSecChUaModel) req.headers['sec-ch-ua-model'] = origSecChUaModel; else delete req.headers['sec-ch-ua-model'];
+        if (origSecChUaPlatformVersion) req.headers['sec-ch-ua-platform-version'] = origSecChUaPlatformVersion; else delete req.headers['sec-ch-ua-platform-version'];
     }
 
     // Anti-proxy bypass: spoof Referer/Origin so Poki CDN and similar accept requests.

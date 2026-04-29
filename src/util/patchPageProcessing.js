@@ -4,9 +4,9 @@
  * runs BEFORE Hammerhead's own runtime and before any page scripts.
  *
  * Provides three data channels on `window`:
- *   __rhQ[]   - console messages  (polled by parent → /__rh_console)
- *   __rhNet[] - network requests  (polled by parent → DevTools Network tab)
- *   __rhSrc[] - resource URLs     (polled by parent → DevTools Sources tab)
+ *   _a_q[]   - console messages  (polled by parent → /__rh_console)
+ *   _a_n[] - network requests  (polled by parent → DevTools Network tab)
+ *   _a_src[] - resource URLs     (polled by parent → DevTools Sources tab)
  */
 
 const pageProcessor = require('testcafe-hammerhead/lib/processing/resources/page');
@@ -24,7 +24,7 @@ const adBlocker = require('./adBlocker');
 //     untrusted events (autoplay, timers, first scroll, etc.)
 //   • meta-refresh & auto-redirect guard: neutralises redirect-ad chains
 //   • YouTube SPA patcher: skips pre/mid/end-roll ads in the player
-// Respects an opt-out cookie (__rh_ab=0) just like the server-side blocker.
+// Respects an opt-out cookie (_a_b=0) just like the server-side blocker.
 // ---------------------------------------------------------------------------
 const AD_CSS_RULES = [
     // Generic ad containers by id/class (EasyList element-hiding excerpt)
@@ -81,7 +81,7 @@ const AD_CSS_RULES = [
 ].join('');
 const AD_BLOCKER_SCRIPT = [
     // Element IDs are deliberately kept vague (no `__rh_*` brand prefix) so
-    // a Smart Agent can't `document.getElementById('__rh_ab_css')` and
+    // a Smart Agent can't `document.getElementById('_a_b_css')` and
     // immediately fingerprint the proxy.
     '<style id="_a_css">',
     // Hide ad containers. !important so sites can\'t override.
@@ -93,19 +93,30 @@ const AD_BLOCKER_SCRIPT = [
     '</style>',
     '<script id="_a_js">',
     '(function(){',
-    'if(typeof window==="undefined"||window.__rhABinit)return;window.__rhABinit=1;',
+    'if(typeof window==="undefined"||window._a_abi)return;window._a_abi=1;',
     // _off = "should this client-side ad-blocking layer bail out and let ads/popups
     // render natively?" The initial value is INJECTED PER-REQUEST by the server
     // (see _injectFor in processResource): when the user has the global toggle
-    // off (cookie __rh_ab=0 on the proxy origin) the server emits true here.
+    // off (cookie _a_b=0 on the proxy origin) the server emits true here.
     // Hammerhead virtualises both localStorage and document.cookie to the
     // proxied origin and explicitly strips __rh_* cookies, so the page-side
     // checks below are dead in practice — they remain as defensive overrides
     // for proxied origins that happen to set their own adBlockerEnabled flag.
     'var _off=__RH_AB_OFF__;',
     'try{if(!_off&&localStorage.getItem("adBlockerEnabled")==="0")_off=true}catch(e){}',
-    'try{if(!_off&&document.cookie.indexOf("__rh_ab=0")!==-1)_off=true}catch(e){}',
+    'try{if(!_off&&document.cookie.indexOf("_a_b=0")!==-1)_off=true}catch(e){}',
     'if(_off){try{var cs=document.getElementById("_a_css");if(cs)cs.remove()}catch(e){}return}',
+    // Lightweight debounce + throttle helpers shared by the perf-sensitive
+    // observers/intervals below. `_dbnc(fn,ms)` collapses bursts of
+    // mutations into a single call after `ms` ms of quiet — used for the
+    // ad-bait scanner, paywall unlocker, ad-slot collapser, and any other
+    // observer that doesn't need per-mutation accuracy. Without this,
+    // dense SPAs (Reddit, Discord chat, Bilibili feed, GitHub PRs) can
+    // fire hundreds of mutation callbacks per frame, all running through
+    // expensive `document.querySelectorAll(complex,selector)` on the
+    // ENTIRE subtree, which is what was making the proxy feel
+    // "unresponsive" on heavy pages.
+    'function _dbnc(fn,ms){var t=null;return function(){if(t)return;t=setTimeout(function(){t=null;try{fn()}catch(e){}},ms)}}',
     // --- POPUP / POPUNDER GUARD ---
     // Block ad popups while still allowing legitimate cross-origin popups (Discord invite
     // links, OAuth flows, share buttons). Decision tree inside the window.open override:
@@ -151,7 +162,7 @@ const AD_BLOCKER_SCRIPT = [
     // receive the ORIGINAL URL the page passed to window.open. We retry over a growing
     // window to account for async runtime init.
     'function _installOpenGuard(){try{',
-    'var cur=window.open;if(!cur||cur.__rhAdGuard)return;',
+    'var cur=window.open;if(!cur||cur._a_ag)return;',
     'var _guardDepth=0;',
     'var _oOpen=cur;',
     'var guarded=function(u,n,f){',
@@ -183,7 +194,7 @@ const AD_BLOCKER_SCRIPT = [
     'return _oOpen.apply(this,arguments);',
     '}finally{_guardDepth--}',
     '};',
-    'guarded.__rhAdGuard=true;',
+    'guarded._a_ag=true;',
     'window.open=guarded;',
     '}catch(e){}}',
     // Install now (in case no runtime wraps window.open) AND after short delays so we end
@@ -206,7 +217,7 @@ const AD_BLOCKER_SCRIPT = [
     'function _isAdRedirect(u){try{if(typeof u!=="string")return false;if(_blockedHosts.test(u))return true;var uh="";try{uh=new URL(u,location.href).hostname}catch(e){}return uh&&_blockedHosts.test(uh)}catch(e){return false}}',
     // Intercept location.assign / replace methods
     'function _installLocGuard(){try{',
-    'var _loc=window.location;if(!_loc||_loc.__rhLocGuard)return;',
+    'var _loc=window.location;if(!_loc||_loc._a_lg)return;',
     'try{var _oAssign=_loc.assign.bind(_loc);_loc.assign=function(u){if(_isAdRedirect(u)){try{console.debug("[ab] blocked location.assign:",u)}catch(e){}return}return _oAssign(u)}}catch(e){}',
     'try{var _oReplace=_loc.replace.bind(_loc);_loc.replace=function(u){if(_isAdRedirect(u)){try{console.debug("[ab] blocked location.replace:",u)}catch(e){}return}return _oReplace(u)}}catch(e){}',
     // Intercept location.href setter on this Location instance (may be hammerhead-wrapped Location)
@@ -224,7 +235,7 @@ const AD_BLOCKER_SCRIPT = [
     'try{var _dlDesc=Object.getOwnPropertyDescriptor(Document.prototype,"location")||Object.getOwnPropertyDescriptor(document,"location");',
     'if(_dlDesc&&_dlDesc.set){var _oDLSet=_dlDesc.set,_oDLGet=_dlDesc.get;',
     'try{Object.defineProperty(document,"location",{configurable:true,get:function(){return _oDLGet?_oDLGet.call(this):_loc},set:function(v){if(_isAdRedirect(v)){try{console.debug("[ab] blocked document.location=:",v)}catch(e){}return}return _oDLSet.call(this,v)}})}catch(e){}}}catch(e){}',
-    '_loc.__rhLocGuard=true;',
+    '_loc._a_lg=true;',
     '}catch(e){}}',
     // Install now AND after hammerhead init so our guard sits on top
     '_installLocGuard();',
@@ -290,13 +301,17 @@ const AD_BLOCKER_SCRIPT = [
     'Object.defineProperty(el,"clientWidth",{configurable:true,get:function(){return 160}});',
     'Object.defineProperty(el,"offsetParent",{configurable:true,get:function(){return document.body||document.documentElement}});',
     'var _oElGBC=el.getBoundingClientRect;el.getBoundingClientRect=function(){return{top:0,left:0,right:160,bottom:100,width:160,height:100,x:0,y:0,toJSON:function(){return this}}};',
-    'el.__rhBaitSpoofed=true}catch(e){}}',
+    'el._a_bs=true}catch(e){}}',
     'window.getComputedStyle=function(el,ps){var cs=_oCompS.call(this,el,ps);',
-    'try{if(el&&el.__rhBaitSpoofed){return new Proxy(cs,{get:function(t,k){if(k==="display")return"block";if(k==="visibility")return"visible";if(k==="opacity")return"1";if(k==="height")return"100px";if(k==="width")return"160px";var v=t[k];return typeof v==="function"?v.bind(t):v}})}}catch(e){}return cs};',
+    'try{if(el&&el._a_bs){return new Proxy(cs,{get:function(t,k){if(k==="display")return"block";if(k==="visibility")return"visible";if(k==="opacity")return"1";if(k==="height")return"100px";if(k==="width")return"160px";var v=t[k];return typeof v==="function"?v.bind(t):v}})}}catch(e){}return cs};',
     // Scan existing DOM now + observe for new bait elements
-    'function _scanBait(){try{document.querySelectorAll("[class*=\\"ads\\"],[id*=\\"ads\\"],[class*=\\"ad-\\"],[id*=\\"ad-\\"],[class*=\\"banner\\"],[id*=\\"banner\\"],[class*=\\"sponsor\\"],ins.adsbygoogle").forEach(function(el){if(_looksLikeBait(el)&&!el.__rhBaitSpoofed)_spoofBait(el)})}catch(e){}}',
+    'function _scanBait(){try{document.querySelectorAll("[class*=\\"ads\\"],[id*=\\"ads\\"],[class*=\\"ad-\\"],[id*=\\"ad-\\"],[class*=\\"banner\\"],[id*=\\"banner\\"],[class*=\\"sponsor\\"],ins.adsbygoogle").forEach(function(el){if(_looksLikeBait(el)&&!el._a_bs)_spoofBait(el)})}catch(e){}}',
     'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_scanBait);else _scanBait();',
-    'new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var an=muts[i].addedNodes;for(var j=0;j<an.length;j++){var n=an[j];if(_looksLikeBait(n)&&!n.__rhBaitSpoofed)_spoofBait(n)}}}).observe(document.documentElement||document,{childList:true,subtree:true});',
+    // Debounced bait scanner: collect added nodes per-burst but the
+    // (relatively expensive) per-node bait check is queued with `_dbnc`
+    // so dense SPAs don't pay the cost on every keystroke.
+    'var _baitQ=[];var _scanBaitQ=_dbnc(function(){var q=_baitQ;_baitQ=[];for(var k=0;k<q.length;k++){var n=q[k];if(_looksLikeBait(n)&&!n._a_bs)_spoofBait(n)}},250);',
+    'new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var an=muts[i].addedNodes;for(var j=0;j<an.length;j++){_baitQ.push(an[j])}}_scanBaitQ()}).observe(document.documentElement||document,{childList:true,subtree:true});',
     '}catch(e){}',
     // --- YOUTUBE AD SKIPPER ---
     // If the page is YouTube, watch for ad-showing state and either skip or fast-forward.
@@ -325,7 +340,7 @@ const AD_BLOCKER_SCRIPT = [
     'e.style.setProperty("display","none","important")}})})}',
     'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_collapseAds);',
     'else _collapseAds();',
-    'new MutationObserver(function(){_collapseAds()}).observe(document.documentElement||document,{childList:true,subtree:true});',
+    'new MutationObserver(_dbnc(_collapseAds,500)).observe(document.documentElement||document,{childList:true,subtree:true});',
     '}catch(e){}',
     // --- COOKIE CONSENT / PAYWALL / SUBSCRIBE-WALL HIDER ---
     // Many news sites wrap their content behind a "Accept cookies to continue" or
@@ -403,9 +418,16 @@ const AD_BLOCKER_SCRIPT = [
     '}catch(e){}}',
     'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_unlockScroll);else _unlockScroll();',
     // Re-check every second; paywalls re-apply locks on route change / timer
-    'setInterval(_unlockScroll,1500);',
-    // Also when any ancestor class changes, re-unlock
-    'try{new MutationObserver(_unlockScroll).observe(document.documentElement,{attributes:true,attributeFilter:["class","style"],subtree:true});}catch(e){}',
+    // 5 s poll covers re-locks done from setInterval/setTimeout
+    // sources we don't observe; the MutationObserver below handles
+    // the much-more-common reactive case at very low cost.
+    'setInterval(_unlockScroll,5000);',
+    // Watch only the body's class/style — paywall scripts almost
+    // always toggle classes on `<body>`, never on arbitrary subtree
+    // nodes. Dropping `subtree:true` is a >10x speedup on dense SPAs.
+    'try{new MutationObserver(_dbnc(_unlockScroll,300)).observe(document.body||document.documentElement,{attributes:true,attributeFilter:["class","style"]});}catch(e){}',
+    // Also watch <html> in case paywall locks the root element.
+    'try{new MutationObserver(_dbnc(_unlockScroll,300)).observe(document.documentElement,{attributes:true,attributeFilter:["class","style"]});}catch(e){}',
     '}catch(e){}',
     '})();',
     '</script>',
@@ -425,18 +447,18 @@ const ANTIDETECT_SCRIPT = [
     // descriptor's `enumerable:false` (per the spec — `[[Set]]` on an existing
     // data property only updates `[[Value]]`), so `Object.keys(window)` /
     // `for...in` / JSON.stringify(window) reveal nothing. Direct access via
-    // `window.__rhQ` still works, so devtools.js + the inject scripts remain
+    // `window._a_q` still works, so devtools.js + the inject scripts remain
     // unchanged. A determined scanner using `Reflect.ownKeys` or
     // `Object.getOwnPropertyNames` could still see them, but that's a much
     // rarer probe and worth defending against in tier 2.
-    'try{["__rhAD","__rhABinit","__rhC","__rhQ","__rhNet","__rhSrc","__rhPanel",',
-    '"__rhListeners","__rhTimerCount","__rhPerf","__rhDestUrl","__rhDevTools"].forEach(function(n){',
+    'try{["_a_ad","_a_abi","_a_c","_a_q","_a_n","_a_src","_a_p",',
+    '"_a_ls","_a_tc","_a_perf","_a_du","_a_dt"].forEach(function(n){',
         'try{var d=Object.getOwnPropertyDescriptor(window,n);',
         'if(!d){Object.defineProperty(window,n,{value:undefined,configurable:true,writable:true,enumerable:false})}',
         'else if(d.enumerable){Object.defineProperty(window,n,{value:d.value,configurable:true,writable:d.writable!==false,enumerable:false})}',
         '}catch(_){}',
     '})}catch(e){}',
-    'if(typeof window==="undefined"||window.__rhAD)return;window.__rhAD=1;',
+    'if(typeof window==="undefined"||window._a_ad)return;window._a_ad=1;',
     'try{Object.defineProperty(navigator,"webdriver",{get:function(){return undefined},configurable:true})}catch(e){}',
     'try{if(!navigator.plugins||!navigator.plugins.length){',
         'var _mkP=function(n,d,fn,mt){var p=Object.create(Plugin.prototype);',
@@ -462,21 +484,41 @@ const ANTIDETECT_SCRIPT = [
     'try{Object.defineProperty(document,"referrer",{get:function(){return ""},configurable:true})}catch(e){}',
     'try{Object.defineProperty(window,"%_d%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
     'try{Object.defineProperty(window,"%_isd%",{enumerable:false,configurable:true,writable:true,value:void 0})}catch(e){}',
-    // Unconditional top/parent/self spoof so anti-iframe guards (TurboWarp, ad networks, etc.)
-    // see top === self === parent even when hammerhead\'s own wrapping is still settling.
-    // CRITICAL: each spoof MUST be in its own try/catch. The previous combined
-    // version (single try/catch covering all three) silently aborted after
-    // `top` threw "Cannot redefine property: top" in same-origin iframes,
-    // leaving `parent` and `frameElement` untouched. That made every site
-    // running an iframe-detection guard (TurboWarp\'s "Invalid Embed" page,
-    // various ad networks, Facebook embed warnings, ...) believe the proxy
-    // page was running inside an iframe — which it IS, since the proxy UI
-    // wraps everything in <iframe>s for tab management. Splitting them
-    // ensures `parent` always succeeds (it\'s configurable on Chrome/FF) and
-    // we get the most important spoof for free.
-    'try{Object.defineProperty(window,"top",{get:function(){return window.self},configurable:true})}catch(e){}',
-    'try{Object.defineProperty(window,"parent",{get:function(){return window.self},configurable:true})}catch(e){}',
-    'try{Object.defineProperty(window,"frameElement",{get:function(){return null},configurable:true})}catch(e){}',
+    // Unconditional top/parent/frameElement spoof so anti-iframe guards
+    // (TurboWarp "Invalid Embed", ad-network "publisher" gates, Facebook
+    // embed warnings, …) see top === self === parent regardless of which
+    // wrapping path Hammerhead's runtime takes.
+    //
+    // We attempt the spoof against three different targets in order of
+    // descending coverage. At least one almost always succeeds:
+    //   1. window           — works in iframes that haven't been claimed
+    //                         by Hammerhead yet, and on top-level windows.
+    //   2. Window.prototype — fallback for Chrome's non-configurable
+    //                         `window.top` getter; defining the same
+    //                         property on the prototype shadows the
+    //                         instance lookup for `Window.prototype` when
+    //                         the IDL accessor on the instance throws
+    //                         (rare but observed for sandboxed iframes).
+    //   3. globalThis       — covers worker-style global access.
+    //
+    // Each property is wrapped in its OWN try/catch — the previous
+    // combined `try { all three } catch` silently aborted after the FIRST
+    // throw left the remaining properties unspoofed.
+    '(function(){',
+        'function _spoof(t,k,getter){try{Object.defineProperty(t,k,{get:getter,configurable:true})}catch(_e){}}',
+        'var _self=function(){return window.self};',
+        'var _null=function(){return null};',
+        '_spoof(window,"top",_self);',
+        '_spoof(window,"parent",_self);',
+        '_spoof(window,"frameElement",_null);',
+        'try{_spoof(Window.prototype,"top",_self);_spoof(Window.prototype,"parent",_self);_spoof(Window.prototype,"frameElement",_null)}catch(_e){}',
+        'try{if(typeof globalThis!=="undefined"&&globalThis!==window){_spoof(globalThis,"top",_self);_spoof(globalThis,"parent",_self)}}catch(_e){}',
+        // Belt-and-suspenders: also patch the [[Get]] proxy of `self`
+        // so `self.top` / `self.parent` resolves to the spoof too. Some
+        // anti-iframe checks read via `self` deliberately to avoid the
+        // `window.top` getter that frameworks shim.
+        'try{_spoof(self,"top",_self);_spoof(self,"parent",_self);_spoof(self,"frameElement",_null)}catch(_e){}',
+    '})();',
     'try{if(typeof crypto!=="undefined"&&!crypto.randomUUID){crypto.randomUUID=function(){var b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=(b[6]&0x0f)|0x40;b[8]=(b[8]&0x3f)|0x80;var h="";for(var i=0;i<16;i++){h+=(b[i]<16?"0":"")+b[i].toString(16);if(i===3||i===5||i===7||i===9)h+="-"}return h}}}catch(e){}',
     'try{if(!window.__tcfapi){window.__tcfapi=function(cmd,ver,cb){if(typeof cb==="function"){cb({cmpId:0,cmpVersion:0,gdprApplies:false,tcfPolicyVersion:2,cmpStatus:"error",eventStatus:"cmpuishown",tcString:"",isServiceSpecific:true,purposeOneTreatment:false,publisherCC:"US"},false)}}}}catch(e){}',
     // Fix cross-origin postMessage for captcha widgets (hCaptcha, reCAPTCHA, Turnstile, etc.).
@@ -506,24 +548,24 @@ const ANTIDETECT_SCRIPT = [
     // console and confusing them into thinking the proxy is broken. Swallow them at the
     // unhandledrejection layer — we never produce these strings ourselves, so this filter is
     // 100% safe for page code.
-    'try{var _rhExtRe=/Could not establish connection|Receiving end does not exist|message port closed|Extension context invalidated/i;',
+    'try{var _a_extRe=/Could not establish connection|Receiving end does not exist|message port closed|Extension context invalidated/i;',
     'window.addEventListener("unhandledrejection",function(e){',
         'try{var r=e.reason;var m=r&&(r.message||r.toString&&r.toString())||(typeof r==="string"?r:"");',
-        'if(m&&_rhExtRe.test(m)){e.preventDefault();if(e.stopImmediatePropagation)try{e.stopImmediatePropagation()}catch(_){}}}catch(_){}',
+        'if(m&&_a_extRe.test(m)){e.preventDefault();if(e.stopImmediatePropagation)try{e.stopImmediatePropagation()}catch(_){}}}catch(_){}',
     '},true);',
     'window.addEventListener("error",function(e){',
         'try{var m=e&&(e.message||(e.error&&e.error.message))||"";',
-        'if(m&&_rhExtRe.test(m)){e.preventDefault();if(e.stopImmediatePropagation)try{e.stopImmediatePropagation()}catch(_){}}}catch(_){}',
+        'if(m&&_a_extRe.test(m)){e.preventDefault();if(e.stopImmediatePropagation)try{e.stopImmediatePropagation()}catch(_){}}}catch(_){}',
     '},true);',
     '}catch(e){}',
     '})();</script>',
 ].join('\n');
 
 const DEVTOOLS_SCRIPT = `<script>(function(){
-if(typeof window==="undefined"||window.__rhC)return;window.__rhC=1;
-window.__rhQ=[];window.__rhNet=[];window.__rhSrc=[];
-window.__rhPanel=null;window.__rhListeners=0;
-window.__rhTimerCount={timeout:0,interval:0};
+if(typeof window==="undefined"||window._a_c)return;window._a_c=1;
+window._a_q=[];window._a_n=[];window._a_src=[];
+window._a_p=null;window._a_ls=0;
+window._a_tc={timeout:0,interval:0};
 var _oC=window.console||{},_srcSeen={},_groupDepth=0;
 var _proxyRe=/\\/[a-z0-9]{32}(?:![a-z]*)?\\/((https?):\\/\\/.+)/i;
 function _cleanUrl(u){if(!u)return u;var m=(""+u).match(_proxyRe);return m?m[1]:""+u}
@@ -532,69 +574,69 @@ var o=_oC[m]||function(){};
 _oC[m]=function(){try{o.apply(_oC,arguments)}catch(e){}
 var raw=[];for(var i=0;i<arguments.length;i++)raw.push(arguments[i]);
 var entry={l:m,raw:raw,t:Date.now(),d:_groupDepth};
-window.__rhQ.push(entry);if(window.__rhPanel)try{window.__rhPanel.log(entry)}catch(e){}}});
+window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}}});
 var _origTable=_oC.table;
 _oC.table=function(data,cols){try{if(_origTable)_origTable.apply(_oC,arguments)}catch(e){}
 var entry={l:"table",raw:[data,cols],t:Date.now(),d:_groupDepth};
-window.__rhQ.push(entry);if(window.__rhPanel)try{window.__rhPanel.log(entry)}catch(e){}};
+window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}};
 _oC.group=_oC.groupCollapsed=function(){var raw=[];for(var i=0;i<arguments.length;i++)raw.push(arguments[i]);
 var entry={l:"group",raw:raw,t:Date.now(),d:_groupDepth};_groupDepth++;
-window.__rhQ.push(entry);if(window.__rhPanel)try{window.__rhPanel.log(entry)}catch(e){}};
-_oC.groupEnd=function(){if(_groupDepth>0)_groupDepth--;window.__rhQ.push({l:"groupEnd",t:Date.now(),d:_groupDepth})};
+window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}};
+_oC.groupEnd=function(){if(_groupDepth>0)_groupDepth--;window._a_q.push({l:"groupEnd",t:Date.now(),d:_groupDepth})};
 var _cTimers={};
 _oC.time=function(l){_cTimers[l||"default"]=performance.now()};
 _oC.timeEnd=function(l){l=l||"default";var s=_cTimers[l];if(s!==undefined){delete _cTimers[l];
 var entry={l:"log",raw:[l+": "+(performance.now()-s).toFixed(3)+"ms"],t:Date.now(),d:_groupDepth};
-window.__rhQ.push(entry);if(window.__rhPanel)try{window.__rhPanel.log(entry)}catch(e){}}};
+window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}}};
 _oC.timeLog=function(l){l=l||"default";var s=_cTimers[l];if(s!==undefined){var entry={l:"log",raw:[l+": "+(performance.now()-s).toFixed(3)+"ms"],t:Date.now(),d:_groupDepth};
-window.__rhQ.push(entry);if(window.__rhPanel)try{window.__rhPanel.log(entry)}catch(e){}}};
+window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}}};
 var _cCounts={};
 _oC.count=function(l){l=l||"default";_cCounts[l]=(_cCounts[l]||0)+1;
 var entry={l:"log",raw:[l+": "+_cCounts[l]],t:Date.now(),d:_groupDepth};
-window.__rhQ.push(entry);if(window.__rhPanel)try{window.__rhPanel.log(entry)}catch(e){}};
+window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}};
 _oC.countReset=function(l){_cCounts[l||"default"]=0};
 var _origClear=_oC.clear;_oC.clear=function(){try{if(_origClear)_origClear.call(_oC)}catch(e){}
-window.__rhQ.length=0;if(window.__rhPanel)try{window.__rhPanel.clear()}catch(e){}};
+window._a_q.length=0;if(window._a_p)try{window._a_p.clear()}catch(e){}};
 window.console=_oC;
 window.addEventListener("error",function(e){if(e.defaultPrevented)return;var msg=e.error?(e.error.stack||e.error.message):e.message;
 var entry={l:"error",raw:["[Uncaught] "+(msg||"Unknown error")],t:Date.now(),d:0};
-window.__rhQ.push(entry);if(window.__rhPanel)try{window.__rhPanel.log(entry)}catch(e2){}});
+window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e2){}});
 window.addEventListener("unhandledrejection",function(e){if(e.defaultPrevented)return;var r=e.reason;
 var entry={l:"error",raw:["[Promise] "+(r&&r.stack?r.stack:String(r))],t:Date.now(),d:0};
-window.__rhQ.push(entry);if(window.__rhPanel)try{window.__rhPanel.log(entry)}catch(e2){}});
+window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e2){}});
 if(typeof fetch==="function"){var _oF=fetch;window.fetch=function(){var a=arguments,u="",m="GET",rh={},st=Date.now();
 try{if(typeof a[0]==="string")u=a[0];else if(a[0]&&a[0].url)u=a[0].url;
 if(a[1]){if(a[1].method)m=a[1].method;var h=a[1].headers;if(h){if(h instanceof Headers)h.forEach(function(v,k){rh[k]=v});
 else if(typeof h==="object")for(var k in h)rh[k]=h[k]}}}catch(e){}
 var entry={m:m,u:_cleanUrl(u),s:0,tp:"fetch",t0:st,t1:0,reqH:rh,resH:{},sz:0};
-window.__rhNet.push(entry);if(window.__rhPanel)try{window.__rhPanel.net(entry)}catch(e){}
+window._a_n.push(entry);if(window._a_p)try{window._a_p.net(entry)}catch(e){}
 return _oF.apply(this,a).then(function(r){entry.s=r.status;entry.t1=Date.now();
 try{r.headers.forEach(function(v,k){entry.resH[k]=v});var ct=r.headers.get("content-type");if(ct)entry.ct=ct.split(";")[0];
 var cl=r.headers.get("content-length");if(cl)entry.sz=parseInt(cl,10)||0}catch(e){}
-if(window.__rhPanel)try{window.__rhPanel.netUpdate(entry)}catch(e){}return r},
-function(e){entry.s=-1;entry.t1=Date.now();if(window.__rhPanel)try{window.__rhPanel.netUpdate(entry)}catch(e2){}throw e})}}
+if(window._a_p)try{window._a_p.netUpdate(entry)}catch(e){}return r},
+function(e){entry.s=-1;entry.t1=Date.now();if(window._a_p)try{window._a_p.netUpdate(entry)}catch(e2){}throw e})}}
 if(typeof XMLHttpRequest!=="undefined"){var _oXO=XMLHttpRequest.prototype.open,_oXS=XMLHttpRequest.prototype.send;
-XMLHttpRequest.prototype.open=function(m,u){this.__rhM=m;this.__rhU=""+u;this.__rhT0=Date.now();this.__rhRH={};return _oXO.apply(this,arguments)};
+XMLHttpRequest.prototype.open=function(m,u){this._a_xm=m;this._a_xu=""+u;this._a_xt=Date.now();this._a_xh={};return _oXO.apply(this,arguments)};
 var _oSRH=XMLHttpRequest.prototype.setRequestHeader;
-XMLHttpRequest.prototype.setRequestHeader=function(k,v){try{this.__rhRH[k]=v}catch(e){}return _oSRH.apply(this,arguments)};
-XMLHttpRequest.prototype.send=function(){var x=this,entry={m:x.__rhM||"GET",u:_cleanUrl(x.__rhU||""),s:0,tp:"xhr",t0:x.__rhT0||Date.now(),t1:0,reqH:x.__rhRH||{},resH:{},sz:0};
-window.__rhNet.push(entry);if(window.__rhPanel)try{window.__rhPanel.net(entry)}catch(e){}
+XMLHttpRequest.prototype.setRequestHeader=function(k,v){try{this._a_xh[k]=v}catch(e){}return _oSRH.apply(this,arguments)};
+XMLHttpRequest.prototype.send=function(){var x=this,entry={m:x._a_xm||"GET",u:_cleanUrl(x._a_xu||""),s:0,tp:"xhr",t0:x._a_xt||Date.now(),t1:0,reqH:x._a_xh||{},resH:{},sz:0};
+window._a_n.push(entry);if(window._a_p)try{window._a_p.net(entry)}catch(e){}
 x.addEventListener("loadend",function(){entry.s=x.status;entry.t1=Date.now();
 try{var h=x.getAllResponseHeaders()||"";h.split("\\r\\n").forEach(function(l){var p=l.indexOf(":");if(p>0)entry.resH[l.slice(0,p).trim().toLowerCase()]=l.slice(p+1).trim()});
 entry.ct=(entry.resH["content-type"]||"").split(";")[0];
 var cl=entry.resH["content-length"];if(cl)entry.sz=parseInt(cl,10)||0;else try{entry.sz=x.response?x.response.length||0:0}catch(e){}}catch(e){}
-if(window.__rhPanel)try{window.__rhPanel.netUpdate(entry)}catch(e){}});return _oXS.apply(this,arguments)}}
+if(window._a_p)try{window._a_p.netUpdate(entry)}catch(e){}});return _oXS.apply(this,arguments)}}
 try{var _oAEL=EventTarget.prototype.addEventListener;
-EventTarget.prototype.addEventListener=function(){window.__rhListeners++;return _oAEL.apply(this,arguments)}}catch(e){}
+EventTarget.prototype.addEventListener=function(){window._a_ls++;return _oAEL.apply(this,arguments)}}catch(e){}
 var _oST=window.setTimeout,_oSI=window.setInterval;
-window.setTimeout=function(){window.__rhTimerCount.timeout++;return _oST.apply(this,arguments)};
-window.setInterval=function(){window.__rhTimerCount.interval++;return _oSI.apply(this,arguments)};
-window.__rhPerf={lcp:0,cls:0,fid:0,fcp:0,ttfb:0,inp:0};
-try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){window.__rhPerf.lcp=e.startTime})}).observe({type:"largest-contentful-paint",buffered:true})}catch(e){}
-try{var _clsVal=0;new PerformanceObserver(function(l){l.getEntries().forEach(function(e){if(!e.hadRecentInput){_clsVal+=e.value;window.__rhPerf.cls=_clsVal}})}).observe({type:"layout-shift",buffered:true})}catch(e){}
-try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){window.__rhPerf.fid=e.processingStart-e.startTime})}).observe({type:"first-input",buffered:true})}catch(e){}
-try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){if(e.name==="first-contentful-paint")window.__rhPerf.fcp=e.startTime})}).observe({type:"paint",buffered:true})}catch(e){}
-function _addSrc(url,type){url=_cleanUrl(url);if(!url||typeof url!=="string"||_srcSeen[url])return;_srcSeen[url]=1;window.__rhSrc.push({u:url,tp:type})}
+window.setTimeout=function(){window._a_tc.timeout++;return _oST.apply(this,arguments)};
+window.setInterval=function(){window._a_tc.interval++;return _oSI.apply(this,arguments)};
+window._a_perf={lcp:0,cls:0,fid:0,fcp:0,ttfb:0,inp:0};
+try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){window._a_perf.lcp=e.startTime})}).observe({type:"largest-contentful-paint",buffered:true})}catch(e){}
+try{var _clsVal=0;new PerformanceObserver(function(l){l.getEntries().forEach(function(e){if(!e.hadRecentInput){_clsVal+=e.value;window._a_perf.cls=_clsVal}})}).observe({type:"layout-shift",buffered:true})}catch(e){}
+try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){window._a_perf.fid=e.processingStart-e.startTime})}).observe({type:"first-input",buffered:true})}catch(e){}
+try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){if(e.name==="first-contentful-paint")window._a_perf.fcp=e.startTime})}).observe({type:"paint",buffered:true})}catch(e){}
+function _addSrc(url,type){url=_cleanUrl(url);if(!url||typeof url!=="string"||_srcSeen[url])return;_srcSeen[url]=1;window._a_src.push({u:url,tp:type})}
 function _scanDOM(){try{document.querySelectorAll("script[src]").forEach(function(e){_addSrc(e.src,"js")})}catch(e){}
 try{document.querySelectorAll("link[rel=stylesheet]").forEach(function(e){_addSrc(e.href,"css")})}catch(e){}
 try{document.querySelectorAll("img[src]").forEach(function(e){_addSrc(e.src,"img")})}catch(e){}
@@ -642,7 +684,7 @@ else document.addEventListener("DOMContentLoaded",function(){document.head.appen
 // filter products themselves. Generic words (`game`, `school`) are NOT
 // included because they appear naturally in legitimate content.
 const KEYWORD_FILTER_SCRIPT = `<script>(function(){
-if(typeof window==="undefined"||window.__rhKF)return;window.__rhKF=1;
+if(typeof window==="undefined"||window._a_kf)return;window._a_kf=1;
 // Globals — many of the techniques in PreventKeywordFilter.md depend on
 // these being callable from arbitrary inline scripts. We define them with
 // non-enumerable descriptors so they don't show up in \`Object.keys(window)\`
@@ -1085,8 +1127,8 @@ function _liteProcess(html, ctx, inject) {
 var O=(typeof location!=='undefined'&&location.origin)||(location.protocol+'//'+location.host);
 var S=${JSON.stringify(sid)},D=${JSON.stringify(destUrl)};
 var _OP=O+'/';var _SP=_OP+S+'/';var _oGA=Element.prototype.getAttribute;var _sSA=Element.prototype.setAttribute;
-// Clear any legacy __rh_sess cookie (removed to prevent cross-destination header leaks).
-try{document.cookie='__rh_sess=; Max-Age=0; path=/'}catch(e){}
+// Clear any legacy _a_se cookie (removed to prevent cross-destination header leaks).
+try{document.cookie='_a_se=; Max-Age=0; path=/'}catch(e){}
 // ------- INFINITE RELOAD-LOOP GUARD -------
 // Some SPAs (React Router, Remix, Next.js) call location.reload() when a dynamic
 // import fails. If we have a bug that makes those imports keep failing, the page
@@ -1102,9 +1144,9 @@ try{document.cookie='__rh_sess=; Max-Age=0; path=/'}catch(e){}
 // attempts reached". Detect challenge SDK markers and use a much higher
 // threshold (15 reloads in 30s) so genuine WAF flows complete; once we leave
 // the challenge page (no markers) the strict threshold returns automatically.
-var _RH_RL_KEY='__rh_rl_'+S;var _RH_RL_BLOCK_KEY='__rh_rl_block_'+S;
-var _rhBlocked=false;
-function _rhIsChallengePage(){try{
+var _a_rlk='_a_rl_'+S;var _a_rlbk='_a_rlb_'+S;
+var _a_blk=false;
+function _a_isCh(){try{
   if(typeof window.AwsWafIntegration!=='undefined')return true;
   if(window.gokuProps)return true;
   if(window.cf_chl_opt||window.__CF$cv$params||window.captcha_settings)return true;
@@ -1121,23 +1163,23 @@ try{
   var ss=window.sessionStorage;
   if(ss){
     var now=Date.now();
-    var blockUntil=parseInt(ss.getItem(_RH_RL_BLOCK_KEY)||'0',10)||0;
-    if(blockUntil&&now<blockUntil){_rhBlocked=true}
+    var blockUntil=parseInt(ss.getItem(_a_rlbk)||'0',10)||0;
+    if(blockUntil&&now<blockUntil){_a_blk=true}
     else{
-      var _rhChallenge=_rhIsChallengePage();
-      var _rhWindow=_rhChallenge?30000:6000;
-      var _rhMax=_rhChallenge?15:4;
-      var raw=ss.getItem(_RH_RL_KEY)||'[]';var arr=[];
+      var _a_ch=_a_isCh();
+      var _a_rw=_a_ch?30000:6000;
+      var _a_rm=_a_ch?15:4;
+      var raw=ss.getItem(_a_rlk)||'[]';var arr=[];
       try{arr=JSON.parse(raw);if(!Array.isArray(arr))arr=[]}catch(e){arr=[]}
       arr.push(now);
-      arr=arr.filter(function(t){return now-t<_rhWindow});
-      if(arr.length>=_rhMax){
-        ss.setItem(_RH_RL_BLOCK_KEY,String(now+30000));
-        ss.removeItem(_RH_RL_KEY);
-        _rhBlocked=true;
-        try{console.warn('[nav] reload-loop detected ('+arr.length+' reloads in '+(_rhWindow/1000)+'s); blocking reloads for 30s')}catch(e){}
+      arr=arr.filter(function(t){return now-t<_a_rw});
+      if(arr.length>=_a_rm){
+        ss.setItem(_a_rlbk,String(now+30000));
+        ss.removeItem(_a_rlk);
+        _a_blk=true;
+        try{console.warn('[nav] reload-loop detected ('+arr.length+' reloads in '+(_a_rw/1000)+'s); blocking reloads for 30s')}catch(e){}
       }else{
-        ss.setItem(_RH_RL_KEY,JSON.stringify(arr));
+        ss.setItem(_a_rlk,JSON.stringify(arr));
       }
     }
   }
@@ -1158,7 +1200,7 @@ if(u.indexOf(_OP)===0){
 }
 if(isProto(u))return px('https:'+u);if(isExt(u))return px(u);if(isRel(u))return pxRel(u);return u}
 try{var du=new URL(D);var DO=du.origin;
-window.__rhDestUrl=du.href;
+window._a_du=du.href;
 function isRel(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/'&&u.indexOf('/'+S+'/')!==0}
 function pxRel(u){return O+'/'+S+'/'+DO+u}
 function pxScript(u){return _OP+S+'!s/'+u}
@@ -1173,7 +1215,7 @@ if(u.indexOf(_OP)===0){
 if(isProto(u))return pxScript('https:'+u);if(isExt(u))return pxScript(u);if(isRel(u))return pxRelScript(u);return u}
 function _destFromPath(p){var sp='/'+S+'/';if(!p||p.indexOf(sp)!==0)return null;var r=p.substring(sp.length);if(/^https?:\\/\\//i.test(r))return r;return null}
 var _rl=window.location,_rr=_rl.replace.bind(_rl),_ra=_rl.assign.bind(_rl),_rrl=_rl.reload.bind(_rl);
-function _rhSafeNav(fn,arg){if(_rhBlocked){try{console.warn('[nav] navigation blocked (reload-loop guard active)')}catch(e){}return}return fn(arg)}
+function _rhSafeNav(fn,arg){if(_a_blk){try{console.warn('[nav] navigation blocked (reload-loop guard active)')}catch(e){}return}return fn(arg)}
 var lp={href:{get:function(){return du.href},set:function(v){_rhSafeNav(_rr,rw(v)||v)}},
 hostname:{get:function(){return du.hostname}},host:{get:function(){return du.host}},
 origin:{get:function(){return du.origin}},protocol:{get:function(){return du.protocol}},
@@ -1183,7 +1225,7 @@ hash:{get:function(){return du.hash},set:function(v){du.hash=v}},
 port:{get:function(){return du.port}},
 assign:{value:function(u){_rhSafeNav(_ra,rw(u)||u)}},
 replace:{value:function(u){_rhSafeNav(_rr,rw(u)||u)}},
-reload:{value:function(){if(_rhBlocked){try{console.warn('[nav] reload blocked (reload-loop guard active)')}catch(e){}return}return _rrl.apply(_rl,arguments)}},
+reload:{value:function(){if(_a_blk){try{console.warn('[nav] reload blocked (reload-loop guard active)')}catch(e){}return}return _rrl.apply(_rl,arguments)}},
 toString:{value:function(){return du.href}}};
 var _locCache=null,_locHref='';
 try{Object.defineProperty(window,'location',{configurable:true,enumerable:true,
@@ -1244,13 +1286,13 @@ var oSW=window.SharedWorker;if(oSW){window.SharedWorker=function(u,o){
 if(typeof u==='string')u=rw(u);return new oSW(u,o)};
 window.SharedWorker.prototype=oSW.prototype}
 try{var oPS=history.pushState.bind(history);history.pushState=function(s,t,u){
-if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;u=pxRel(u)}}return oPS(s,t,u)};
+if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window._a_du=du.href;u=pxRel(u)}}return oPS(s,t,u)};
 var oRS=history.replaceState.bind(history);history.replaceState=function(s,t,u){
-if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;u=pxRel(u)}}return oRS(s,t,u)}}catch(e){}
+if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window._a_du=du.href;u=pxRel(u)}}return oRS(s,t,u)}}catch(e){}
 window.addEventListener('popstate',function(){try{
 var r=_destFromPath(_rl.pathname);
-if(r){du=new URL(r+(_rl.search||'')+(_rl.hash||''));window.__rhDestUrl=du.href}
-else{du=new URL(_rl.pathname+(_rl.search||'')+(_rl.hash||''),DO+'/');window.__rhDestUrl=du.href}
+if(r){du=new URL(r+(_rl.search||'')+(_rl.hash||''));window._a_du=du.href}
+else{du=new URL(_rl.pathname+(_rl.search||'')+(_rl.hash||''),DO+'/');window._a_du=du.href}
 }catch(e){}});
 try{var sSA=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){
 var nl=n.toLowerCase();if((nl==='src'||nl==='href'||nl==='action'||nl==='data'||nl==='poster')&&typeof v==='string'){
@@ -1337,7 +1379,7 @@ ogSet.call(this,sk+'='+p.value+attrs);return
 ogSet.call(this,v);
 }})}}catch(e){}
 }catch(e){}
-function fixEl(el){if(!el||el.nodeType!==1||el.__rhLite)return;el.__rhLite=1;
+function fixEl(el){if(!el||el.nodeType!==1||el._a_lt)return;el._a_lt=1;
 try{var a,n;
 a=_oGA.call(el,'src');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)_sSA.call(el,'src',n)}
 a=_oGA.call(el,'href');if(a&&a.indexOf(_OP)!==0){n=rw(a);if(n!==a)_sSA.call(el,'href',n)}
@@ -1371,10 +1413,42 @@ _pendQ.push(nd)}}}
 if(_pendQ.length&&!_pendRaf)_pendRaf=requestAnimationFrame(_flushPend);
 }).observe(r,{childList:true,subtree:true})}
 startObs();
-document.addEventListener('click',function(e){try{var a=e.target.closest&&e.target.closest('a[href]');
-if(a){var ah=_oGA.call(a,'href');var n=rw(ah);if(n!==ah)_sSA.call(a,'href',n)}}catch(e2){}},true);
+// Click handler: rewrite href + neutralise target=_blank so the
+// navigation stays inside the proxy frame instead of opening a new
+// browser tab. allowMultipleWindows=false on the session covers links
+// rendered by the server-side HTML walker, but DOM nodes added by
+// client-side JS after hydration never reach that pass (deepseek
+// "Start Chatting" CTA, snap/telegram share buttons, SPA widgets, …),
+// which is why we also run this client-side fallback. Modifier keys
+// (Cmd/Ctrl/Shift/middle-click) skip the rewrite so the user can still
+// open a genuine new tab when they want one — and that tab still loads
+// a proxy URL because rw() runs first.
+document.addEventListener('click',function(e){try{
+if(e.defaultPrevented)return;
+var a=e.target.closest&&e.target.closest('a[href]');
+if(!a)return;
+var ah=_oGA.call(a,'href');
+var n=rw(ah);
+if(n!==ah)_sSA.call(a,'href',n);
+var t=(a.target||'').toLowerCase();
+if(t==='_blank'||t==='_new'){
+  if(e.button===1||e.metaKey||e.ctrlKey||e.shiftKey)return;
+  try{a.target='_top'}catch(_e){}
+}
+}catch(e2){}},true);
+document.addEventListener('auxclick',function(e){try{
+if(e.button!==1)return;
+var a=e.target.closest&&e.target.closest('a[href]');
+if(!a)return;
+var ah=_oGA.call(a,'href');
+var n=rw(ah);
+if(n!==ah)_sSA.call(a,'href',n);
+}catch(e2){}},true);
 document.addEventListener('submit',function(e){try{var f=e.target;
-if(f&&f.tagName==='FORM'){var fa=_oGA.call(f,'action');if(fa){var n=rw(fa);if(n!==fa)_sSA.call(f,'action',n)}}}catch(e2){}},true);
+if(f&&f.tagName==='FORM'){var fa=_oGA.call(f,'action');if(fa){var n=rw(fa);if(n!==fa)_sSA.call(f,'action',n)}
+var ft=(f.target||'').toLowerCase();
+if(ft==='_blank'||ft==='_new'){try{f.target='_top'}catch(_e){}}
+}}catch(e2){}},true);
 })()</script>`;
 
     html = html.replace(/<head[^>]*>/i, '$&' + inject + bridge);
@@ -1383,23 +1457,55 @@ if(f&&f.tagName==='FORM'){var fa=_oGA.call(f,'action');if(fa){var n=rw(fa);if(n!
 
 const _DEV = !!process.env.DEVELOPMENT;
 
+// Strip JS comments + collapse whitespace from each `<script>` block in
+// the injection bundles. The bundles contain extensive English-language
+// comments explaining why we do each step; if those comments stay in
+// the served bytes a content-filter that scans response bodies for
+// "proxy" / "rammerhead" / "unblock" / etc. trips on the comments
+// themselves (we ARE the bypass — the comments literally describe it).
+// UglifyJS with mangle/compress OFF only strips comments + redundant
+// whitespace, so identifiers and the `__RH_AB_OFF__` template marker
+// are preserved untouched. If minification fails for any reason we
+// fall back to the original block — the proxy keeps working, just
+// with a slightly larger surface for naive byte scanners.
+const UglifyJS = require('uglify-js');
+function _stripScriptComments(html) {
+    return html.replace(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/g, function (_m, attrs, body) {
+        try {
+            const out = UglifyJS.minify(body, {
+                compress: false,
+                mangle: false,
+                output: { comments: false, beautify: false }
+            });
+            if (out && !out.error && out.code) {
+                return '<script' + (attrs || '') + '>' + out.code + '</script>';
+            }
+        } catch (_e) { /* fall through */ }
+        return '<script' + (attrs || '') + '>' + body + '</script>';
+    });
+}
+const _AD_BLOCKER_SCRIPT_MIN  = _stripScriptComments(AD_BLOCKER_SCRIPT);
+const _ANTIDETECT_SCRIPT_MIN  = _stripScriptComments(ANTIDETECT_SCRIPT);
+const _KEYWORD_FILTER_SCRIPT_MIN = _stripScriptComments(KEYWORD_FILTER_SCRIPT);
+const _DEVTOOLS_SCRIPT_MIN    = _stripScriptComments(DEVTOOLS_SCRIPT);
+
 // AD_BLOCKER_SCRIPT contains the placeholder __RH_AB_OFF__ that decides whether
 // the injected layer hides ads / blocks popups / spoofs adblock-detection. We
 // pre-bake both states so per-request injection is a single pointer pick.
-const _AD_SCRIPT_ENABLED  = AD_BLOCKER_SCRIPT.replace(/__RH_AB_OFF__/g, 'false');
-const _AD_SCRIPT_DISABLED = AD_BLOCKER_SCRIPT.replace(/__RH_AB_OFF__/g, 'true');
+const _AD_SCRIPT_ENABLED  = _AD_BLOCKER_SCRIPT_MIN.replace(/__RH_AB_OFF__/g, 'false');
+const _AD_SCRIPT_DISABLED = _AD_BLOCKER_SCRIPT_MIN.replace(/__RH_AB_OFF__/g, 'true');
 
 // KEYWORD_FILTER_SCRIPT is included in EVERY injection bundle: it's the only
 // thing that exposes `window._` / `window._t` to proxied JS, and it's also
 // what mangles flagged keywords in the runtime DOM. We put it FIRST so
 // any other injected scripts that happen to call `_(…)` already see it.
-const INJECT_PROD_ENABLED  = KEYWORD_FILTER_SCRIPT + ANTIDETECT_SCRIPT + _AD_SCRIPT_ENABLED;
-const INJECT_PROD_DISABLED = KEYWORD_FILTER_SCRIPT + ANTIDETECT_SCRIPT + _AD_SCRIPT_DISABLED;
-const INJECT_DEV_ENABLED   = KEYWORD_FILTER_SCRIPT + ANTIDETECT_SCRIPT + _AD_SCRIPT_ENABLED  + DEVTOOLS_SCRIPT;
-const INJECT_DEV_DISABLED  = KEYWORD_FILTER_SCRIPT + ANTIDETECT_SCRIPT + _AD_SCRIPT_DISABLED + DEVTOOLS_SCRIPT;
+const INJECT_PROD_ENABLED  = _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_ENABLED;
+const INJECT_PROD_DISABLED = _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_DISABLED;
+const INJECT_DEV_ENABLED   = _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_ENABLED  + _DEVTOOLS_SCRIPT_MIN;
+const INJECT_DEV_DISABLED  = _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_DISABLED + _DEVTOOLS_SCRIPT_MIN;
 
 // Resolve the user's ad-blocker preference for this specific request. The
-// __rh_ab cookie is set on the proxy origin by the parent UI (toolbar +
+// _a_b cookie is set on the proxy origin by the parent UI (toolbar +
 // settings page); since every iframe sub-resource also routes through that
 // origin, the cookie reaches us on every request. Hammerhead's per-page
 // virtualisation hides this cookie from the proxied script context, which is

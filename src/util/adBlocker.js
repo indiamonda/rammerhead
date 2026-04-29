@@ -7,8 +7,8 @@
  *   3. YouTube player response rewrite     — strips pre/mid-roll ads from /youtubei/v1/player JSON
  *   4. Per-page injections (CSS + JS)      — hides in-DOM ad containers, blocks popups/redirects
  *
- * A user toggle is transmitted via the `__rh_ab` cookie (path=/). When absent we default to ON;
- * the client writes `__rh_ab=0` to disable.
+ * A user toggle is transmitted via the `_a_b` cookie (path=/). When absent we default to ON;
+ * the client writes `_a_b=0` to disable.
  */
 
 'use strict';
@@ -402,13 +402,13 @@ function writeBlockedResponse(req, res, originalUrl) {
 }
 
 /**
- * Is the ad blocker enabled for this request? Checks the `__rh_ab` cookie.
+ * Is the ad blocker enabled for this request? Checks the `_a_b` cookie.
  * Absent or `1` → enabled. `0` → disabled.
  */
 function isEnabledFor(req) {
     const cookie = req.headers.cookie || '';
     if (!cookie) return true;
-    const m = cookie.match(/(?:^|;\s*)__rh_ab=(0|1)/);
+    const m = cookie.match(/(?:^|;\s*)_a_b=(0|1)/);
     if (!m) return true;
     return m[1] === '1';
 }

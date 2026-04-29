@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>
         (function(){var t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();
-        (function(){try{var ab=localStorage.getItem('adBlockerEnabled');if(ab===null){ab='1';localStorage.setItem('adBlockerEnabled','1')}document.cookie='__rh_ab='+(ab==='0'?'0':'1')+'; Path=/; Max-Age=31536000; SameSite=Lax'}catch(e){}})();
+        (function(){try{var ab=localStorage.getItem('adBlockerEnabled');if(ab===null){ab='1';localStorage.setItem('adBlockerEnabled','1')}document.cookie='_a_b='+(ab==='0'?'0':'1')+'; Path=/; Max-Age=31536000; SameSite=Lax'}catch(e){}})();
         var _=atob;function _t(s){var r='';for(var i=0;i<s.length;i++){r+=s.charAt(i);if(i<s.length-1&&Math.random()>.4){var c='',l=1+(Math.random()*2|0);for(var j=0;j<l;j++)c+=String.fromCharCode(97+(Math.random()*26|0));r+='<s style="font-size:0;position:absolute;opacity:0;pointer-events:none;user-select:none">'+c+'</s>'}}return r}
         (function(){var b=_('aHR0cHM6Ly9qaW1teXFyZy5naXRodWIuaW8vdW5saW5ld2l6ZS9hc3NldHMvd2FsbHBhcGVycy8=');function p(){for(var i=1;i<=50;i++){var img=new Image();img.src=b+i+'.jpg';}}'requestIdleCallback' in window ? requestIdleCallback(p, {timeout: 300}) : setTimeout(p, 0);})();
     </script>
@@ -3743,13 +3743,13 @@
                 const successMsg = document.getElementById('settings-success-message');
                 const errorMsg = document.getElementById('settings-error-message');
 
-                // Ad Blocker toggle — writes both localStorage (client-side) and __rh_ab cookie
+                // Ad Blocker toggle — writes both localStorage (client-side) and _a_b cookie
                 // (server-side) so both layers stay in sync.
                 const adBlockToggle = document.getElementById('settings-adblock-toggle');
                 const adBlockStatus = document.getElementById('settings-adblock-status');
                 function _applyAdBlockerPref(enabled) {
                     localStorage.setItem('adBlockerEnabled', enabled ? '1' : '0');
-                    document.cookie = '__rh_ab=' + (enabled ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
+                    document.cookie = '_a_b=' + (enabled ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
                     if (adBlockStatus) adBlockStatus.textContent = enabled ? 'Enabled' : 'Disabled';
                     const slider = adBlockToggle && adBlockToggle.parentElement && adBlockToggle.parentElement.querySelector('.slider');
                     const knob = adBlockToggle && adBlockToggle.parentElement && adBlockToggle.parentElement.querySelector('.knob');
@@ -5242,7 +5242,7 @@
             function toggleAdblockerPref() {
                 const next = !isAdblockerEnabled();
                 try { localStorage.setItem('adBlockerEnabled', next ? '1' : '0'); } catch (_) {}
-                document.cookie = '__rh_ab=' + (next ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
+                document.cookie = '_a_b=' + (next ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
                 refreshAdblockMenuLabel();
                 // Keep the Settings page toggle in sync if it's currently rendered
                 const settingsToggle = document.getElementById('settings-adblock-toggle');

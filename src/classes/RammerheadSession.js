@@ -27,7 +27,20 @@ class RammerheadSession extends Session {
      */
     constructor({ id = generateId(), dontConnectToData = false, disableShuffling = false, prependScripts = [] } = {}) {
         super(['blah/blah'], {
-            allowMultipleWindows: true,
+            // `false` makes Hammerhead's DOM processor rewrite every
+            // <a target="_blank"> (and <form formtarget="_blank">) to
+            // _top so a click navigates the proxied frame in-place
+            // instead of opening a brand-new browser tab. Many sites
+            // ship `target="_blank"` on what users perceive as a normal
+            // in-page navigation (Deepseek "Start Chatting", Snapchat
+            // share links, Telegram open-in-app, …); opening those in
+            // a fresh tab is jarring AND loses the parent's session
+            // warmup / cookies, which then re-triggers Cloudflare /
+            // AWS WAF / hCaptcha challenges from the cold referrer.
+            // The runtime click handler in patchPageProcessing.js
+            // catches the same case for dynamically-rendered SPA
+            // links that don't go through the server-side DOM walker.
+            allowMultipleWindows: false,
             disablePageCaching: false
         });
 
