@@ -32,6 +32,7 @@
     "async-exit-hook": "^2.0.1",
     "lru-cache": "^7.14.1",
     "mime": "^2.5.2",
+    "puppeteer-core": "^24.42.0",
     "sticky-session-custom": "^1.2.0",
     "testcafe-hammerhead": "31.6.2",
     "uglify-js": "^3.15.3",
