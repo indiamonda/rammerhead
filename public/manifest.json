@@ -1,7 +1,9 @@
 {
-  "name": "Home",
-  "short_name": "Home",
-  "description": "Web application",
+  "name": "StudyBoard Learning",
+  "short_name": "StudyBoard",
+  "description": "StudyBoard online learning platform - an interactive educational workspace for students, teachers, and self-directed learners. Browse curated learning resources, manage study sessions, organize academic bookmarks, and review your learning history.",
+  "categories": ["education", "productivity", "books", "reference"],
+  "lang": "en",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0f",

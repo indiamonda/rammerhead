@@ -1,6 +1,6 @@
 const LRUCache = require('lru-cache');
 
-class RammerheadJSMemCache {
+class StudyBoardJSMemCache {
   constructor(jsCacheSize) {
     this.lru = new LRUCache({
       maxSize: jsCacheSize,
@@ -15,4 +15,4 @@ class RammerheadJSMemCache {
   }
 }
 
-module.exports = RammerheadJSMemCache;
+module.exports = StudyBoardJSMemCache;

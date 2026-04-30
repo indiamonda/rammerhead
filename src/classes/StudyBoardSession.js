@@ -13,7 +13,7 @@ UploadStorage.prototype.store = emptyFunc;
 /**
  * wrapper for initializing Session with saving capabilities
  */
-class RammerheadSession extends Session {
+class StudyBoardSession extends Session {
     data = {};
     createdAt = Date.now();
     lastUsed = Date.now();
@@ -67,19 +67,19 @@ class RammerheadSession extends Session {
         this.overrideExternalProxySettings = null;
 
         // disable http2. error handling from http2 proxy client to non-http2 user is too complicated to handle
-        // (status code 0, for example, will crash rammerhead)
+        // (status code 0, for example, will crash studyboard)
         // UPDATE: so apparently, some websites *really* want you to make an http2 connection to them before you connect
         // to their websocket endpoint.
         // for example, web.whatsapp.com websockets throws a 400 error even though the request is identical, with/without http2.
         // so now, we undo the change we made that initially was to avoid the whole error mess and a potential source of memory leak.
         // (also we got the "last resort" error handling in addMoreErrorGuards.js so everything is fine)
         // this.isHttp2Disabled = () => true;
-        if (global.rhDisableHttp2) { // globally set from RammerheadProxy.js
+        if (global.sbDisableHttp2) { // globally set from StudyBoardGateway.js
             this.disableHttp2();
         }
 
         this.injectable.scripts.push(...prependScripts);
-        this.injectable.scripts.push(PROXY_PATHS.rammerheadJs);
+        this.injectable.scripts.push(PROXY_PATHS.studyboardJs);
 
         this.id = id;
         this.shuffleDict = disableShuffling ? null : StrShuffler.generateDictionary();
@@ -118,7 +118,7 @@ class RammerheadSession extends Session {
         if (!parsed.serializedCookieJar)
             throw new Error('expected serializedSession to contain serializedCookieJar object');
 
-        const session = new RammerheadSession({ id, dontConnectToData: true });
+        const session = new StudyBoardSession({ id, dontConnectToData: true });
         session.data = parsed.data;
         session.connectHammerheadToData(true);
         session.cookies.setJar(parsed.serializedCookieJar);
@@ -147,4 +147,4 @@ class RammerheadSession extends Session {
     }
 }
 
-module.exports = RammerheadSession;
+module.exports = StudyBoardSession;

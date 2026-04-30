@@ -13,7 +13,7 @@
  *                as absolute links because pulling them would explode the
  *                graph.
  *
- *   2. LOCAL   — package this rammerhead instance's source tree (public/,
+ *   2. LOCAL   — package this studyboard instance's source tree (public/,
  *                src/, package.json, etc.). Used when the user typed a URL
  *                that resolves to the running server itself; it's the only
  *                "non-static" export we can actually deliver, since we
@@ -80,7 +80,7 @@ const DEFAULTS = {
 
 /**
  * Promise-style fetch built on Node's core http/https. We don't rely on
- * `fetch()` because it isn't available on Node 14, and rammerhead's
+ * `fetch()` because it isn't available on Node 14, and studyboard's
  * package.json declares >=18 but downstream forks may run older.
  *
  * Auto-follows up to `maxRedirects` redirects, returns the final URL so the
@@ -394,7 +394,7 @@ async function buildStaticSite(rootUrl, zip, opts = {}) {
     // page just inside <head>. When `useServer` is off this is null
     // and no injection happens. The BASE we hand the bridge has the
     // form `<protocol>://<host>/<sessionId>` — that's the only path
-    // shape rammerhead's URL router accepts. Without the trailing
+    // shape studyboard's URL router accepts. Without the trailing
     // session ID the proxy 404s every request and the bridge is a
     // no-op.
     const proxyBase = (useServer && opts.proxyHostHeader && opts.proxySessionId)
@@ -816,7 +816,7 @@ async function buildLocalSite(zip, opts = {}) {
     const readme = [
         '# Web Build Files Export — Local Mode',
         '',
-        'This archive contains the rammerhead source tree (the live server',
+        'This archive contains the studyboard source tree (the live server',
         'you exported from). Use it to redeploy or fork the instance.',
         '',
         '## Layout',
@@ -1020,7 +1020,7 @@ async function buildSingleFileSite(rootUrl, opts = {}) {
     // bootstrap. The bootstrap is injected at the very top so it
     // captures fetch / XHR / WebSocket *before* any of the page's
     // own scripts can grab references to the originals.
-    let prelude = '<!-- Built by Rammerhead Web-Build (single-file). Source: '
+    let prelude = '<!-- Built by StudyBoard Web-Build (single-file). Source: '
         + finalUrl + '. Generated: ' + new Date().toISOString() + ' -->\n';
     if (proxyBase) {
         prelude += '<script data-rh-bridge="1">' + buildProxyBridgeScript(proxyBase) + '</script>\n';
@@ -1168,7 +1168,7 @@ async function replaceAsync(str, regex, mapper) {
  * own protocol (via X-Forwarded-Proto when behind a reverse proxy,
  * or req.connection.encrypted otherwise) so the bridge doesn't end
  * up mixing protocols when the deployed copy talks back to the
- * rammerhead host. Localhost defaults to http; anything else
+ * studyboard host. Localhost defaults to http; anything else
  * defaults to https when we don't have explicit info.
  */
 function resolveProxyProtocol(opts) {
@@ -1183,7 +1183,7 @@ function resolveProxyProtocol(opts) {
 /**
  * Returns a tiny self-contained JS string. When the deployed copy of
  * the export runs, it overrides `fetch`, `XMLHttpRequest`, and
- * `WebSocket` so any absolute URL still flows through the rammerhead
+ * `WebSocket` so any absolute URL still flows through the studyboard
  * proxy that built the export. That makes dynamic backends keep
  * working even when the user opens the file from `file://` or hosts
  * it on a different origin.
@@ -1192,7 +1192,7 @@ function resolveProxyProtocol(opts) {
  * caller; passing it as a parameter would require the bridge to know
  * its own host dynamically, which adds complexity for no gain.
  *
- * The bridge intentionally fails open: if the rammerhead host is
+ * The bridge intentionally fails open: if the studyboard host is
  * unreachable the original fetch/XHR/WebSocket still runs against the
  * absolute URL (which will probably hit CORS). That's better than
  * silently breaking the exported page.
@@ -1205,7 +1205,7 @@ function buildProxyBridgeScript(proxyBase) {
     return ';(function(){\n' +
         '  var BASE = ' + JSON.stringify(proxyBase) + ';\n' +
         '  if (!BASE) return;\n' +
-        '  // BASE looks like "https://rammerhead.example.com/<sessionId>".\n' +
+        '  // BASE looks like "https://studyboard.example.com/<sessionId>".\n' +
         '  // Trailing slashes are tolerated.\n' +
         '  BASE = BASE.replace(/\\/+$/, "");\n' +
         '  function rh_proxy(u){\n' +

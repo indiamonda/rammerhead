@@ -312,11 +312,11 @@ const CDN_REFERER_MAP = [
 ];
 
 // Match unshuffled (https://...) and shuffled (legacy `_rhs...` or v2 `_rh1...`)
-// proxy URLs. Optional /rammerhead prefix for reverse-proxy deployments.
+// proxy URLs. Optional /studyboard prefix for reverse-proxy deployments.
 // Allow hammerhead-style metadata segments after the session id, e.g.:
 //   /<id>!s!utf-8/_rhs... or /<id>!a!1!s*host/_rh1...
-const PROXY_REQUEST_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(?:https?:\/\/[^/]+|_rh[s1])/i;
-const UNSHUFFLED_ORIGIN_RE = /^(?:\/rammerhead)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(https?:\/\/[^/]+)/i;
+const PROXY_REQUEST_RE = /^(?:\/studyboard)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(?:https?:\/\/[^/]+|_rh[s1])/i;
+const UNSHUFFLED_ORIGIN_RE = /^(?:\/studyboard)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(https?:\/\/[^/]+)/i;
 
 /**
  * Extract destination origin from proxy URL.
@@ -333,7 +333,7 @@ function getDestinationOrigin(url, sessionStore) {
     const session = sessionStore.get(sessionId);
     if (!session?.shuffleDict) return null;
 
-    const destPartMatch = pathOnly.match(new RegExp(`^(?:\\/rammerhead)?\\/[a-z0-9]{32}(?:(?:![^\\/]+)*)\\/(.+)$`, 'i'));
+    const destPartMatch = pathOnly.match(new RegExp(`^(?:\\/studyboard)?\\/[a-z0-9]{32}(?:(?:![^\\/]+)*)\\/(.+)$`, 'i'));
     if (!destPartMatch) return null;
     let destPart = destPartMatch[1];
     if (!StrShuffler.isShuffled(destPart)) return null;
@@ -372,7 +372,7 @@ function getRefererFullUrl(referer, sessionStore) {
     if (!sessionId || !sessionStore) return null;
     const session = sessionStore.get(sessionId);
     if (!session?.shuffleDict) return null;
-    const pathMatch = referer.match(/(?:\/rammerhead)?\/[a-z0-9]{32}(?:(?:![^\/\?]+)*)\/(.+?)(?:\?|$)/i);
+    const pathMatch = referer.match(/(?:\/studyboard)?\/[a-z0-9]{32}(?:(?:![^\/\?]+)*)\/(.+?)(?:\?|$)/i);
     if (!pathMatch) return null;
     let destPart = pathMatch[1];
     if (StrShuffler.isShuffled(destPart)) {
@@ -526,7 +526,7 @@ function _isCaptchaDest(destOrigin, url) {
 /**
  * @param {http.IncomingMessage} req
  * @param {boolean} isRoute - from pipeline; session proxy requests are false
- * @param {import('../classes/RammerheadSessionAbstractStore')} [sessionStore] - for unshuffling when URL is shuffled
+ * @param {import('../classes/StudyBoardSessionAbstractStore')} [sessionStore] - for unshuffling when URL is shuffled
  */
 function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     if (!req?.headers) return;

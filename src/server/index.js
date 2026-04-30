@@ -19,21 +19,21 @@ if (config.enableWorkers && (cluster.isPrimary || cluster.isMaster)) {
     const exitHook = require('async-exit-hook');
     const fs = require('fs');
     const path = require('path');
-    const RammerheadProxy = require('../classes/RammerheadProxy');
+    const StudyBoardGateway = require('../classes/StudyBoardGateway');
     const addStaticDirToProxy = require('../util/addStaticDirToProxy');
-    const RammerheadSessionFileCache = require('../classes/RammerheadSessionFileCache');
+    const StudyBoardSessionFileCache = require('../classes/StudyBoardSessionFileCache');
     const setupRoutes = require('./setupRoutes');
     const setupPipeline = require('./setupPipeline');
-    const RammerheadLogging = require('../classes/RammerheadLogging');
+    const StudyBoardLogging = require('../classes/StudyBoardLogging');
 
     const workerId = config.enableWorkers ? `(worker ${cluster.worker.id}) ` : '';
 
-    const logger = new RammerheadLogging({
+    const logger = new StudyBoardLogging({
         logLevel: config.logLevel,
         generatePrefix: (level) => workerId + config.generatePrefix(level)
     });
 
-    const proxyServer = new RammerheadProxy({
+    const proxyServer = new StudyBoardGateway({
         logger,
         loggerGetIP: config.getIP,
         bindingAddress: config.bindingAddress,
@@ -51,7 +51,7 @@ if (config.enableWorkers && (cluster.isPrimary || cluster.isMaster)) {
     if (config.enableWorkers) {
         fileCacheOptions.staleCleanupOptions = null;
     }
-    const sessionStore = new RammerheadSessionFileCache(fileCacheOptions);
+    const sessionStore = new StudyBoardSessionFileCache(fileCacheOptions);
     sessionStore.attachToProxy(proxyServer);
 
     setupPipeline(proxyServer, sessionStore);
@@ -59,14 +59,14 @@ if (config.enableWorkers && (cluster.isPrimary || cluster.isMaster)) {
     setupRoutes(proxyServer, sessionStore, logger);
 
     exitHook(() => {
-        logger.info(`(server) Received exit signal, closing proxy server`);
+        logger.info(`(server) Received exit signal, closing gateway`);
         proxyServer.close();
-        logger.info('(server) Closed proxy server');
+        logger.info('(server) Closed gateway');
     });
 
     const formatUrl = (secure, hostname, port) => `${secure ? 'https' : 'http'}://${hostname}:${port}`;
     logger.info(
-        `(server) Rammerhead proxy is listening on ${formatUrl(config.ssl, config.bindingAddress, config.port)}`
+        `(server) StudyBoard learning gateway is listening on ${formatUrl(config.ssl, config.bindingAddress, config.port)}`
     );
 
     module.exports = proxyServer;

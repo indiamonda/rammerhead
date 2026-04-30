@@ -15,8 +15,8 @@
  *     when a service-worker or task-script lookup misses its session — same
  *     "blank tab" symptom.
  *
- * Hammerhead doesn't pass the `req` to these helpers, so RammerheadProxy
- * tags every `res` with `_rhReq = req` inside `_onRequest`. We read that
+ * Hammerhead doesn't pass the `req` to these helpers, so StudyBoardGateway
+ * tags every `res` with `_sbReq = req` inside `_onRequest`. We read that
  * here to do content-negotiation. If the tag is missing (e.g. third-party
  * code calling these helpers from another path), we fall back to the
  * original status-only behaviour.
@@ -29,7 +29,7 @@ const orig404 = httpUtil.respond404;
 const orig500 = httpUtil.respond500;
 
 httpUtil.respond404 = function patchedRespond404(res) {
-    const req = res && res._rhReq;
+    const req = res && res._sbReq;
     if (req && !res.headersSent) {
         try {
             sendErrorPage(req, res, 404, { detail: req.url });
@@ -44,7 +44,7 @@ httpUtil.respond404 = function patchedRespond404(res) {
 httpUtil.respond404._a_patched = true;
 
 httpUtil.respond500 = function patchedRespond500(res, err) {
-    const req = res && res._rhReq;
+    const req = res && res._sbReq;
     if (req && !res.headersSent) {
         try {
             sendErrorPage(req, res, 500, { detail: err || undefined });

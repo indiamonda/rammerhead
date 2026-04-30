@@ -8,7 +8,7 @@ function defaultGeneratePrefix(level) {
     return `[${new Date().toISOString()}] [${level.toUpperCase()}] `;
 }
 
-class RammerheadLogging {
+class StudyBoardLogging {
     /**
      * @param {object} options
      * @param {LoggingLevels} options.logLevel - logLevel to initialize the logger with
@@ -77,4 +77,4 @@ class RammerheadLogging {
     }
 }
 
-module.exports = RammerheadLogging;
+module.exports = StudyBoardLogging;

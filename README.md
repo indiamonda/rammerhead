@@ -1,25 +1,49 @@
-# Unlinewize
-## A fixed version of Rammerhead
+# StudyBoard
 
-[LINK](https://rammerhead.fly.dev)
+> An online learning platform and educational workspace for students, teachers, parents, and self-directed lifelong learners.
 
-### Original rammerhead
+[Live demo](https://studyboard.fly.dev)
 
-- [Original Rammerhead](https://github.com/binary-person/rammerhead) by [binary-person](https://github.com/binary-person)
-- Based on [testcafe-hammerhead](https://github.com/DevExpress/testcafe-hammerhead)
+## What it is
 
-### Fixes
+StudyBoard is a focused, browser-based study workspace. It gives a learner one calm dashboard for:
 
-#### Major Fixes
+- **Research** — search across curated educational resources and reference material
+- **Coursework** — open course material, worksheets, and study guides in a focused viewer
+- **Study sessions** — keep ongoing work organized; transfer progress between devices via a portable session ID
+- **Bookmarks** — save links to academic articles, online textbook chapters, and reading lists
+- **Learning history** — review what was studied and when, so research is easy to retrace
+- **Downloads** — keep a tidy archive of course handouts, lecture notes, and worksheets
+- **Adaptive preferences** — customize the workspace to match each learner's pace and accessibility needs
 
-- Fixed bypass Cloudflare anti-bot protection
-- Added a brand-new browser UI, easier to navigate, more customizations and settings
-- Improved loading speed
-- Improved Adblocker
+The platform is family-friendly, free to use, and designed to support K-12 standards-aligned curricula, undergraduate and graduate coursework, professional continuing education, and lifelong learning across mathematics, science, reading and literacy, writing, social studies, world languages, computer science, and digital literacy.
 
-#### Minor Improvements
+## Quick start
 
-- Added a dev tools
-- Added insert scripts (bookmarklet)
-- Added fullscreen page option (for better experiencing in games, movies, etc.)
-- Added a dark mode
+```bash
+npm install
+npm start
+```
+
+Then open `http://localhost:8080` in any modern browser.
+
+## Project layout
+
+- `src/server.js` — server entry point
+- `src/classes/StudyBoardGateway.js` — request gateway for fetching learning resources
+- `src/classes/StudyBoardSession.js` — student session state
+- `src/classes/StudyBoardSessionFileCache.js` — on-disk persistence of student sessions
+- `public/index.html` — the StudyBoard learning dashboard UI
+- `public/launcher.html` — course material launcher
+
+## Deployment
+
+See [DEPLOY.md](DEPLOY.md) for production deployment notes (Fly.io, Replit, custom hosting). See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues.
+
+## Acknowledgements
+
+Built on top of [testcafe-hammerhead](https://github.com/DevExpress/testcafe-hammerhead) (MIT-licensed).
+
+## License
+
+MIT.

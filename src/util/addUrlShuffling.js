@@ -42,7 +42,7 @@ const replaceUrl = (url, replacer) => {
     // `!s!utf-8`) is attached before the slash that starts the destination.
     //
     // We must allow *multiple* path segments before the session — not a single
-    // `/(?:[^/]+)/` — otherwise `/rammerhead/<sid>/…`, PATH_STYLE prefixes, or any
+    // `/(?:[^/]+)/` — otherwise `/studyboard/<sid>/…`, PATH_STYLE prefixes, or any
     // UI base path leaves `<sid>!meta/…` inside the "destination" capture, the
     // shuffler never sees `_rh1…`, and static chunks (ChatGPT `/cdn/assets/…`,
     // etc.) 404.

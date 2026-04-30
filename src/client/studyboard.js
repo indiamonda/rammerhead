@@ -205,9 +205,9 @@
         const request = new XMLHttpRequest();
         // Session ID is the 32-char hex segment before the destination URL.
         // Detect the proxy's mount-point dynamically from the SCRIPT tag that
-        // loaded us (rather than hard-coding `/rammerhead/`) so the served
+        // loaded us (rather than hard-coding `/studyboard/`) so the served
         // bundle never literally contains the brand string. Works for any
-        // base path (`/`, `/proxy/`, `/rammerhead/`, `/foo/bar/`, …).
+        // base path (`/`, `/proxy/`, `/studyboard/`, `/foo/bar/`, …).
         var basePath = '';
         try {
             var scripts = document.getElementsByTagName('script');
@@ -395,7 +395,7 @@
 
         const replaceUrl = (url, replacer) => {
             // Must mirror src/util/addUrlShuffling.js: allow multiple path segments
-            // before /<32hex>(!meta)*/ so /rammerhead/<sid>/… and PATH_STYLE bases work.
+            // before /<32hex>(!meta)*/ so /studyboard/<sid>/… and PATH_STYLE bases work.
             // NON-GREEDY `*?` so the FIRST 32-hex segment wins (otherwise content-hash
             // dirs in destinations are mistaken for the session id).
             return (url || '').replace(

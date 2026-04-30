@@ -3,7 +3,7 @@ const path = require('path');
 const cluster = require('cluster');
 const LRUCache = require('lru-cache');
 
-class RammerheadJSFileCache {
+class StudyBoardJSFileCache {
   constructor(diskJsCachePath, jsCacheSize, maxItems, enableWorkerMode) {
     /**
      * this lru cache will be treated as such: key => jsFileSize
@@ -137,4 +137,4 @@ class RammerheadJSFileCache {
   }
 }
 
-module.exports = RammerheadJSFileCache;
+module.exports = StudyBoardJSFileCache;

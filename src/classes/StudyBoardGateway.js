@@ -12,8 +12,8 @@ const WebSocket = require('ws');
 const httpResponse = require('../util/httpResponse');
 const streamToString = require('../util/streamToString');
 const URLPath = require('../util/URLPath');
-const RammerheadLogging = require('../classes/RammerheadLogging');
-const RammerheadJSMemCache = require('./RammerheadJSMemCache.js');
+const StudyBoardLogging = require('../classes/StudyBoardLogging');
+const StudyBoardJSMemCache = require('./StudyBoardJSMemCache.js');
 
 require('../util/fixCorsHeader');
 require('../util/fixCorsMissingOriginHeader.js');
@@ -69,7 +69,7 @@ let addJSDiskCache = function (jsCache) {
  */
 
 /**
- * @typedef {object} RammerheadServerInfo
+ * @typedef {object} StudyBoardServerInfo
  * @property {string} hostname
  * @property {number} port
  * @property {'https:'|'http:'} protocol
@@ -77,17 +77,17 @@ let addJSDiskCache = function (jsCache) {
 
 /**
  * @private
- * @typedef {import('./RammerheadSession')} RammerheadSession
+ * @typedef {import('./StudyBoardSession')} StudyBoardSession
  */
 
 /**
  * wrapper for hammerhead's Proxy
  */
-class RammerheadProxy extends Proxy {
+class StudyBoardGateway extends Proxy {
     /**
      *
      * @param {object} options
-     * @param {RammerheadLogging|undefined} options.logger
+     * @param {StudyBoardLogging|undefined} options.logger
      * @param {(req: http.IncomingMessage) => string} options.loggerGetIP - use custom logic to get IP, either from headers or directly
      * @param {string} options.bindingAddress - hostname for proxy to bind to
      * @param {number} options.port - port for proxy to listen to
@@ -95,16 +95,16 @@ class RammerheadProxy extends Proxy {
      * to disable using this. highly not recommended to disable this because it breaks sites that check for the origin header
      * @param {boolean} options.dontListen - avoid calling http.listen() if you need to use sticky-session to load balance
      * @param {http.ServerOptions} options.ssl - set to null to disable ssl
-     * @param {(req: http.IncomingMessage) => RammerheadServerInfo} options.getServerInfo - force hammerhead to rewrite using specified
+     * @param {(req: http.IncomingMessage) => StudyBoardServerInfo} options.getServerInfo - force hammerhead to rewrite using specified
      * server info (server info includes hostname, port, and protocol). Useful for a reverse proxy setup like nginx where you
      * need to rewrite the hostname/port/protocol
      * @param {boolean} options.disableLocalStorageSync - disables localStorage syncing (default: false)
-     * @param {import('../classes/RammerheadJSAbstractCache.js')} options.jsCache - js cache class. (default: memory class 50mb)
+     * @param {import('../classes/StudyBoardJSAbstractCache.js')} options.jsCache - js cache class. (default: memory class 50mb)
      * @param {boolean} options.disableHttp2
      */
     constructor({
         loggerGetIP = (req) => req.socket.remoteAddress,
-        logger = new RammerheadLogging({ logLevel: 'disabled' }),
+        logger = new StudyBoardLogging({ logLevel: 'disabled' }),
         bindingAddress = '127.0.0.1',
         port = 8080,
         crossDomainPort = 8081,
@@ -119,11 +119,11 @@ class RammerheadProxy extends Proxy {
             };
         },
         disableLocalStorageSync = false,
-        jsCache = new RammerheadJSMemCache(50 * 1024 * 1024),
+        jsCache = new StudyBoardJSMemCache(50 * 1024 * 1024),
         disableHttp2 = false
     } = {}) {
         // as of testcafe-hammerhead version 31.6.2, they put the code for starting the server in a separate "start()"
-        // method. due to the proxy focused nature of rammerhead, and backwards-compatibility, there won't be a need for
+        // method. due to the proxy focused nature of studyboard, and backwards-compatibility, there won't be a need for
         // start()
 
         super({ staticContentCaching: true });
@@ -186,7 +186,7 @@ class RammerheadProxy extends Proxy {
             http.Server.prototype.listen = originalListen;
         }
 
-        this._setupRammerheadServiceRoutes();
+        this._setupStudyBoardServiceRoutes();
         this._setupLocalStorageServiceRoutes(disableLocalStorageSync);
 
         this.onRequestPipeline = [];
@@ -212,20 +212,20 @@ class RammerheadProxy extends Proxy {
             // names the proxy. Hammerhead/Node don't set these by default but a
             // reverse-proxy upstream (Fly's edge, a future middleware, etc.) could.
             'x-powered-by': () => undefined,
-            'x-rammerhead': () => undefined,
-            'x-rammerhead-version': () => undefined,
+            'x-studyboard': () => undefined,
+            'x-studyboard-version': () => undefined,
             'x-hammerhead': () => undefined,
             // `Server` from origin (e.g. `cloudflare`, `nginx`) is forwarded as-is
             // because the user *wants* to look like the destination. Only strip if
             // the value names us.
             'server': (src) => {
-                if (typeof src === 'string' && /rammerhead|hammerhead|testcafe/i.test(src)) return undefined;
+                if (typeof src === 'string' && /studyboard|hammerhead|testcafe/i.test(src)) return undefined;
                 return src;
             },
             // `Via` proxies are usually transparent middleboxes; pass through unless
             // the value names us.
             'via': (src) => {
-                if (typeof src === 'string' && /rammerhead|hammerhead/i.test(src)) return undefined;
+                if (typeof src === 'string' && /studyboard|hammerhead/i.test(src)) return undefined;
                 return src;
             },
         };
@@ -237,13 +237,13 @@ class RammerheadProxy extends Proxy {
         this.loggerGetIP = loggerGetIP;
         this.logger = logger;
         // this.disableHttp2 = disableHttp2;
-        global.rhDisableHttp2 = disableHttp2;
+        global.sbDisableHttp2 = disableHttp2;
 
         addJSDiskCache(jsCache);
     }
 
     start() {
-        throw new TypeError('rammerhead does not need a start(). server will automatically start when constructor is initialized.');
+        throw new TypeError('studyboard does not need a start(). server will automatically start when constructor is initialized.');
     }
 
     // add WS routing
@@ -299,7 +299,7 @@ class RammerheadProxy extends Proxy {
     _WSRouteHandler(req, socket, head) {
         const route = this.getWSRoute(req.url);
         if (route) {
-            // RH stands for rammerhead. RHROUTE is a custom implementation by rammerhead that is
+            // RH stands for studyboard. RHROUTE is a custom implementation by studyboard that is
             // unrelated to hammerhead
             this.logger.traffic(`WSROUTE UPGRADE ${this.loggerGetIP(req)} ${req.url}`);
             route.wsServer.handleUpgrade(req, socket, head, (client, req) => {
@@ -383,7 +383,7 @@ class RammerheadProxy extends Proxy {
             // Tag res with the matching req so hammerhead's respond404/respond500
             // helpers (which only receive res) can do content-negotiation. See
             // patchHammerheadErrorResponses.js for the consuming side.
-            res._rhReq = req;
+            res._sbReq = req;
             // strip server headers
             const originalWriteHead = res.writeHead;
             const self = this;
@@ -502,18 +502,18 @@ class RammerheadProxy extends Proxy {
     /**
      * @private
      */
-    _setupRammerheadServiceRoutes() {
-        const rammerheadClientHandler = {
+    _setupStudyBoardServiceRoutes() {
+        const studyboardClientHandler = {
             content: fs.readFileSync(
-                path.join(__dirname, '../client/rammerhead' + (process.env.DEVELOPMENT ? '.js' : '.min.js'))
+                path.join(__dirname, '../client/studyboard' + (process.env.DEVELOPMENT ? '.js' : '.min.js'))
             ),
             contentType: 'application/x-javascript'
         };
-        // Generic CDN-shaped path is the primary; the legacy /rammerhead.js alias
+        // Generic CDN-shaped path is the primary; the legacy /studyboard.js alias
         // stays so any cached page or older client that still references the old
         // path keeps working.
-        this.GET(_serviceRoutePatch.PROXY_PATHS.rammerheadJs, rammerheadClientHandler);
-        this.GET(_serviceRoutePatch.PROXY_PATHS.rammerheadJsLegacy, rammerheadClientHandler);
+        this.GET(_serviceRoutePatch.PROXY_PATHS.studyboardJs, studyboardClientHandler);
+        this.GET(_serviceRoutePatch.PROXY_PATHS.studyboardJsLegacy, studyboardClientHandler);
         const shuffleDictHandler = (req, res) => {
             try {
                 const params = new URLPath(req.url || '').getParams();
@@ -524,10 +524,10 @@ class RammerheadProxy extends Proxy {
                 let session = this.openSessions.get(id);
                 if (!session) {
                     if (/^[a-f0-9]{32}$/i.test(id)) {
-                        const RammerheadSession = require('./RammerheadSession');
+                        const StudyBoardSession = require('./StudyBoardSession');
                         const StrShuffler = require('../util/StrShuffler');
                         const sessionAffinity = require('../util/sessionAffinity');
-                        session = new RammerheadSession();
+                        session = new StudyBoardSession();
                         session.shuffleDict = StrShuffler.generateDictionary();
                         this.openSessions.addSerializedSession(id, session.serializeSession());
                         sessionAffinity.registerSessionMachineSync(id);
@@ -545,11 +545,11 @@ class RammerheadProxy extends Proxy {
             }
         };
         // Generic CDN-shaped path is the primary; the legacy `/api/shuffleDict`
-        // and `/rammerhead/api/shuffleDict` aliases are kept so older client
+        // and `/studyboard/api/shuffleDict` aliases are kept so older client
         // bundles (and any cached page) keep working.
         this.GET(_serviceRoutePatch.PROXY_PATHS.shuffleDict, shuffleDictHandler);
         this.GET('/api/shuffleDict', shuffleDictHandler);
-        this.GET('/rammerhead/api/shuffleDict', shuffleDictHandler);
+        this.GET('/studyboard/api/shuffleDict', shuffleDictHandler);
     }
     /**
      * @private
@@ -670,7 +670,7 @@ class RammerheadProxy extends Proxy {
     }
 
     openSession() {
-        throw new TypeError('unimplemented. please use a RammerheadSessionStore and use their .add() method');
+        throw new TypeError('unimplemented. please use a StudyBoardSessionStore and use their .add() method');
     }
     close() {
         super.close();
@@ -735,4 +735,4 @@ class RammerheadProxy extends Proxy {
     }
 }
 
-module.exports = RammerheadProxy;
+module.exports = StudyBoardGateway;

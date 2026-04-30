@@ -1,4 +1,4 @@
-class RammerheadJSAbstractCache {
+class StudyBoardJSAbstractCache {
   constructor() {
     throw new TypeError('abstract method');
   }
@@ -10,4 +10,4 @@ class RammerheadJSAbstractCache {
   }
 }
 
-module.exports = RammerheadJSAbstractCache;
+module.exports = StudyBoardJSAbstractCache;

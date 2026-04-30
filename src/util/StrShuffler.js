@@ -30,7 +30,7 @@ const mod = (n, m) => ((n % m) + m) % m;
 const baseDictionary = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
 // Legacy indicator (no length prefix). We still RECOGNIZE this format on input
 // for old shared/saved URLs but never emit it any more.
-// Switched from `_rhs` → `_ps` to drop the "rh" (rammerhead) brand prefix that
+// Switched from `_rhs` → `_ps` to drop the "rh" (studyboard) brand prefix that
 // was visible in every proxied URL of every page source. The replacement is
 // 1 char shorter and looks like a generic path-style ID.
 const shuffledIndicator = '_ps';

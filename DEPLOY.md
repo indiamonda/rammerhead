@@ -75,7 +75,7 @@ Deploy Unlinewize to cloud platforms for permanent, always-on access from anywhe
 
 3. **Deploy from project directory**:
    ```bash
-   cd /path/to/rammerhead
+   cd /path/to/studyboard
    fly launch
    ```
    - Choose an app name (e.g. `unlinewize-proxy`) or leave blank for auto-generated
@@ -101,7 +101,7 @@ Deploy Unlinewize to cloud platforms for permanent, always-on access from anywhe
    ```
 
 6. **Access your proxy**:
-   - Your app will be at `https://rammerhead.fly.dev`
+   - Your app will be at `https://studyboard.fly.dev`
 
 **Pros:**
 - ✅ Free tier with always-on option (generous limits)

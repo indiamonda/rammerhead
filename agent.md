@@ -1,4 +1,4 @@
-# Rammerhead — Agent Plan
+# StudyBoard — Agent Plan
 
 > Living document that captures the current state of the proxy: what's
 > fixed, what's broken, why, and the next steps. Update as work
@@ -10,7 +10,7 @@
 
 Two parallel tracks:
 
-1. **Tier 1: Stealth Mode** — make Rammerhead invisible to
+1. **Tier 1: Stealth Mode** — make StudyBoard invisible to
    Lightspeed-style classroom/network filters and to common
    bot-detection vendors (Cloudflare Turnstile, AWS WAF, hCaptcha,
    DataDome, PerimeterX). No proxy hostname leaks in served bytes;
@@ -54,11 +54,11 @@ references and commit messages.
 | `discord-403-percent` | Discord — `403 Forbidden` on assets containing `%20` / non-ASCII (e.g. `_Rectangle%201%20(3).svg`) | **DONE** (root cause: `safeDecodeUrl()` in `addUrlShuffling.js` ran `decodeURIComponent` on the *whole* URL before `StrShuffler.unshuffle`, mangling the position-dependent cipher; gated decode behind a "shuffler-indicator already visible?" check) | n/a | §4.7 |
 | `captcha-host-expand` | Preserve `Referer` / `Origin` / `Accept-Encoding` for Cloudflare Turnstile, AWS WAF, DataDome, Douyin captcha endpoints | **DONE** (expanded `CAPTCHA_HOST_RE` + new `CAPTCHA_PATH_RE` in `browserLikeHeaders.js` and reused inside `_isChallengeFrame`) | n/a | §4.2 |
 | `challenge-frame-skip` | Pass challenge SDK iframe HTML through verbatim (no AST/lite touch) | **DONE** (early-return in `patchPageProcessing.js processResource` driven by `_isChallengeFrame(ctx)`) | n/a | §4.2 |
-| `csp-strip` | Strip CSP / X-Frame-Options / COEP / COOP / CORP / Permissions-Policy / Origin-Agent-Cluster on responses, plus `<meta http-equiv="content-security-policy">` in body | **DONE** (server `rewriteServerHeaders` defaults in `RammerheadProxy.js` + `config.js`; meta CSP scrubbed in `setupPipeline.js` and `patchPageProcessing.js`) | n/a | §3.14 |
+| `csp-strip` | Strip CSP / X-Frame-Options / COEP / COOP / CORP / Permissions-Policy / Origin-Agent-Cluster on responses, plus `<meta http-equiv="content-security-policy">` in body | **DONE** (server `rewriteServerHeaders` defaults in `StudyBoardGateway.js` + `config.js`; meta CSP scrubbed in `setupPipeline.js` and `patchPageProcessing.js`) | n/a | §3.14 |
 | `cookie-name-storm` | Wrapped-cookie name includes `now` timestamp; bloats jar | **DONE** (cookie name now stable: `lastAccessed` segment emitted as `''`; old cookies parse with a sentinel max-date so they still expire correctly. Patches applied to `node_modules/testcafe-hammerhead/lib/utils/cookie.js`, `lib/client/hammerhead.js`, `lib/client/hammerhead.min.js` via `scripts/patch-hammerhead.js`) | n/a | §3.15 |
 | `discord-optional-chain` | Discord login blank — Hammerhead's `computed-property-get` / `method-call` AST transformers eagerly evaluated args inside `obj?.foo[idx]` / `obj?.method()`, breaking native short-circuit (Discord login crashed with `TypeError: Cannot read properties of undefined (reading 'messages')`) | **DONE** (transformers now skip the rewrite when `node.optional` / `callee.optional` is set so the chain stays intact in emitted code; runtime `_error` helpers throw `TypeError` instead of `Error` so React error boundaries / `instanceof TypeError` checks (Poki, Discord) catch them; `__call$` short-circuits to `void 0` before any `owner[methName]` access when receiver is null. Patches via `scripts/patch-hammerhead.js`, applied to server-side `lib/processing/script/transformers/{computed-property-get,method-call}.js` AND propagated into `src/client/hammerhead.{js,min.js}` by re-running `src/build.js` at end of patch step.) | n/a | §3.16 |
 | `client-bundle-rebuild` | `scripts/patch-hammerhead.js` patched `node_modules/testcafe-hammerhead/lib/client/hammerhead.{js,min.js}` but the proxy actually serves `src/client/hammerhead.min.js` (built by `src/build.js` from the node_modules copy). Patches were invisible to browsers between installs unless `npm run build` was re-run manually. | **DONE** (`scripts/patch-hammerhead.js` now `require()`s `src/build.js` at the end so patching always re-runs the build; `src/build.js` made resilient to missing `dotenv-flow` for production installs.) | n/a | §3.17 |
-| `adblock-toggle-honored` | Disabling the adblocker in the toolbar/settings (`__rh_ab=0`) didn't actually let ads render: server stopped blocking URLs but the injected `_a_js` layer (CSS hider, popup blocker, anti-adblock spoofer, paywall hider) kept running because Hammerhead virtualises `localStorage` + `document.cookie` to the proxied origin and explicitly strips `__rh_*` cookies — the page-side script literally could not see the toggle. | **DONE** (server now resolves `adBlocker.isEnabledFor(ctx.req)` inside `pageProcessor.processResource` and bakes the answer into the placeholder `__RH_AB_OFF__` at the head of the injected script, so the very first synchronous statement is `var _off=true|false`. Pre-built two static variants per dev/prod so injection stays a single pointer pick. Page-side `localStorage` / `document.cookie` checks remain as defensive overrides.) | n/a | §3.18 |
+| `adblock-toggle-honored` | Disabling the adblocker in the toolbar/settings (`__sb_ab=0`) didn't actually let ads render: server stopped blocking URLs but the injected `_a_js` layer (CSS hider, popup blocker, anti-adblock spoofer, paywall hider) kept running because Hammerhead virtualises `localStorage` + `document.cookie` to the proxied origin and explicitly strips `__sb_*` cookies — the page-side script literally could not see the toggle. | **DONE** (server now resolves `adBlocker.isEnabledFor(ctx.req)` inside `pageProcessor.processResource` and bakes the answer into the placeholder `__SB_AB_OFF__` at the head of the injected script, so the very first synchronous statement is `var _off=true|false`. Pre-built two static variants per dev/prod so injection stays a single pointer pick. Page-side `localStorage` / `document.cookie` checks remain as defensive overrides.) | n/a | §3.18 |
 | `chatgpt-assets` | ChatGPT — confirm full message-send flow after fix | **OPEN** (asset 404 regressions cleared; auth/message E2E still needs Puppeteer cover) | next | §4.4 |
 | `douyin-bot` | Douyin — slider/puzzle captcha | **OPEN** (page renders + smoke green; captcha solve requires real-browser TLS+canvas+font fingerprint) | queued | §4.5 |
 
@@ -75,7 +75,7 @@ editing.
 | Concern | File | What it does |
 |---|---|---|
 | URL shuffling | `src/util/StrShuffler.js` | v2 length-prefixed shuffle (`_rh1<5hex>:<body>`) plus legacy `_rhs` decoder. `StrShuffler.isShuffled()` is the canonical detector. |
-| Embedded shuffler (client) | `src/client/rammerhead.js`, `public/index.html`, `public/script.js`, `public/unblocker.html` | Same algorithm replicated client-side. Must stay in lockstep with `src/util/StrShuffler.js`. |
+| Embedded shuffler (client) | `src/client/studyboard.js`, `public/index.html`, `public/script.js`, `public/unblocker.html` | Same algorithm replicated client-side. Must stay in lockstep with `src/util/StrShuffler.js`. |
 | Pipeline | `src/server/setupPipeline.js` | Order: task.js warm-up → header injection → hammerhead. Decodes pathname before route checks. |
 | Header injection | `src/util/browserLikeHeaders.js` | Chrome-like header surface, Referer/Origin spoofing, Accept-Language by region, captcha-host preservation. |
 | Page processing | `src/util/patchPageProcessing.js` | Lite-mode HTML rewriter, full-mode injection, challenge detection (`_isChallengeResponse`), reload-loop guard, location/document.cookie shims (lite). |
@@ -118,7 +118,7 @@ this.
   trailing unchanged. Legacy `_rhs` URLs still decode (regex fallback).
   New helper `StrShuffler.isShuffled()` replaces every
   `startsWith(shuffledIndicator)` call site.
-- **Files**: `src/util/StrShuffler.js`, `src/client/rammerhead.js`,
+- **Files**: `src/util/StrShuffler.js`, `src/client/studyboard.js`,
   `public/index.html`, `public/script.js`, `public/unblocker.html`,
   `src/util/browserLikeHeaders.js`, `src/server/setupPipeline.js`.
 - **Verification**: chosic.com and gimkit.com now load without console
@@ -178,7 +178,7 @@ this.
   Patch is applied to:
   - server-side `urlUtils.handleUrlsSet` via
     `require('../util/patchSrcsetParser')` in
-    `src/classes/RammerheadProxy.js`,
+    `src/classes/StudyBoardGateway.js`,
   - client-side `hammerhead.min.js` via a regex `.replace()` in
     `src/build.js` (the `function handleUrlsSet(handler, url){…return
     replacedUrls.join(',');}` block is rewritten in place).
@@ -193,7 +193,7 @@ this.
   again!`. The challenge JS legitimately reloads 2-3× in quick
   succession to build token confidence, but the existing guard (4
   reloads in 6s) blocked the third reload, leaving the page mid-solve.
-- **Fix**: `_rhIsChallengePage()` heuristic in
+- **Fix**: `_sbIsChallengePage()` heuristic in
   `src/util/patchPageProcessing.js` detects challenge SDK markers
   (`AwsWafIntegration`, `gokuProps`, `cf_chl_opt`, `__CF$cv$params`,
   `dataDomeOptions`, `cdn-cgi/challenge-platform`, `awswaf.com`,
@@ -434,7 +434,7 @@ Documented for completeness — verify they haven't drifted.
     `content-security-policy-report-only` and
     `x-content-security-policy` returned as `undefined` (deletes the
     header).
-  - `src/classes/RammerheadProxy.js` constructor seeds the
+  - `src/classes/StudyBoardGateway.js` constructor seeds the
     server-side defaults: `permissions-policy`, `feature-policy`,
     `report-to`, `nel`, `expect-ct`, `document-policy`,
     `origin-agent-cluster`, `cross-origin-embedder-policy`,
@@ -442,7 +442,7 @@ Documented for completeness — verify they haven't drifted.
     `strict-transport-security`, `x-dns-prefetch-control`,
     `x-content-type-options`, `x-xss-protection` all stripped.
     `server` and `via` only stripped if they name us
-    (`rammerhead|hammerhead|testcafe`); upstream `server: cloudflare`
+    (`studyboard|hammerhead|testcafe`); upstream `server: cloudflare`
     forwarded as-is so the wire still looks like the destination.
   - `src/server/setupPipeline.js` and
     `src/util/patchPageProcessing.js` strip `<meta http-equiv=
@@ -599,7 +599,7 @@ Documented for completeness — verify they haven't drifted.
 ### 3.18 Adblocker toggle actually disables the client-side layer  *(id: `adblock-toggle-honored`)*
 
 - **Symptom**: with the toolbar / settings adblocker switched **OFF**
-  (`__rh_ab=0` cookie set on the proxy origin) and the proxied tab
+  (`__sb_ab=0` cookie set on the proxy origin) and the proxied tab
   reloaded, ads still didn't render. Ad containers stayed
   `display:none`, anti-adblock detection scripts kept reporting
   "no ads" → publisher walls (Poki, gaming/unblocker sites, news
@@ -614,10 +614,10 @@ Documented for completeness — verify they haven't drifted.
     redirect guard, anti-adblock spoofer, paywall hider, YouTube ad
     skipper) decided whether to bail purely from
     `localStorage.getItem('adBlockerEnabled')` and
-    `document.cookie.indexOf('__rh_ab=0')`. Both are virtualised by
+    `document.cookie.indexOf('__sb_ab=0')`. Both are virtualised by
     Hammerhead to the **proxied** origin (gimkit.com,
     discord.com, …) — and `document.cookie`'s read-side filter
-    explicitly strips any cookie whose name starts with `__rh_` (see
+    explicitly strips any cookie whose name starts with `__sb_` (see
     `src/util/patchPageProcessing.js` lite mode `_fSync`, plus the
     full-mode hammerhead bundle's equivalent). So the script ran on
     the proxied origin and could *never* see the toggle that lives
@@ -627,13 +627,13 @@ Documented for completeness — verify they haven't drifted.
     same-named pref — which never happens.
 - **Fix** (in `src/util/patchPageProcessing.js`):
   - Replace the literal `var _off=false;` line with a placeholder
-    `var _off=__RH_AB_OFF__;`. Keep the existing
+    `var _off=__SB_AB_OFF__;`. Keep the existing
     localStorage/`document.cookie` checks below as defensive
     overrides (they only flip from `false` → `true`, never the
     other way, matching the original semantics).
   - Pre-compute four static inject strings at module load:
     `INJECT_{PROD,DEV}_{ENABLED,DISABLED}`. Each substitutes
-    `__RH_AB_OFF__` for `false` or `true`. Keeps per-request work
+    `__SB_AB_OFF__` for `false` or `true`. Keeps per-request work
     to a single pointer pick.
   - New helper `_isAdblockEnabledForReq(ctx)` reads the cookie via
     `adBlocker.isEnabledFor(ctx.req)` (already used server-side).
@@ -650,21 +650,21 @@ Documented for completeness — verify they haven't drifted.
     unblocker pages — anything that runs through page processing.
     Nothing site-specific.
   - Doesn't break the existing toolbar/settings-page UI: the
-    `__rh_ab` cookie semantics, the `localStorage` mirror, and
+    `__sb_ab` cookie semantics, the `localStorage` mirror, and
     the iframe-reload-on-toggle in `public/index.html` are
     unchanged.
 - **Verification**:
   - Without cookie:
     `curl … /<sid>/https://example.com/ | grep _off=` → `var _off=false;`
-  - With `Cookie: __rh_ab=0`:
+  - With `Cookie: __sb_ab=0`:
     `curl … /<sid>/https://example.com/ | grep _off=` → `var _off=true;`
-  - With `Cookie: __rh_ab=1` (explicit on): `var _off=false;`
+  - With `Cookie: __sb_ab=1` (explicit on): `var _off=false;`
   - Same outcomes verified for lite-mode (Discord) and full-mode
     (Poki) HTML.
   - Server-side blocking confirmed unchanged:
     `curl /<sid>/https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js`
-    returns the empty stub (`X-Rammerhead-Blocked: 1`) without the
-    cookie and the genuine 62 KB of upstream JS with `__rh_ab=0`.
+    returns the empty stub (`X-StudyBoard-Blocked: 1`) without the
+    cookie and the genuine 62 KB of upstream JS with `__sb_ab=0`.
   - `tests/smoke.sh`: 38 pass / 2 warn / 0 fail.
 
 ### 3.13 Curl-based smoke-test harness  *(id: `smoke-tests`)*
@@ -1008,7 +1008,7 @@ The two changes that bite hardest if you forget them:
 
 1. **Embedded shuffler copies**: every change to
    `src/util/StrShuffler.js` must be mirrored in
-   `src/client/rammerhead.js`, `public/index.html`, `public/script.js`,
+   `src/client/studyboard.js`, `public/index.html`, `public/script.js`,
    and `public/unblocker.html`. The minified copy in
    `node_modules/testcafe-hammerhead/lib/client/hammerhead.js` is
    patched at build time by `src/build.js` — verify by grepping for
@@ -1016,7 +1016,7 @@ The two changes that bite hardest if you forget them:
 2. **Server restart after build**: `npm run build` only regenerates
    `src/client/hammerhead.min.js`; the server still has the old
    bundle in worker memory. Always
-   `pkill -f "node.*rammerhead/src/server.js" && node src/server.js &`
+   `pkill -f "node.*studyboard/src/server.js" && node src/server.js &`
    after a build.
 
 ---

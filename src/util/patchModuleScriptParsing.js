@@ -49,7 +49,7 @@
  */
 const acorn = require('acorn-hammerhead');
 
-if (!acorn.__rh_module_fallback_patched) {
+if (!acorn.__sb_module_fallback_patched) {
     const _origParse = acorn.parse;
 
     acorn.parse = function patchedParse(src, opts) {
@@ -84,7 +84,7 @@ if (!acorn.__rh_module_fallback_patched) {
         }
     }
 
-    Object.defineProperty(acorn, '__rh_module_fallback_patched', {
+    Object.defineProperty(acorn, '__sb_module_fallback_patched', {
         value: true,
         configurable: false,
         enumerable: false,

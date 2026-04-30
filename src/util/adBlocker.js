@@ -1,5 +1,5 @@
 /**
- * Ad Blocker for rammerhead proxy.
+ * Ad Blocker for studyboard proxy.
  *
  * Works in four layers:
  *   1. Request-level domain blocklist      — short-circuits ad-network fetches at the server
@@ -302,7 +302,7 @@ const AD_PATH_RE = new RegExp([
 const YOUTUBE_PLAYER_RE = /youtube(?:-nocookie)?\.com\/youtubei\/v\d+\/player(?:\?|$)/i;
 const YOUTUBE_AD_PATH_RE = /youtube(?:-nocookie)?\.com\/(api\/stats\/ads|pagead|get_midroll_info|api\/stats\/atr|ptracking|generate_204_simple|api\/stats\/qoe)/i;
 
-const ALLOWLIST_HOST_RE = /(^|\.)(rammerhead|turbowarp|poki|chatgpt|openai|claude|anthropic|github|duckduckgo|deepseek|jmail|mk48)\./i;
+const ALLOWLIST_HOST_RE = /(^|\.)(studyboard|turbowarp|poki|chatgpt|openai|claude|anthropic|github|duckduckgo|deepseek|jmail|mk48)\./i;
 
 /** Returns true when the host is an allowlisted first-party we never block. */
 function _isAllowlisted(host) {
@@ -374,7 +374,7 @@ function _stubHeaders(origin, stub) {
     const h = {
         'Access-Control-Allow-Origin': origin || '*',
         'Access-Control-Allow-Credentials': 'true',
-        'X-Rammerhead-Blocked': '1',
+        'X-StudyBoard-Blocked': '1',
     };
     if (stub.ct) h['Content-Type'] = stub.ct;
     h['Content-Length'] = stub.body.length;

@@ -1,19 +1,19 @@
 const fs = require('fs');
 const path = require('path');
-const RammerheadSessionAbstractStore = require('./RammerheadSessionAbstractStore');
-const RammerheadSession = require('./RammerheadSession');
-const RammerheadLogging = require('../classes/RammerheadLogging');
+const StudyBoardSessionAbstractStore = require('./StudyBoardSessionAbstractStore');
+const StudyBoardSession = require('./StudyBoardSession');
+const StudyBoardLogging = require('../classes/StudyBoardLogging');
 
-// rh = rammerhead. extra f to distinguish between rhsession (folder) and rhfsession (file)
-const sessionFileExtension = '.rhfsession';
+// rh = studyboard. extra f to distinguish between sbsession (folder) and sbfsession (file)
+const sessionFileExtension = '.sbfsession';
 
-class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
+class StudyBoardSessionFileCache extends StudyBoardSessionAbstractStore {
     /**
      *
      * @param {object} options
      * @param {string} options.saveDirectory - all cacheTimeouted sessions will be saved in this folder
      * to avoid storing all the sessions in the memory.
-     * @param {RammerheadLogging|undefined} options.logger
+     * @param {StudyBoardLogging|undefined} options.logger
      * @param {number} options.cacheTimeout - timeout before saving cache to disk and deleting it from the cache
      * @param {number} options.cacheCheckInterval
      * @param {boolean} options.deleteUnused - (default: true) if set to true, it deletes unused sessions when saving cache to disk
@@ -28,7 +28,7 @@ class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
      */
     constructor({
         saveDirectory = path.join(__dirname, '../../sessions'),
-        logger = new RammerheadLogging({ logLevel: 'disabled' }),
+        logger = new StudyBoardLogging({ logLevel: 'disabled' }),
         cacheTimeout = 1000 * 60 * 20, // 20 minutes
         cacheCheckInterval = 1000 * 60 * 10, // 10 minutes,
         deleteUnused = true,
@@ -49,7 +49,7 @@ class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
         this.cacheTimeout = cacheTimeout;
         this.deleteCorruptedSessions = deleteCorruptedSessions;
         /**
-         * @type {Map.<string, RammerheadSession>}
+         * @type {Map.<string, StudyBoardSession>}
          */
         this.cachedSessions = new Map();
         setInterval(() => this._saveCacheToDisk(), cacheCheckInterval).unref();
@@ -88,7 +88,7 @@ class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
     /**
      * @param {string} id
      * @param {boolean} updateActiveTimestamp
-     * @returns {RammerheadSession|undefined}
+     * @returns {StudyBoardSession|undefined}
      */
     get(id, updateActiveTimestamp = true, cacheToMemory = true) {
         if (!this.has(id)) {
@@ -104,7 +104,7 @@ class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
 
         let session;
         try {
-            session = RammerheadSession.DeserializeSession(id, fs.readFileSync(this._getSessionFilePath(id)));
+            session = StudyBoardSession.DeserializeSession(id, fs.readFileSync(this._getSessionFilePath(id)));
         } catch (e) {
             if (e.name === 'SyntaxError' && e.message.includes('JSON')) {
                 this.logger.warn(`(FileCache.get) ${id} bad JSON`);
@@ -130,12 +130,12 @@ class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
     }
     /**
      * @param {string} id
-     * @returns {RammerheadSession}
+     * @returns {StudyBoardSession}
      */
     add(id) {
         if (this.has(id)) throw new Error(`session ${id} already exists`);
 
-        fs.writeFileSync(this._getSessionFilePath(id), new RammerheadSession().serializeSession());
+        fs.writeFileSync(this._getSessionFilePath(id), new StudyBoardSession().serializeSession());
 
         this.logger.debug(`FileCache.add ${id}`);
 
@@ -162,7 +162,7 @@ class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
      */
     addSerializedSession(id, serializedSession) {
         this.logger.debug(`(FileCache.addSerializedSession) adding serialized session id ${id} to store`);
-        const session = RammerheadSession.DeserializeSession(id, serializedSession);
+        const session = StudyBoardSession.DeserializeSession(id, serializedSession);
         fs.writeFileSync(this._getSessionFilePath(id), session.serializeSession());
         this.logger.debug(`(FileCache.addSerializedSession) added ${id} to cache`);
     }
@@ -244,4 +244,4 @@ class RammerheadSessionFileCache extends RammerheadSessionAbstractStore {
     }
 }
 
-module.exports = RammerheadSessionFileCache;
+module.exports = StudyBoardSessionFileCache;

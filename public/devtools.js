@@ -13,7 +13,7 @@ function el(tag,cls,html){var e=document.createElement(tag);if(cls)e.className=c
 function ts(){var t=new Date();return('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2)+':'+('0'+t.getSeconds()).slice(-2)}
 var _proxyRe=/\/[a-z0-9]{32}(?:![a-z]*)?\/((https?):\/\/.+)/i;
 function cleanUrl(u){if(!u)return u;var m=String(u).match(_proxyRe);return m?m[1]:String(u)}
-function _rhFetchSource(url){
+function _sbFetchSource(url){
   var qs='?url='+encodeURIComponent(url);
   return fetch('/_a/sr'+qs).then(function(r){
     if(!r.ok)throw new Error('s '+r.status);
@@ -568,7 +568,7 @@ function renderNetDetail(entry,container){
   pp.addEventListener('click',function(){
     if(pp.dataset.loaded)return;pp.dataset.loaded='1';pp.style.cursor='default';
     pp.innerHTML='<div style="color:#969696">Loading…</div>';
-    _rhFetchSource(entry.u).then(function(text){
+    _sbFetchSource(entry.u).then(function(text){
       var ct=(entry.ct||'').toLowerCase();
       if(ct.includes('json')){try{pp.innerHTML='<pre style="white-space:pre-wrap;word-break:break-all;color:#d4d4d4">'+esc(JSON.stringify(JSON.parse(text),null,2))+'</pre>'}catch(e){pp.innerHTML='<pre style="white-space:pre-wrap;color:#d4d4d4">'+esc(text.slice(0,5000))+'</pre>'}}
       else if(ct.includes('image')){pp.innerHTML='<img src="'+esc(entry.u)+'" style="max-width:100%;max-height:200px">'}
@@ -584,7 +584,7 @@ function renderNetDetail(entry,container){
   rp.addEventListener('click',function(){
     if(rp.dataset.loaded)return;rp.dataset.loaded='1';rp.style.cursor='default';
     rp.innerHTML='<div style="color:#969696">Loading…</div>';
-    _rhFetchSource(entry.u).then(function(text){
+    _sbFetchSource(entry.u).then(function(text){
       rp.innerHTML='<pre style="white-space:pre-wrap;word-break:break-all;color:#d4d4d4;max-height:200px;overflow:auto">'+esc(text.slice(0,10000))+(text.length>10000?'\n…truncated':'')+'</pre>';
     }).catch(function(e){rp.innerHTML='<div style="color:#f44">Failed: '+esc(e.message)+'</div>'});
   },false);
@@ -839,7 +839,7 @@ function loadSource(url,type){
   _srcCurrentUrl=url;
   var viewer=$('#rh-src-viewer');if(!viewer)return;
   viewer.innerHTML='<div style="padding:8px;color:#969696">Loading '+esc(url.split('/').pop())+'…</div>';
-  _rhFetchSource(url).then(function(text){
+  _sbFetchSource(url).then(function(text){
     if(_srcCurrentUrl!==url)return;
     var lines=text.split('\n');
     var code=el('div','s-code');
@@ -1257,14 +1257,14 @@ function runSecurityScan(){
 
   // Overview
   html+='<div class="sec-overview">';
-  if(destHTTPS)html+='<div class="sec-badge secure">&#10003; Secure Connection</div><div style="color:#969696;font-size:11px;margin-top:4px">This page is served over HTTPS (via proxy)</div>';
+  if(destHTTPS)html+='<div class="sec-badge secure">&#10003; Secure Connection</div><div style="color:#969696;font-size:11px;margin-top:4px">This page is served over HTTPS (via learning gateway)</div>';
   else if(destUrl)html+='<div class="sec-badge insecure">&#10007; Insecure Connection</div><div style="color:#969696;font-size:11px;margin-top:4px">This page is served over HTTP</div>';
   else html+='<div class="sec-badge mixed">? Unknown</div>';
   html+='</div>';
 
   // Connection Info
   html+='<div class="sec-sect">Connection</div>';
-  html+='<div class="sec-row"><span class="sec-icon '+(isHTTPS?'sec-pass':'sec-warn')+'">'+( isHTTPS?'✓':'!')+'</span><span>Proxy protocol: '+location.protocol+'</span></div>';
+  html+='<div class="sec-row"><span class="sec-icon '+(isHTTPS?'sec-pass':'sec-warn')+'">'+( isHTTPS?'✓':'!')+'</span><span>Gateway protocol: '+location.protocol+'</span></div>';
   if(destUrl)html+='<div class="sec-row"><span class="sec-icon '+(destHTTPS?'sec-pass':'sec-fail')+'">'+( destHTTPS?'✓':'✕')+'</span><span>Origin protocol: '+(destHTTPS?'https:':'http:')+'</span></div>';
 
   // Mixed Content

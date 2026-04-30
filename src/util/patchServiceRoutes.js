@@ -61,17 +61,17 @@ const SHADOW_UI_POSTFIX_NEW = '-_a-ui';
 // Other proxy-internal paths that get inspected/blocklisted. Kept here so
 // setupRoutes.js, setupPipeline.js, and injected scripts use one source of truth.
 const PROXY_PATHS = Object.freeze({
-    rammerheadJs: '/_a/r.js',        // was /rammerhead.js (injected as <script src=> on every proxied page)
-    devtoolsJs: '/_a/d.js',          // was /__rh_devtools.js
-    console: '/_a/cl',               // was /__rh_console
-    raw: '/_a/rw',                   // was /__rh_raw
-    sources: '/_a/sr',               // was /__rh_sources
+    studyboardJs: '/_a/r.js',        // was /studyboard.js (injected as <script src=> on every proxied page)
+    devtoolsJs: '/_a/d.js',          // was /__sb_devtools.js
+    console: '/_a/cl',               // was /__sb_console
+    raw: '/_a/rw',                   // was /__sb_raw
+    sources: '/_a/sr',               // was /__sb_sources
     shuffleDict: '/_a/sd',           // was /api/shuffleDict
-    rammerheadJsLegacy: '/rammerhead.js',
-    devtoolsJsLegacy: '/__rh_devtools.js',
-    consoleLegacy: '/__rh_console',
-    rawLegacy: '/__rh_raw',
-    sourcesLegacy: '/__rh_sources',
+    studyboardJsLegacy: '/studyboard.js',
+    devtoolsJsLegacy: '/__sb_devtools.js',
+    consoleLegacy: '/__sb_console',
+    rawLegacy: '/__sb_raw',
+    sourcesLegacy: '/__sb_sources',
     shuffleDictLegacy: '/api/shuffleDict',
 });
 
@@ -97,7 +97,7 @@ shadowUiClassName.uiStylesheet = 'ui-stylesheet' + _suiPostfix;
 // to read the underlying client bundle file from `lib/client/<name>`. After our rename,
 // that path becomes `lib/client/_a/c.js` — which doesn't exist — and the proxy crashes on
 // startup. Monkey-patch `load-client-script` to translate the renamed paths back to the
-// real bundle filenames before the file lookup. Note: `RammerheadProxy.GET` later overrides
+// real bundle filenames before the file lookup. Note: `StudyBoardGateway.GET` later overrides
 // `handler.content` with our customized `src/client/*.min.js` bundles, so the content
 // returned here is only used as a temporary placeholder.
 const NEW_TO_OLD = Object.create(null);

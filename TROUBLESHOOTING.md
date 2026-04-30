@@ -226,7 +226,7 @@ Set `cspCompatibilityMode: true` in `src/config.js` (or root `config.js`) to rel
 
 ### 400 Errors
 - **`/api/shuffleDict?id=...` returns 400** – Fixed: Session is now loaded from disk when not in memory. If it persists, the session may have expired (stale cleanup) or the session ID in the URL is invalid.
-- **`getproxiedurl` / `ensuresession` 400** – Ensure the frontend sends valid `id` and `url` parameters.
+- **`getresourceurl` / `ensuresession` 400** – Ensure the frontend sends valid `id` and `url` parameters.
 
 ### 403 Errors
 - **"Sessions must come from the same IP"** – `restrictSessionToIP` is enabled and the session was created from a different IP (e.g. VPN, mobile network switch). Device sessions (`ensuresession`) bypass this.

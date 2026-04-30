@@ -12,9 +12,9 @@ const forbiddenRoutes = [
     OLD_PATHS.messaging, OLD_PATHS.transportWorker, OLD_PATHS.workerHammerhead,
     NEW_PATHS.hammerhead, NEW_PATHS.task, NEW_PATHS.iframeTask,
     NEW_PATHS.messaging, NEW_PATHS.transportWorker, NEW_PATHS.workerHammerhead,
-    PROXY_PATHS.rammerheadJs, PROXY_PATHS.devtoolsJs, PROXY_PATHS.console,
+    PROXY_PATHS.studyboardJs, PROXY_PATHS.devtoolsJs, PROXY_PATHS.console,
     PROXY_PATHS.raw, PROXY_PATHS.sources, PROXY_PATHS.shuffleDict,
-    PROXY_PATHS.rammerheadJsLegacy, PROXY_PATHS.devtoolsJsLegacy,
+    PROXY_PATHS.studyboardJsLegacy, PROXY_PATHS.devtoolsJsLegacy,
     PROXY_PATHS.consoleLegacy, PROXY_PATHS.rawLegacy,
     PROXY_PATHS.sourcesLegacy, PROXY_PATHS.shuffleDictLegacy,
 ];

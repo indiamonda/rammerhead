@@ -1,8 +1,8 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const RammerheadJSMemCache = require('./classes/RammerheadJSMemCache.js');
-const RammerheadJSFileCache = require('./classes/RammerheadJSFileCache.js');
+const StudyBoardJSMemCache = require('./classes/StudyBoardJSMemCache.js');
+const StudyBoardJSFileCache = require('./classes/StudyBoardJSFileCache.js');
 
 // Use simple cluster mode (not sticky-session-custom which has Node.js v24+ issues)
 const enableWorkers = os.cpus().length > 1 && !process.env.SINGLE_PROCESS;
@@ -26,10 +26,10 @@ module.exports = {
     publicDir: path.join(__dirname, '../public'), // set to null to disable
 
     // Homepage stealth-mode. When set to a non-empty string (e.g. "g8K2m4xQ"),
-    // the bare origin and well-known landing paths (/, /index.html, /rammerhead,
-    // /rammerhead/, /rammerhead/index.html) serve an innocuous cover page instead
+    // the bare origin and well-known landing paths (/, /index.html, /studyboard,
+    // /studyboard/, /studyboard/index.html) serve an innocuous cover page instead
     // of the proxy UI. The real UI is reachable ONLY at `/${stealthPortal}` (and
-    // `/${stealthPortal}/`, `/rammerhead/${stealthPortal}`, etc.). Existing
+    // `/${stealthPortal}/`, `/studyboard/${stealthPortal}`, etc.). Existing
     // session links `/<sessionId>/<destination>` continue to work as before, so
     // share links you've already given out aren't broken.
     //
@@ -72,7 +72,7 @@ module.exports = {
     ssl: null,
 
     // this function's return object will determine how the client url rewriting will work.
-    // set them differently from bindingAddress and port if rammerhead is being served
+    // set them differently from bindingAddress and port if studyboard is being served
     // from a reverse proxy.
     getServerInfo: (req) => {
         const hostHeader = (req?.headers?.host || '').trim() || 'localhost:8080';
@@ -114,8 +114,8 @@ module.exports = {
     // caching options for js rewrites. (disk caching not recommended for slow HDD disks)
     // recommended: 50mb for memory, 5gb for disk. Larger = more cache hits, less rewriting
     jsCache: isCloudDeployment
-        ? new RammerheadJSMemCache(25 * 1024 * 1024)  // 25MB on 512MB cloud VMs
-        : new RammerheadJSMemCache(200 * 1024 * 1024), // 200MB locally for fewer cache misses
+        ? new StudyBoardJSMemCache(25 * 1024 * 1024)  // 25MB on 512MB cloud VMs
+        : new StudyBoardJSMemCache(200 * 1024 * 1024), // 200MB locally for fewer cache misses
 
     // whether to disable http2 support or not (from proxy to destination site).
     // disabling may reduce number of errors/memory, but also risk
@@ -133,7 +133,7 @@ module.exports = {
     // rewriteServerHeaders: {
     //     // you can also specify a function to modify/add the header using the original value (undefined if adding the header)
     //     // 'x-frame-options': (originalHeaderValue) => '',
-    //     'x-frame-options': null, // set to null to tell rammerhead that you want to delete it
+    //     'x-frame-options': null, // set to null to tell studyboard that you want to delete it
     // },
     rewriteServerHeaders: {
         'x-frame-options': null,
@@ -144,7 +144,7 @@ module.exports = {
 
     //// SESSION STORE CONFIG ////
 
-    // see src/classes/RammerheadSessionFileCache.js for more details and options
+    // see src/classes/StudyBoardSessionFileCache.js for more details and options
     fileCacheSessionConfig: {
         saveDirectory: process.env.FLY_APP_NAME ? '/data/sessions' : path.join(__dirname, '../sessions'),
         cacheTimeout: 1000 * 60 * 20, // 20 min – evict idle sessions from RAM sooner on 512MB VMs

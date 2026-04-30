@@ -13,7 +13,7 @@
  * `https://chatgpt.com/cdn/assets/manifest.js` correctly loads
  * `https://chatgpt.com/cdn/assets/<chunk>.js`.
  *
- * BUT: rammerhead's `addUrlShuffling` patches `toProxyUrl` to emit shuffled
+ * BUT: studyboard's `addUrlShuffling` patches `toProxyUrl` to emit shuffled
  * URLs of the form `<sid>!s!utf-8/_p1XXXXX:<shuffled-bytes>`. Hammerhead's
  * `parseProxyUrl` only understands plain `<sid>/<https-destination>` paths, so
  * for shuffled URLs it returns `null` and `baseUrl` collapses to `''`.

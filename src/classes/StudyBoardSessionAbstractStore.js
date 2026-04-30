@@ -2,7 +2,7 @@
 
 /**
  * @private
- * @typedef {import("./RammerheadSession")} RammerheadSession
+ * @typedef {import("./StudyBoardSession")} StudyBoardSession
  */
 
 /**
@@ -11,16 +11,16 @@
  * particular to different implementations
  * @abstract
  */
-class RammerheadSessionAbstractStore {
+class StudyBoardSessionAbstractStore {
     constructor() {
-        if (this.constructor === RammerheadSessionAbstractStore) {
+        if (this.constructor === StudyBoardSessionAbstractStore) {
             throw new Error('abstract classes cannot be instantiated');
         }
     }
 
     /**
      *
-     * @param {import('./RammerheadProxy')} proxy - this will overwrite proxy.openSessions with this class instance and
+     * @param {import('./StudyBoardGateway')} proxy - this will overwrite proxy.openSessions with this class instance and
      * adds a request handler that calls loadSessionToMemory
      * @param {boolean} removeExistingSessions - whether to remove all sessions before overwriting proxy.openSessions
      */
@@ -61,17 +61,17 @@ class RammerheadSessionAbstractStore {
      * @abstract
      * @param {string} id
      * @param {boolean} updateActiveTimestamp
-     * @returns {RammerheadSession|undefined}
+     * @returns {StudyBoardSession|undefined}
      */
     get(id, updateActiveTimestamp = true) {
         this._mustImplement();
     }
     /**
-     * the implemented method here will use the dataOperation option in RammerheadSession however they
+     * the implemented method here will use the dataOperation option in StudyBoardSession however they
      * see fit
      * @abstract
      * @param {string} id
-     * @returns {RammerheadSession}
+     * @returns {StudyBoardSession}
      */
     add(id) {
         this._mustImplement();
@@ -98,4 +98,4 @@ class RammerheadSessionAbstractStore {
     close() {}
 }
 
-module.exports = RammerheadSessionAbstractStore;
+module.exports = StudyBoardSessionAbstractStore;

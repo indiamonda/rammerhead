@@ -130,9 +130,9 @@
 
 ## v1.1.2
 
-- build to rammerhead.js and rammerhead.min.js
+- build to studyboard.js and studyboard.min.js
 - fix same-domain iframes
-- add jsdoc definitions for rammerhead store classes
+- add jsdoc definitions for studyboard store classes
 - fix http proxy setting not deleting correctly
 
 ## v1.1.1
@@ -148,12 +148,12 @@
 - handle ECONNRESET manually
 - bring back MemoryStore class for module exports
 - add server option to disable localStorage syncing
-- fix `RammerheadSessionFileCache` not saving cache to disk correctly
+- fix `StudyBoardSessionFileCache` not saving cache to disk correctly
 
 ## v1.0.8
 
 - handle websocket EPIPE error
-- replace hammerhead's connection reset guard with a non-crashing rammerhead's reset guard
+- replace hammerhead's connection reset guard with a non-crashing studyboard's reset guard
 - add missing element attr getter unrewrite
 - fix url rewriting for ports 80 and 443
 
@@ -184,7 +184,7 @@
 
 ## v1.0.42
 
-- add entrypoint index.js for rammerhead package
+- add entrypoint index.js for studyboard package
 - add package-lock.json to source control
 
 ## v1.0.41
@@ -207,7 +207,7 @@
 
 ## v1.0.1
 
-- removed multi worker and rate limiting support to defer the complexity to other more suitable platforms like Docker. See [this commit](https://github.com/binary-person/rammerhead/tree/31ac3d23f30487f0dcd14323dc029f4ceb3b235a) if you wish to see the original attempt at this.
+- removed multi worker and rate limiting support to defer the complexity to other more suitable platforms like Docker. See [this commit](https://github.com/binary-person/studyboard/tree/31ac3d23f30487f0dcd14323dc029f4ceb3b235a) if you wish to see the original attempt at this.
 - removed unused session cleanup (as traversing the session list forces the cache into memory)
 - lots of cleanup
 

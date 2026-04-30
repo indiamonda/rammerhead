@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Debug proxy on a remote host (e.g. rammerhead.fly.dev).
+ * Debug proxy on a remote host (e.g. studyboard.fly.dev).
  * Simulates browser: ensure session → get proxied URL → fetch document.
  * Run: node scripts/debug-proxy-remote.js [BASE_URL]
- * Example: node scripts/debug-proxy-remote.js https://rammerhead.fly.dev
+ * Example: node scripts/debug-proxy-remote.js https://studyboard.fly.dev
  *
- * If document request returns 404 while getproxiedurl returns 200, requests
+ * If document request returns 404 while getresourceurl returns 200, requests
  * are likely hitting different Fly machines (need 1 machine or Upstash Redis).
  */
 
-const BASE = process.argv[2] || 'https://rammerhead.fly.dev';
+const BASE = process.argv[2] || 'https://studyboard.fly.dev';
 // Must be 32 hex chars so proxy getSessionId() and session store recognize it
 const sessionId = Array.from(require('crypto').randomBytes(16)).map(b => b.toString(16).padStart(2, '0')).join('');
 
@@ -35,10 +35,10 @@ async function main() {
         process.exit(1);
     }
 
-    const r2 = await fetchJson(`${BASE}/getproxiedurl?id=${sessionId}&url=${encodeURIComponent('https://example.com/')}`);
-    console.log('GET /getproxiedurl (example.com):', r2.status, r2.data?.proxiedUrl || r2.data);
+    const r2 = await fetchJson(`${BASE}/getresourceurl?id=${sessionId}&url=${encodeURIComponent('https://example.com/')}`);
+    console.log('GET /getresourceurl (example.com):', r2.status, r2.data?.proxiedUrl || r2.data);
     if (r2.status !== 200 || !r2.data?.proxiedUrl) {
-        console.log('Abort: getproxiedurl failed');
+        console.log('Abort: getresourceurl failed');
         process.exit(1);
     }
 
@@ -56,8 +56,8 @@ async function main() {
     }
 
     console.log('');
-    const r4 = await fetchJson(`${BASE}/getproxiedurl?id=${sessionId}&url=${encodeURIComponent('https://www.google.com/')}`);
-    console.log('GET /getproxiedurl (google):', r4.status);
+    const r4 = await fetchJson(`${BASE}/getresourceurl?id=${sessionId}&url=${encodeURIComponent('https://www.google.com/')}`);
+    console.log('GET /getresourceurl (google):', r4.status);
     if (r4.status === 200 && r4.data?.proxiedUrl) {
         const docUrl2 = r4.data.proxiedUrl.startsWith('http') ? r4.data.proxiedUrl : BASE.replace(/\/$/, '') + r4.data.proxiedUrl;
         const r5 = await fetch(docUrl2);

@@ -1808,7 +1808,7 @@ body {
    ============================================
    The page is a single iframe filling the tab's content area. We
    intentionally show no header/toolbar/footer/text so the user sees
-   *exactly* what their build renders to, with no rammerhead chrome
+   *exactly* what their build renders to, with no studyboard chrome
    bleeding through.
 */
 .webbuild-test-shell {

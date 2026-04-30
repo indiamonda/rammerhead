@@ -10,7 +10,7 @@ const path = require('path');
 const fs = require('fs');
 const UglifyJS = require('uglify-js');
 
-// modify unmodifable items that cannot be hooked in rammerhead.js
+// modify unmodifable items that cannot be hooked in studyboard.js
 fs.writeFileSync(
     path.join(__dirname, './client/hammerhead.js'),
     fs
@@ -19,7 +19,7 @@ fs.writeFileSync(
         // Inject the iframe-aware top/parent/ancestor helpers under
         // brand-stripped names (`_a_t`, `_a_p`, `_a_dt`, `_a_ao`) so a
         // scanner that walks `Object.keys(window)` no longer sees a
-        // literal "rammerhead" string. The names need to stay short
+        // literal "studyboard" string. The names need to stay short
         // because the regex replacements below splice them in place
         // of `window.top`/`window.parent` calls inside the minified
         // hammerhead bundle.
@@ -73,7 +73,7 @@ fs.writeFileSync(
         .replace('blur: function () {', '$& if (!window) return null;')
         .replace('preventDefault: function () {', '$& if (!window) return null;')
 
-        // expose hooks for rammerhead.js
+        // expose hooks for studyboard.js
         .replace(
             'function parseProxyUrl$1',
             'window.overrideParseProxyUrl = function(rewrite) {parseProxyUrl$$1 = rewrite(parseProxyUrl$$1)}; $&'
@@ -205,7 +205,7 @@ const minify = (fileName, newFileName) => {
     fs.writeFileSync(path.join(__dirname, './client', newFileName), minified.code, 'utf8');
 };
 
-minify('rammerhead.js', 'rammerhead.min.js');
+minify('studyboard.js', 'studyboard.min.js');
 minify('hammerhead.js', 'hammerhead.min.js');
 minify('worker-hammerhead.js', 'worker-hammerhead.min.js');
 minify('transport-worker.js', 'transport-worker.min.js');

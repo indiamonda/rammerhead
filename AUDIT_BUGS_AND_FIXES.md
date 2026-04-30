@@ -38,7 +38,7 @@ Audit focused on douyin.com / bilibili.com / task.js 500, session warm-up, URL s
 - **SessionStore.get vs addSerializedSession:** Warm-up uses `sessionStore.get(sessionId)` (which loads and caches), then `addSerializedSession`. The session remains in `cachedSessions`, so later `openSessions.get(sessionId)` in dispatch / task.js sees it.
 - **replaceUrl when URL doesn’t match:** If the URL doesn’t match the regex (e.g. `/task.js` with no session segment), `replace` leaves the string unchanged; no incorrect shuffle/unshuffle.
 - **getSessionId:** Handles undefined (treats as `''`), and the two regexes correctly extract the 32-char hex from path or full URL.
-- **Fallback in loadTabContent:** When getproxiedurl fails, the fallback uses unshuffled URL; dispatch still finds the session and unshuffle is a no-op for non-`_rhs` URLs, so behavior remains correct.
+- **Fallback in loadTabContent:** When getresourceurl fails, the fallback uses unshuffled URL; dispatch still finds the session and unshuffle is a no-op for non-`_rhs` URLs, so behavior remains correct.
 
 ---
 

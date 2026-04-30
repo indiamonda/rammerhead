@@ -1,27 +1,27 @@
-const RammerheadProxy = require('./classes/RammerheadProxy');
-const RammerheadLogging = require('./classes/RammerheadLogging');
-const RammerheadSession = require('./classes/RammerheadSession');
-const RammerheadSessionAbstractStore = require('./classes/RammerheadSessionAbstractStore');
-const RammerheadSessionFileCache = require('./classes/RammerheadSessionFileCache');
+const StudyBoardGateway = require('./classes/StudyBoardGateway');
+const StudyBoardLogging = require('./classes/StudyBoardLogging');
+const StudyBoardSession = require('./classes/StudyBoardSession');
+const StudyBoardSessionAbstractStore = require('./classes/StudyBoardSessionAbstractStore');
+const StudyBoardSessionFileCache = require('./classes/StudyBoardSessionFileCache');
 const generateId = require('./util/generateId');
 const addStaticFilesToProxy = require('./util/addStaticDirToProxy');
-const RammerheadSessionMemoryStore = require('./classes/RammerheadMemoryStore');
+const StudyBoardSessionMemoryStore = require('./classes/StudyBoardMemoryStore');
 const StrShuffler = require('./util/StrShuffler');
 const URLPath = require('./util/URLPath');
-const RammerheadJSAbstractCache = require('./classes/RammerheadJSAbstractCache.js');
-const RammerheadJSFileCache = require('./classes/RammerheadJSFileCache.js');
-const RammerheadJSMemCache = require('./classes/RammerheadJSMemCache.js');
+const StudyBoardJSAbstractCache = require('./classes/StudyBoardJSAbstractCache.js');
+const StudyBoardJSFileCache = require('./classes/StudyBoardJSFileCache.js');
+const StudyBoardJSMemCache = require('./classes/StudyBoardJSMemCache.js');
 
 module.exports = {
-    RammerheadProxy,
-    RammerheadLogging,
-    RammerheadSession,
-    RammerheadSessionAbstractStore,
-    RammerheadSessionMemoryStore,
-    RammerheadSessionFileCache,
-    RammerheadJSAbstractCache,
-    RammerheadJSFileCache,
-    RammerheadJSMemCache,
+    StudyBoardGateway,
+    StudyBoardLogging,
+    StudyBoardSession,
+    StudyBoardSessionAbstractStore,
+    StudyBoardSessionMemoryStore,
+    StudyBoardSessionFileCache,
+    StudyBoardJSAbstractCache,
+    StudyBoardJSFileCache,
+    StudyBoardJSMemCache,
     StrShuffler,
     generateId,
     addStaticFilesToProxy,

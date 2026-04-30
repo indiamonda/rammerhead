@@ -9,7 +9,7 @@ let cacheSet = async (_key, _value) => {
 
 /**
  * 
- * @param {import('../classes/RammerheadJSAbstractCache.js')} jsCache 
+ * @param {import('../classes/StudyBoardJSAbstractCache.js')} jsCache 
  */
 module.exports = async function (jsCache) {
     const md5 = (data) => crypto.createHash('md5').update(data).digest('hex');

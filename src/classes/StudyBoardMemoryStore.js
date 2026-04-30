@@ -1,17 +1,17 @@
-const RammerheadLogging = require('./RammerheadLogging');
-const RammerheadSession = require('./RammerheadSession');
-const RammerheadSessionAbstractStore = require('./RammerheadSessionAbstractStore');
+const StudyBoardLogging = require('./StudyBoardLogging');
+const StudyBoardSession = require('./StudyBoardSession');
+const StudyBoardSessionAbstractStore = require('./StudyBoardSessionAbstractStore');
 
-class RammerheadSessionMemoryStore extends RammerheadSessionAbstractStore {
+class StudyBoardSessionMemoryStore extends StudyBoardSessionAbstractStore {
     /**
      * @param {object} options
-     * @param {RammerheadLogging|undefined} options.logger
+     * @param {StudyBoardLogging|undefined} options.logger
      * @param {number|null} options.staleTimeout - if inactivity goes beyond this, then the session is deleted. null to disable
      * @param {number|null} options.maxToLive - if now - createdAt surpasses maxToLive, then the session is deleted. null to disable
      * @param {number} options.cleanupInterval - every cleanupInterval ms will run a cleanup check
      */
     constructor({
-        logger = new RammerheadLogging({ logLevel: 'disabled' }),
+        logger = new StudyBoardLogging({ logLevel: 'disabled' }),
         staleTimeout = 1000 * 60 * 30, // 30 minutes
         maxToLive = 1000 * 60 * 60 * 4, // 4 hours
         cleanupInterval = 1000 * 60 * 1 // 1 minute
@@ -40,7 +40,7 @@ class RammerheadSessionMemoryStore extends RammerheadSessionAbstractStore {
     /**
      * @param {string} id
      * @param {boolean} updateActiveTimestamp
-     * @returns {RammerheadSession|undefined}
+     * @returns {StudyBoardSession|undefined}
      */
     get(id, updateActiveTimestamp = true) {
         if (!this.has(id)) return;
@@ -53,12 +53,12 @@ class RammerheadSessionMemoryStore extends RammerheadSessionAbstractStore {
     }
     /**
      * @param {string} id
-     * @returns {RammerheadSession}
+     * @returns {StudyBoardSession}
      */
     add(id) {
         if (this.has(id)) throw new Error('the following session already exists: ' + id);
         this.logger.debug(`(MemoryStore.add) ${id}`);
-        const session = new RammerheadSession({ id });
+        const session = new StudyBoardSession({ id });
         this.mapStore.set(id, session);
         return session;
     }
@@ -75,7 +75,7 @@ class RammerheadSessionMemoryStore extends RammerheadSessionAbstractStore {
      */
     addSerializedSession(id, serializedSession) {
         this.logger.debug(`(MemoryStore.addSerializedSession) adding serialized session id ${id} to store`);
-        const session = RammerheadSession.DeserializeSession(id, serializedSession);
+        const session = StudyBoardSession.DeserializeSession(id, serializedSession);
         session.updateLastUsed();
         this.mapStore.set(id, session);
         this.logger.debug(`(FileCache.addSerializedSession) added ${id}`);
@@ -109,4 +109,4 @@ class RammerheadSessionMemoryStore extends RammerheadSessionAbstractStore {
     }
 }
 
-module.exports = RammerheadSessionMemoryStore;
+module.exports = StudyBoardSessionMemoryStore;

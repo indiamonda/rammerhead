@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Helper: does a request URL match either the new (/_a/...) path or its legacy
-// (/__rh_*/api/shuffleDict/...) alias? We accept both during the transition so
+// (/__sb_*/api/shuffleDict/...) alias? We accept both during the transition so
 // any cached page or bookmarked link still works.
 function _urlMatchesEither(reqUrl, newPath, oldPath) {
     if (!reqUrl) return false;
@@ -122,7 +122,7 @@ var S=${JSON.stringify(sessionId)},D=${JSON.stringify(targetUrl || '')};
 // Best-effort cleanup of a legacy session cookie that older proxy
 // versions used to set on the proxy origin. The literal cookie name
 // is obfuscated through atob() so the served bytes never contain
-// the brand-shaped marker (\`__rh_sess\`) that content-filters look
+// the brand-shaped marker (\`__sb_sess\`) that content-filters look
 // for when fingerprinting proxies.
 try{document.cookie=atob('X19yaF9zZXNz')+'=; Max-Age=0; path=/'}catch(e){}
 function px(u){return O+'/'+S+'/'+u}
@@ -228,8 +228,8 @@ function rawFetch(url, callback, hops, options) {
 }
 
 /**
- * @param {import('../classes/RammerheadProxy')} proxyServer
- * @param {import('../classes/RammerheadSessionAbstractStore')} sessionStore
+ * @param {import('../classes/StudyBoardGateway')} proxyServer
+ * @param {import('../classes/StudyBoardSessionAbstractStore')} sessionStore
  */
 module.exports = function setupPipeline(proxyServer, sessionStore) {
     const stream = require('stream');
@@ -239,7 +239,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // When `config.pathStyle` is non-empty (e.g. "cdn-cgi/p"), incoming
     // requests arrive as `/<pathStyle>/<sid>/<dest>`. We strip the prefix at
     // the *very* top of `_onRequest` — BEFORE Hammerhead's `checkIsRoute`,
-    // BEFORE every Rammerhead pipeline handler, BEFORE `super._onRequest`.
+    // BEFORE every StudyBoard pipeline handler, BEFORE `super._onRequest`.
     // This is critical: many handlers (notably `injectBrowserLikeHeaders` →
     // see `PROXY_REQUEST_RE` in browserLikeHeaders.js) recognise a request as
     // "proxied" only if the path starts with `/<32-hex-sid>/`. If we strip
@@ -287,7 +287,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Extract the real destination URL from a proxied request. Handles unshuffled
     // (`/<sid>/https://...`) and shuffled (legacy `_rhs...` or v2 `_rh1...`) URL
     // forms. Returns null when the URL can't be mapped to a destination.
-    const _PROXY_DEST_RE = /^(?:\/rammerhead)?\/([a-f0-9]{32})(?:(?:![^/]+)*)\/(.+?)(?:\?|$)/i;
+    const _PROXY_DEST_RE = /^(?:\/studyboard)?\/([a-f0-9]{32})(?:(?:![^/]+)*)\/(.+?)(?:\?|$)/i;
     function _extractDestForAdBlock(reqUrl) {
         if (!reqUrl) return null;
         const pathOnly = reqUrl.split('?')[0];
@@ -493,9 +493,9 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // The browser resolves them to http://proxy/path without a session ID.
     // We extract the session from the Referer and rewrite to the correct proxy URL.
     // Match all known proxy-internal paths (both renamed `/_a/...` and legacy
-    // `/__rh_*` / `/hammerhead.js` etc.) so the rescue mechanism doesn't try to
+    // `/__sb_*` / `/hammerhead.js` etc.) so the rescue mechanism doesn't try to
     // proxy them to the destination.
-    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getproxiedurl|generatelink|health|debug-proxy|syncLocalStorage|api\/shuffleDict|__rh_|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__rh_devtools\.js|[a-f0-9]{32}[\/?!])/i;
+    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getresourceurl|generatelink|health|debug-status|syncLocalStorage|api\/shuffleDict|__sb_|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|studyboard\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__sb_devtools\.js|[a-f0-9]{32}[\/?!])/i;
 
     function _extractOriginFromReferer(referer) {
         const sessionId = getSessionId(referer);
@@ -534,13 +534,13 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     const _stealthPortal = (require('../config').stealthPortal || '').trim() || null;
     const HOMEPAGE_PATHS = new Set([
         '/', '/index.html', '/index.htm',
-        '/rammerhead', '/rammerhead/', '/rammerhead/index.html', '/rammerhead/index.htm',
+        '/studyboard', '/studyboard/', '/studyboard/index.html', '/studyboard/index.htm',
     ]);
     if (_stealthPortal) {
         HOMEPAGE_PATHS.add('/' + _stealthPortal);
         HOMEPAGE_PATHS.add('/' + _stealthPortal + '/');
-        HOMEPAGE_PATHS.add('/rammerhead/' + _stealthPortal);
-        HOMEPAGE_PATHS.add('/rammerhead/' + _stealthPortal + '/');
+        HOMEPAGE_PATHS.add('/studyboard/' + _stealthPortal);
+        HOMEPAGE_PATHS.add('/studyboard/' + _stealthPortal + '/');
     }
 
     proxyServer.addToOnRequestPipeline((req, res) => {
@@ -689,7 +689,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return true;
     }, true);
 
-    // Console capture endpoint — accepts either the new generic path or the legacy /__rh_console.
+    // Console capture endpoint — accepts either the new generic path or the legacy /__sb_console.
     proxyServer.addToOnRequestPipeline((req, res) => {
         if (!_urlMatchesEither(req.url, PROXY_PATHS.console, PROXY_PATHS.consoleLegacy)) return false;
         if (req.method === 'POST') {
@@ -711,7 +711,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     }, true);
 
     // Source file fetch endpoint for DevTools Sources tab.
-    // GET /__rh_sources?url=<encoded-url> → fetches raw content and returns as text.
+    // GET /__sb_sources?url=<encoded-url> → fetches raw content and returns as text.
     // Handles proxy-rewritten URLs by extracting the real target URL.
     const PROXY_URL_RE = /\/[a-z0-9]{32}(?:![a-z]*)?\/(https?:\/\/.+)/i;
     function _extractRealUrl(url) {
@@ -841,7 +841,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         if (!targetMachine || targetMachine === sessionAffinity.FLY_MACHINE_ID) return false;
         res.writeHead(307, {
             'Fly-Replay': `instance=${targetMachine}`,
-            // Cookie name is generic ("affinity routing") so it doesn't broadcast "rammerhead"
+            // Cookie name is generic ("affinity routing") so it doesn't broadcast "studyboard"
             // when a user inspects their cookie jar. Functionally only used for Fly multi-machine
             // sticky routing — never read back by us.
             'Set-Cookie': `_aff=${sessionId}; Path=/; Max-Age=3600; SameSite=Lax`
