@@ -41,7 +41,7 @@ const FALLBACK = [
 // Apparatus-style iframe safety net — catches dynamically created iframes that
 // bypass hammerhead's URL rewriting (race conditions, __proc$Html fallback, etc.).
 // Uses MutationObserver to detect iframes with unproxied src attributes.
-// Fallback chain: proxy URL → blob URL (proxy content) → blob URL (raw content via /__sb_raw with bridge).
+// Fallback chain: proxy URL → blob URL (proxy content) → blob URL (raw content via /_a/rw with bridge).
 const IFRAME_PROXY = [
     'if(typeof window!=="undefined"&&typeof document!=="undefined"&&!window._a_ifi){window._a_ifi=1;(function(){',
     'function getHH(){try{return window["%_d%"]}catch(e){return null}}',
@@ -83,9 +83,7 @@ const IFRAME_PROXY = [
         '}).catch(function(){',
           'if(!getCtx())return;',
           'var _rb=JSON.stringify({url:src,session:_sid});',
-          'var _rh=function(p){return fetch(p,{method:"POST",headers:{"Content-Type":"application/json"},body:_rb}).then(function(r){return r.ok?r.text():null})};',
-          '_sb("/_a/rw").catch(function(){return _sb("/__sb_raw")}).then(function(h){blobLoad(el,h)',
-          '}).catch(function(){})',
+          'fetch("/_a/rw",{method:"POST",headers:{"Content-Type":"application/json"},body:_rb}).then(function(r){return r.ok?r.text():null}).then(function(h){if(h)blobLoad(el,h)}).catch(function(){})',
         '})',
       '},{once:true})',
     '}',

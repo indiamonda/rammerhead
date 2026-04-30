@@ -79,45 +79,53 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     // ========== Base path ==========
     var basePath = location.pathname.startsWith('/studyboard') ? '/studyboard' : '';
 
-    // ========== URL Shuffler (mirror of server StrShuffler) ==========
+    // Server endpoints — names base64-encoded so they don't appear as
+    // plaintext in the served bytes.
+    var _E = {
+        ensure:   atob('L2Vuc3VyZXNlc3Npb24='),
+        resource: atob('L2dldHJlc291cmNldXJs'),
+        pmDict:   atob('L19hL3Nk'),
+    };
+
+    // ========== URL lookup table (mirror of server _PM) ==========
     // Supports legacy `_rhs<body>` and v2 `_rh1<5hex>:<body>` formats. The v2
     // length prefix preserves text appended after the shuffled portion.
-    var _shufflerBase = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
+    var _pmBase = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
     var _shuffledInd  = '_rhs';
     var _shuffledIndV2 = '_rh1';
     var _SHUF_LEN_DIGITS = 5;
     var _SHUF_SEP = ':';
     var _SHUF_MAX_LEN = (1 << (_SHUF_LEN_DIGITS * 4)) - 1;
     var _mod = function(n, m) { return ((n % m) + m) % m; };
-    var _shuffler = null;
+    var _pm = null;
 
-    function StrShuffler(dict) { this.dictionary = dict; }
-    StrShuffler.prototype.shuffle = function(str) {
+    function _PM(dict) { this.dictionary = dict; }
+    _PM.prototype.shuffle = function(str) {
         if (typeof str !== 'string') return str;
         if (str.indexOf(_shuffledIndV2) === 0 || str.indexOf(_shuffledInd) === 0) return str;
         var out = '';
         for (var i = 0; i < str.length; i++) {
-            var ch = str.charAt(i), idx = _shufflerBase.indexOf(ch);
+            var ch = str.charAt(i), idx = _pmBase.indexOf(ch);
             if (ch === '%' && str.length - i >= 3) { out += ch; out += str.charAt(++i); out += str.charAt(++i); }
             else if (idx === -1) { out += ch; }
-            else { out += this.dictionary.charAt(_mod(idx + i, _shufflerBase.length)); }
+            else { out += this.dictionary.charAt(_mod(idx + i, _pmBase.length)); }
         }
         if (out.length > _SHUF_MAX_LEN) return _shuffledInd + out;
         var lenHex = out.length.toString(16);
         while (lenHex.length < _SHUF_LEN_DIGITS) lenHex = '0' + lenHex;
         return _shuffledIndV2 + lenHex + _SHUF_SEP + out;
     };
-    StrShuffler.prototype._unshuffleBody = function(body) {
+    _PM.prototype._unshuffleBody = function(body) {
         var out = '';
         for (var i = 0; i < body.length; i++) {
             var ch = body.charAt(i), idx = this.dictionary.indexOf(ch);
             if (ch === '%' && body.length - i >= 3) { out += ch; out += body.charAt(++i); out += body.charAt(++i); }
             else if (idx === -1) { out += ch; }
-            else { out += _shufflerBase.charAt(_mod(idx - i, _shufflerBase.length)); }
+            else { out += _pmBase.charAt(_mod(idx - i, _pmBase.length)); }
         }
         return out;
     };
-    StrShuffler.prototype.unshuffle = function(str) {
+    _PM.prototype.unshuffle = function(str) {
         if (typeof str !== 'string') return str;
         if (str.indexOf(_shuffledIndV2) === 0) {
             var headerLen = _shuffledIndV2.length + _SHUF_LEN_DIGITS + _SHUF_SEP.length;
@@ -139,11 +147,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     function ensureUnshuffled(candidate) {
         if (!candidate || typeof candidate !== 'string') return candidate;
         if (candidate.indexOf('http://') === 0 || candidate.indexOf('https://') === 0) return candidate;
-        if (!_shuffler) return null;
+        if (!_pm) return null;
         var hasInd = candidate.indexOf(_shuffledIndV2) === 0 || candidate.indexOf(_shuffledInd) === 0;
         var toUn = hasInd ? candidate : (_shuffledInd + candidate);
         try {
-            var real = _shuffler.unshuffle(toUn);
+            var real = _pm.unshuffle(toUn);
             return (real && (real.indexOf('http://') === 0 || real.indexOf('https://') === 0)) ? real : null;
         } catch (_) {}
         return null;
@@ -253,20 +261,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
             return;
         }
 
-        fetch(basePath + '/getresourceurl?id=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(normalized))
+        fetch(basePath + _E.resource + '?id=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(normalized))
             .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
             .then(function(data) {
                 frame.src = data.proxiedUrl || (basePath + '/' + sessionId + '/' + normalized);
             })
             .catch(function() {
-                fetch(basePath + '/ensuresession?id=' + encodeURIComponent(sessionId)).catch(function(){});
+                fetch(basePath + _E.ensure + '?id=' + encodeURIComponent(sessionId)).catch(function(){});
                 frame.src = basePath + '/' + sessionId + '/' + normalized;
             });
     }
 
     // ========== iframe onload: sync title, intercept window.open/close ==========
     function onFrameLoad() {
-        try { if (!_shuffler) fetchShuffler(); } catch (_) {}
+        try { if (!_pm) fetchPm(); } catch (_) {}
 
         var iframeWin, iframeDoc;
         try { iframeWin = frame.contentWindow; iframeDoc = frame.contentDocument || iframeWin.document; } catch (_) { return; }
@@ -333,19 +341,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
     frame.onload = onFrameLoad;
 
-    // ========== Fetch shuffler dict ==========
-    function fetchShuffler() {
-        if (_shuffler) return;
+    // ========== Fetch the per-session lookup table ==========
+    function fetchPm() {
+        if (_pm) return;
         var qs = '?id=' + encodeURIComponent(sessionId);
-        fetch(basePath + '/_a/sd' + qs)
+        fetch(basePath + _E.pmDict + qs)
             .then(function(r) { return r.ok ? r.text() : Promise.reject(); })
-            .catch(function() {
-                return fetch(basePath + '/api/shuffleDict' + qs).then(function(r) { return r.text(); });
-            })
             .then(function(t) {
                 if (typeof t !== 'string') return;
                 var dict = JSON.parse(t);
-                if (dict) _shuffler = new StrShuffler(dict);
+                if (dict) _pm = new _PM(dict);
             })
             .catch(function(){});
     }
@@ -381,10 +386,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         document.body.style.background = '#fff';
         document.title = normalized;
 
-        fetch(basePath + '/ensuresession?id=' + encodeURIComponent(sessionId))
+        fetch(basePath + _E.ensureid=' + encodeURIComponent(sessionId))
             .then(function() {
-                fetchShuffler();
-                return fetch(basePath + '/getresourceurl?id=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(normalized));
+                fetchPm();
+                return fetch(basePath + _E.resourceid=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(normalized));
             })
             .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
             .then(function(data) {
@@ -402,13 +407,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     setProgress(5, 'Setting up session\u2026');
     startTrickle(5, 25);
 
-    fetch(basePath + '/ensuresession?id=' + encodeURIComponent(sessionId))
+    fetch(basePath + _E.ensureid=' + encodeURIComponent(sessionId))
         .then(function() {
             stopTrickle();
             setProgress(30, 'Resolving\u2026');
             startTrickle(30, 48);
-            fetchShuffler();
-            return fetch(basePath + '/getresourceurl?id=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(normalized));
+            fetchPm();
+            return fetch(basePath + _E.resourceid=' + encodeURIComponent(sessionId) + '&url=' + encodeURIComponent(normalized));
         })
         .then(function(r) {
             if (!r.ok) throw new Error('Server error: ' + r.status);

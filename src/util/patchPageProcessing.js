@@ -651,7 +651,7 @@ try{document.querySelectorAll("link[rel*=icon]").forEach(function(e){_addSrc(e.h
 try{document.querySelectorAll("video source[src],audio source[src]").forEach(function(e){_addSrc(e.src,"media")})}catch(e){}
 try{document.querySelectorAll("link[as=font],link[rel=preload][href*=font]").forEach(function(e){_addSrc(e.href,"font")})}catch(e){}}
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_scanDOM);else _scanDOM();
-var _s=document.createElement("script");_s.src="/_a/d.js";_s.defer=true;_s.onerror=function(){var _f=document.createElement("script");_f.src="/__sb_devtools.js";_f.defer=true;document.head.appendChild(_f)};
+var _s=document.createElement("script");_s.src="/_a/d.js";_s.defer=true;
 if(document.head)document.head.appendChild(_s);
 else document.addEventListener("DOMContentLoaded",function(){document.head.appendChild(_s)});
 })()</script>`;
@@ -1216,8 +1216,8 @@ function px(u){return _SP+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
 function isProto(u){return typeof u==='string'&&u.length>2&&u.charCodeAt(0)===47&&u.charCodeAt(1)===47&&u.charCodeAt(2)!==47}
-// Is this a proxy-internal route (e.g. /_a/cl, /__sb_console, /<sid>/...)? Don't rewrite those.
-function _isProxyInternal(p){return p==='/'||p.indexOf('/__sb_')===0||p.indexOf('/_a/')===0||p.indexOf('/'+S+'/')===0||/^\\/[a-f0-9]{32}(\\/|!|$)/i.test(p)}
+// Is this a gateway-internal route (e.g. /_a/cl, /<sid>/...)? Don't rewrite those.
+function _isProxyInternal(p){return p==='/'||p.indexOf('/_a/')===0||p.indexOf('/'+S+'/')===0||/^\\/[a-f0-9]{32}(\\/|!|$)/i.test(p)}
 function rw(u){if(!u||typeof u!=='string')return u;u=u.trim();
 if(u.indexOf(_SP)===0)return u;
 if(u.indexOf(_OP)===0){
@@ -1361,7 +1361,6 @@ function _pCk(v){var p={};var parts=String(v).split(';');for(var i=0;i<parts.len
 // document.cookie.indexOf('aws-waf-token=') etc. still work on reload.
 function _fSync(c){if(!c)return c;var seen={};var out=[];var parts=c.split(/;\\s*/);
 for(var i=0;i<parts.length;i++){var p=parts[i];if(!p)continue;
-if(p.indexOf('__sb_')===0)continue;
 var m=p.match(/^[scw]+\\|[^|]+\\|([^|]+)\\|[^|]*\\|[^|]*\\|[^|]*\\|[^|]*\\|[^=]*=(.*)$/);
 if(m){var nm;try{nm=decodeURIComponent(m[1])}catch(e){nm=m[1]}
 if(!seen[nm]){seen[nm]=1;out.push(nm+'='+m[2])}continue}

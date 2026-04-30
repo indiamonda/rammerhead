@@ -11,14 +11,11 @@ const { sendErrorPage } = require('../util/errorPages');
 const fs = require('fs');
 const path = require('path');
 
-// Helper: does a request URL match either the new (/_a/...) path or its legacy
-// (/__sb_*/api/shuffleDict/...) alias? We accept both during the transition so
-// any cached page or bookmarked link still works.
-function _urlMatchesEither(reqUrl, newPath, oldPath) {
-    if (!reqUrl) return false;
-    if (newPath && reqUrl.indexOf(newPath) !== -1) return true;
-    if (oldPath && reqUrl.indexOf(oldPath) !== -1) return true;
-    return false;
+// Helper: does a request URL match the opaque service path? Legacy aliases
+// were retired (they were textbook URL-shuffling-proxy fingerprints) so the
+// match is now a single substring check.
+function _urlMatches(reqUrl, p) {
+    return !!(reqUrl && p && reqUrl.indexOf(p) !== -1);
 }
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: 60000 });
@@ -495,7 +492,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Match all known proxy-internal paths (both renamed `/_a/...` and legacy
     // `/__sb_*` / `/hammerhead.js` etc.) so the rescue mechanism doesn't try to
     // proxy them to the destination.
-    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getresourceurl|generatelink|health|debug-status|syncLocalStorage|api\/shuffleDict|__sb_|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|studyboard\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__sb_devtools\.js|[a-f0-9]{32}[\/?!])/i;
+    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getresourceurl|generatelink|health|debug-status|syncLocalStorage|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|[a-f0-9]{32}[\/?!])/i;
 
     function _extractOriginFromReferer(referer) {
         const sessionId = getSessionId(referer);
@@ -689,9 +686,9 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return true;
     }, true);
 
-    // Console capture endpoint — accepts either the new generic path or the legacy /__sb_console.
+    // Console capture endpoint.
     proxyServer.addToOnRequestPipeline((req, res) => {
-        if (!_urlMatchesEither(req.url, PROXY_PATHS.console, PROXY_PATHS.consoleLegacy)) return false;
+        if (!_urlMatches(req.url, PROXY_PATHS.console)) return false;
         if (req.method === 'POST') {
             let body = '';
             req.on('data', chunk => { body += chunk; if (body.length > 65536) body = body.substring(0, 65536); });
@@ -711,7 +708,6 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     }, true);
 
     // Source file fetch endpoint for DevTools Sources tab.
-    // GET /__sb_sources?url=<encoded-url> → fetches raw content and returns as text.
     // Handles proxy-rewritten URLs by extracting the real target URL.
     const PROXY_URL_RE = /\/[a-z0-9]{32}(?:![a-z]*)?\/(https?:\/\/.+)/i;
     function _extractRealUrl(url) {
@@ -724,7 +720,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return null;
     }
     proxyServer.addToOnRequestPipeline((req, res) => {
-        if (!_urlMatchesEither(req.url, PROXY_PATHS.sources, PROXY_PATHS.sourcesLegacy)) return false;
+        if (!_urlMatches(req.url, PROXY_PATHS.sources)) return false;
         if (req.method === 'OPTIONS') {
             res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Allow-Headers': 'Content-Type' });
             res.end();
@@ -758,7 +754,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // POST { url, session } → fetches raw HTML, injects <base> + bridge script.
     // Used by the IFRAME_PROXY client-side fallback when hammerhead-processed iframes fail.
     proxyServer.addToOnRequestPipeline((req, res) => {
-        if (!_urlMatchesEither(req.url, PROXY_PATHS.raw, PROXY_PATHS.rawLegacy)) return false;
+        if (!_urlMatches(req.url, PROXY_PATHS.raw)) return false;
 
         if (req.method === 'OPTIONS') {
             res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' });

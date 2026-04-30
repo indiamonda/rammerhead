@@ -126,10 +126,8 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/favicon.png', serveCached('favicon.png', 'image/png'));
     proxyServer.GET('/embedded-styles.css', serveCached('embedded-styles.css', 'text/css'));
     proxyServer.GET('/manifest.json', serveCached('manifest.json', 'application/json'));
-    // Devtools script: served under a generic CDN-shaped path; legacy alias kept so
-    // pages cached against the old URL keep working until they re-render.
+    // Devtools script: served under a generic CDN-shaped path only.
     proxyServer.GET(PROXY_PATHS.devtoolsJs, serveCached('devtools.js', 'application/javascript'));
-    proxyServer.GET(PROXY_PATHS.devtoolsJsLegacy, serveCached('devtools.js', 'application/javascript'));
 
     // Lightweight health check for Fly.io/Render (avoids loading full index.html)
     proxyServer.GET('/health', (req, res) => {

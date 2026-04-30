@@ -60,19 +60,15 @@ const SHADOW_UI_POSTFIX_NEW = '-_a-ui';
 
 // Other proxy-internal paths that get inspected/blocklisted. Kept here so
 // setupRoutes.js, setupPipeline.js, and injected scripts use one source of truth.
+// All paths are opaque /_a/* names; the older brand-bearing aliases were
+// retired because they were textbook URL-shuffling-proxy fingerprints.
 const PROXY_PATHS = Object.freeze({
-    studyboardJs: '/_a/r.js',        // was /studyboard.js (injected as <script src=> on every proxied page)
-    devtoolsJs: '/_a/d.js',          // was /__sb_devtools.js
-    console: '/_a/cl',               // was /__sb_console
-    raw: '/_a/rw',                   // was /__sb_raw
-    sources: '/_a/sr',               // was /__sb_sources
-    shuffleDict: '/_a/sd',           // was /api/shuffleDict
-    studyboardJsLegacy: '/studyboard.js',
-    devtoolsJsLegacy: '/__sb_devtools.js',
-    consoleLegacy: '/__sb_console',
-    rawLegacy: '/__sb_raw',
-    sourcesLegacy: '/__sb_sources',
-    shuffleDictLegacy: '/api/shuffleDict',
+    studyboardJs: '/_a/r.js',        // injected as <script src=> on every proxied page
+    devtoolsJs:   '/_a/d.js',
+    console:      '/_a/cl',
+    raw:          '/_a/rw',
+    sources:      '/_a/sr',
+    shuffleDict:  '/_a/sd',
 });
 
 // Apply the mutation. After this, every module that does

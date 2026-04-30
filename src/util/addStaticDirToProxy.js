@@ -14,9 +14,6 @@ const forbiddenRoutes = [
     NEW_PATHS.messaging, NEW_PATHS.transportWorker, NEW_PATHS.workerHammerhead,
     PROXY_PATHS.studyboardJs, PROXY_PATHS.devtoolsJs, PROXY_PATHS.console,
     PROXY_PATHS.raw, PROXY_PATHS.sources, PROXY_PATHS.shuffleDict,
-    PROXY_PATHS.studyboardJsLegacy, PROXY_PATHS.devtoolsJsLegacy,
-    PROXY_PATHS.consoleLegacy, PROXY_PATHS.rawLegacy,
-    PROXY_PATHS.sourcesLegacy, PROXY_PATHS.shuffleDictLegacy,
 ];
 
 const isDirectory = (dir) => fs.lstatSync(dir).isDirectory();

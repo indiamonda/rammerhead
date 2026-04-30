@@ -509,11 +509,10 @@ class StudyBoardGateway extends Proxy {
             ),
             contentType: 'application/x-javascript'
         };
-        // Generic CDN-shaped path is the primary; the legacy /studyboard.js alias
-        // stays so any cached page or older client that still references the old
-        // path keeps working.
+        // Only the opaque CDN-shaped path is served; the legacy
+        // `/studyboard.js` alias was retired because the brand fragment
+        // in the URL is itself fingerprintable.
         this.GET(_serviceRoutePatch.PROXY_PATHS.studyboardJs, studyboardClientHandler);
-        this.GET(_serviceRoutePatch.PROXY_PATHS.studyboardJsLegacy, studyboardClientHandler);
         const shuffleDictHandler = (req, res) => {
             try {
                 const params = new URLPath(req.url || '').getParams();
@@ -544,12 +543,11 @@ class StudyBoardGateway extends Proxy {
                 sendErrorPage(req, res, 500, { detail: e && e.message });
             }
         };
-        // Generic CDN-shaped path is the primary; the legacy `/api/shuffleDict`
-        // and `/studyboard/api/shuffleDict` aliases are kept so older client
-        // bundles (and any cached page) keep working.
+        // Only the opaque CDN-shaped path is registered; the legacy aliases
+        // (`/api/shuffleDict`, `/studyboard/api/shuffleDict`) used to live
+        // here but they are textbook URL-shuffling-proxy fingerprints, so
+        // they were removed once all client code switched to the new path.
         this.GET(_serviceRoutePatch.PROXY_PATHS.shuffleDict, shuffleDictHandler);
-        this.GET('/api/shuffleDict', shuffleDictHandler);
-        this.GET('/studyboard/api/shuffleDict', shuffleDictHandler);
     }
     /**
      * @private

@@ -233,25 +233,16 @@
             console.warn('cannot get session id from url');
             return;
         }
-        const newPath = basePath + '/_a/sd';
-        const oldPath = basePath + '/api/shuffleDict';
-        request.open('GET', newPath + '?id=' + sessionId, false);
+        request.open('GET', basePath + '/_a/sd?id=' + sessionId, false);
         request.send();
-        let resp = request;
-        if (resp.status !== 200) {
-            const r2 = new XMLHttpRequest();
-            r2.open('GET', oldPath + '?id=' + sessionId, false);
-            r2.send();
-            resp = r2;
-        }
-        if (resp.status !== 200) {
+        if (request.status !== 200) {
             console.warn(
-                `received a non 200 status code while trying to fetch shuffleDict:\nstatus: ${resp.status}\nresponse: ${resp.responseText}`
+                'failed to fetch lookup table: status=' + request.status
             );
             return;
         }
-        const shuffleDict = JSON.parse(resp.responseText);
-        if (!shuffleDict) return;
+        const _pmDict = JSON.parse(request.responseText);
+        if (!_pmDict) return;
 
         // Mirror of src/util/StrShuffler.js. The v2 length-prefixed format
         // (`_p1<5hex>:<body>`) lets the unshuffler know exactly where the
@@ -284,7 +275,7 @@
             }
             return str;
         };
-        class StrShuffler {
+        class _PM {
             constructor(dictionary = generateDictionary()) {
                 this.dictionary = dictionary;
             }
@@ -403,11 +394,11 @@
                 (_, g1, g2) => g1 + replacer(g2)
             );
         };
-        const shuffler = new StrShuffler(shuffleDict);
+        const _pm = new _PM(_pmDict);
 
         // shuffle current url if it isn't already shuffled (unshuffled urls likely come from user input)
         const oldUrl = location.href;
-        const newUrl = replaceUrl(location.href, (url) => shuffler.shuffle(url));
+        const newUrl = replaceUrl(location.href, (url) => _pm.shuffle(url));
         if (oldUrl !== newUrl) {
             history.replaceState(null, null, newUrl);
         }
@@ -418,10 +409,10 @@
             if (noShuffling) {
                 return getProxyUrl(url, opts);
             }
-            return replaceUrl(getProxyUrl(url, opts), (u) => shuffler.shuffle(u), true);
+            return replaceUrl(getProxyUrl(url, opts), (u) => _pm.shuffle(u), true);
         });
         hammerhead.utils.url.overrideParseProxyUrl(function (url) {
-            return parseProxyUrl(replaceUrl(url, (u) => shuffler.unshuffle(u), false));
+            return parseProxyUrl(replaceUrl(url, (u) => _pm.unshuffle(u), false));
         });
         // manual hooks //
         window.overrideGetProxyUrl(
@@ -430,13 +421,13 @@
                     if (noShuffling) {
                         return getProxyUrl$1(url, opts);
                     }
-                    return replaceUrl(getProxyUrl$1(url, opts), (u) => shuffler.shuffle(u), true);
+                    return replaceUrl(getProxyUrl$1(url, opts), (u) => _pm.shuffle(u), true);
                 }
         );
         window.overrideParseProxyUrl(
             (parseProxyUrl$1) =>
                 function (url) {
-                    return parseProxyUrl$1(replaceUrl(url, (u) => shuffler.unshuffle(u), false));
+                    return parseProxyUrl$1(replaceUrl(url, (u) => _pm.unshuffle(u), false));
                 }
         );
     }
