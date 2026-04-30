@@ -607,6 +607,24 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
             headersToInject['sec-fetch-site'] = 'same-origin';
         } else if (getRefererOriginForHost(destOrigin) === refererOrigin) {
             headersToInject['sec-fetch-site'] = 'same-site';
+        } else {
+            try {
+                const destHost = new URL(destOrigin + '/').hostname.replace(/^www\./, '');
+                const refHost = new URL(refererOrigin + '/').hostname.replace(/^www\./, '');
+                
+                // If they share the same root domain (e.g. chatgpt.com and oaiusercontent.com might not, but api.chatgpt.com and chatgpt.com do)
+                // This is a simplified check.
+                const destParts = destHost.split('.');
+                const refParts = refHost.split('.');
+                
+                if (destParts.length >= 2 && refParts.length >= 2) {
+                    const destRoot = destParts.slice(-2).join('.');
+                    const refRoot = refParts.slice(-2).join('.');
+                    if (destRoot === refRoot) {
+                        headersToInject['sec-fetch-site'] = 'same-site';
+                    }
+                }
+            } catch (_) {}
         }
     }
 
@@ -721,7 +739,20 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
         }
     }
 
+    // ChatGPT specific overrides
+    if (!isDoc && destOrigin && destOrigin.includes('chatgpt.com')) {
+        req.headers['sec-fetch-site'] = 'same-origin';
+        if (req.headers['origin']) {
+            req.headers['origin'] = destOrigin;
+        }
+    }
+
     _reorderHeaders(req.headers, isDoc ? CHROME_DOC_ORDER : CHROME_SUB_ORDER);
+    
+    if (req.url && (req.url.includes('chatgpt.com') || req.url.includes('openai.com'))) {
+        console.log('[UPSTREAM_REQ]', req.url);
+        console.log(req.headers);
+    }
 }
 
 module.exports = {
