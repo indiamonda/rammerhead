@@ -623,6 +623,10 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     const origSecChUaBitness = req.headers['sec-ch-ua-bitness'];
     const origSecChUaModel = req.headers['sec-ch-ua-model'];
     const origSecChUaPlatformVersion = req.headers['sec-ch-ua-platform-version'];
+    const origSecFetchMode = req.headers['sec-fetch-mode'];
+    const origSecFetchDest = req.headers['sec-fetch-dest'];
+    const origSecFetchSite = req.headers['sec-fetch-site'];
+    
     for (const [name, value] of Object.entries(headersToInject)) {
         const lower = name.toLowerCase();
         req.headers[lower] = value;
@@ -634,6 +638,10 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     if (origContentType) {
         req.headers['content-type'] = origContentType;
     }
+    if (origSecFetchMode) req.headers['sec-fetch-mode'] = origSecFetchMode;
+    if (origSecFetchDest) req.headers['sec-fetch-dest'] = origSecFetchDest;
+    // We do NOT preserve origSecFetchSite because the client sends it relative to the proxy domain.
+    // The proxy must compute the correct sec-fetch-site based on the upstream origins.
     // CRITICAL: preserve the BROWSER's User-Agent + Client-Hints triplet so
     // anti-bot WAFs (AWS WAF, Cloudflare, hCaptcha, Datadome, …) can verify
     // the tokens they issued. Their challenge.js computes a proof in-browser
@@ -676,7 +684,9 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
             ? (fullRefererUrl.endsWith('/') ? fullRefererUrl : fullRefererUrl + '/')
             : (refererOrigin.endsWith('/') ? refererOrigin : refererOrigin + '/');
         req.headers['referer'] = ref;
-        if (!isDoc) req.headers['origin'] = refererOrigin;
+        if (!isDoc && req.headers['origin']) {
+            req.headers['origin'] = refererOrigin;
+        }
     }
 
     // Request-type-aware Accept + sec-fetch-dest (by URL path) — many CDNs/servers validate these
@@ -692,24 +702,21 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
         if (looksLikeApi) {
             const curAccept = (req.headers['accept'] || '').toLowerCase();
             const isSSE = curAccept.includes('text/event-stream');
-            if (!isSSE) {
-                req.headers['x-requested-with'] = 'XMLHttpRequest';
-            }
-            req.headers['sec-fetch-dest'] = 'empty';
+            if (!origSecFetchDest) req.headers['sec-fetch-dest'] = 'empty';
             if (!isSSE && curAccept.includes('*/*') && !curAccept.includes('application/json')) {
                 req.headers['accept'] = 'application/json, text/plain, */*';
             }
         } else if (looksLikeImage) {
-            req.headers['sec-fetch-dest'] = 'image';
+            if (!origSecFetchDest) req.headers['sec-fetch-dest'] = 'image';
             req.headers['accept'] = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
         } else if (looksLikeScript) {
-            req.headers['sec-fetch-dest'] = 'script';
+            if (!origSecFetchDest) req.headers['sec-fetch-dest'] = 'script';
             req.headers['accept'] = '*/*';
         } else if (looksLikeStyle) {
-            req.headers['sec-fetch-dest'] = 'style';
+            if (!origSecFetchDest) req.headers['sec-fetch-dest'] = 'style';
             req.headers['accept'] = 'text/css,*/*;q=0.1';
         } else if (looksLikeFont) {
-            req.headers['sec-fetch-dest'] = 'font';
+            if (!origSecFetchDest) req.headers['sec-fetch-dest'] = 'font';
             req.headers['accept'] = 'font/woff2,font/woff,*/*;q=0.9';
         }
     }
