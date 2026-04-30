@@ -69,7 +69,21 @@ const originalAssign = agentModule.assign;
 agentModule.assign = function (reqOpts) {
     originalAssign(reqOpts);
     if (reqOpts.isHttps || reqOpts.protocol === 'https:') {
-        Object.assign(reqOpts, CHROME_TLS);
+        // CRITICAL: For WebSocket upgrades we MUST force http/1.1 ALPN. WebSockets
+        // cannot run over HTTP/2 with Node's http.request — if ALPN negotiates h2
+        // (which Cloudflare-fronted hosts like gateway.discord.gg always prefer),
+        // Node receives raw H2 binary frames on the socket, and its HTTP/1 parser
+        // throws "Parse Error: Expected HTTP/, RTSP/ or ICE/" → the upgrade silently
+        // fails. Browsers solve this by sending a different ALPN list for WS, so
+        // we mirror that here. Symptoms before this fix: every WS-using site
+        // (Discord gateway, Twitch chat, jchat, Douyin) showed
+        // `[WS CLOSED] (false, 0, An error with the websocket occurred)` in the
+        // page console with no further detail.
+        if (reqOpts.isWebSocket) {
+            Object.assign(reqOpts, CHROME_TLS, { ALPNProtocols: ['http/1.1'] });
+        } else {
+            Object.assign(reqOpts, CHROME_TLS);
+        }
     }
 };
 

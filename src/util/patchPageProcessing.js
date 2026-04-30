@@ -451,8 +451,15 @@ const ANTIDETECT_SCRIPT = [
     // unchanged. A determined scanner using `Reflect.ownKeys` or
     // `Object.getOwnPropertyNames` could still see them, but that's a much
     // rarer probe and worth defending against in tier 2.
-    'try{["_a_ad","_a_abi","_a_c","_a_q","_a_n","_a_src","_a_p",',
-    '"_a_ls","_a_tc","_a_perf","_a_du","_a_dt"].forEach(function(n){',
+    //
+    // NOTE: `_a_p` and `_a_dt` are deliberately NOT in this list — those
+    // names are reserved by build.js for the iframe-aware
+    // `window.parent`/iframe-depth helpers it splices into the hammerhead
+    // bundle. The DevTools panel hook lives on `_a_dp` (devtools panel)
+    // and the DevTools init guard on `_a_di` (devtools init) to avoid
+    // colliding with build.js's reservations.
+    'try{["_a_ad","_a_abi","_a_c","_a_q","_a_n","_a_src","_a_dp",',
+    '"_a_ls","_a_tc","_a_perf","_a_du","_a_di"].forEach(function(n){',
         'try{var d=Object.getOwnPropertyDescriptor(window,n);',
         'if(!d){Object.defineProperty(window,n,{value:undefined,configurable:true,writable:true,enumerable:false})}',
         'else if(d.enumerable){Object.defineProperty(window,n,{value:d.value,configurable:true,writable:d.writable!==false,enumerable:false})}',
@@ -564,7 +571,7 @@ const ANTIDETECT_SCRIPT = [
 const DEVTOOLS_SCRIPT = `<script>(function(){
 if(typeof window==="undefined"||window._a_c)return;window._a_c=1;
 window._a_q=[];window._a_n=[];window._a_src=[];
-window._a_p=null;window._a_ls=0;
+window._a_dp=null;window._a_ls=0;
 window._a_tc={timeout:0,interval:0};
 var _oC=window.console||{},_srcSeen={},_groupDepth=0;
 var _proxyRe=/\\/[a-z0-9]{32}(?:![a-z]*)?\\/((https?):\\/\\/.+)/i;
@@ -574,58 +581,58 @@ var o=_oC[m]||function(){};
 _oC[m]=function(){try{o.apply(_oC,arguments)}catch(e){}
 var raw=[];for(var i=0;i<arguments.length;i++)raw.push(arguments[i]);
 var entry={l:m,raw:raw,t:Date.now(),d:_groupDepth};
-window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}}});
+window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}}});
 var _origTable=_oC.table;
 _oC.table=function(data,cols){try{if(_origTable)_origTable.apply(_oC,arguments)}catch(e){}
 var entry={l:"table",raw:[data,cols],t:Date.now(),d:_groupDepth};
-window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}};
+window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}};
 _oC.group=_oC.groupCollapsed=function(){var raw=[];for(var i=0;i<arguments.length;i++)raw.push(arguments[i]);
 var entry={l:"group",raw:raw,t:Date.now(),d:_groupDepth};_groupDepth++;
-window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}};
+window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}};
 _oC.groupEnd=function(){if(_groupDepth>0)_groupDepth--;window._a_q.push({l:"groupEnd",t:Date.now(),d:_groupDepth})};
 var _cTimers={};
 _oC.time=function(l){_cTimers[l||"default"]=performance.now()};
 _oC.timeEnd=function(l){l=l||"default";var s=_cTimers[l];if(s!==undefined){delete _cTimers[l];
 var entry={l:"log",raw:[l+": "+(performance.now()-s).toFixed(3)+"ms"],t:Date.now(),d:_groupDepth};
-window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}}};
+window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}}};
 _oC.timeLog=function(l){l=l||"default";var s=_cTimers[l];if(s!==undefined){var entry={l:"log",raw:[l+": "+(performance.now()-s).toFixed(3)+"ms"],t:Date.now(),d:_groupDepth};
-window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}}};
+window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}}};
 var _cCounts={};
 _oC.count=function(l){l=l||"default";_cCounts[l]=(_cCounts[l]||0)+1;
 var entry={l:"log",raw:[l+": "+_cCounts[l]],t:Date.now(),d:_groupDepth};
-window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e){}};
+window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}};
 _oC.countReset=function(l){_cCounts[l||"default"]=0};
 var _origClear=_oC.clear;_oC.clear=function(){try{if(_origClear)_origClear.call(_oC)}catch(e){}
-window._a_q.length=0;if(window._a_p)try{window._a_p.clear()}catch(e){}};
+window._a_q.length=0;if(window._a_dp)try{window._a_dp.clear()}catch(e){}};
 window.console=_oC;
 window.addEventListener("error",function(e){if(e.defaultPrevented)return;var msg=e.error?(e.error.stack||e.error.message):e.message;
 var entry={l:"error",raw:["[Uncaught] "+(msg||"Unknown error")],t:Date.now(),d:0};
-window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e2){}});
+window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e2){}});
 window.addEventListener("unhandledrejection",function(e){if(e.defaultPrevented)return;var r=e.reason;
 var entry={l:"error",raw:["[Promise] "+(r&&r.stack?r.stack:String(r))],t:Date.now(),d:0};
-window._a_q.push(entry);if(window._a_p)try{window._a_p.log(entry)}catch(e2){}});
+window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e2){}});
 if(typeof fetch==="function"){var _oF=fetch;window.fetch=function(){var a=arguments,u="",m="GET",rh={},st=Date.now();
 try{if(typeof a[0]==="string")u=a[0];else if(a[0]&&a[0].url)u=a[0].url;
 if(a[1]){if(a[1].method)m=a[1].method;var h=a[1].headers;if(h){if(h instanceof Headers)h.forEach(function(v,k){rh[k]=v});
 else if(typeof h==="object")for(var k in h)rh[k]=h[k]}}}catch(e){}
 var entry={m:m,u:_cleanUrl(u),s:0,tp:"fetch",t0:st,t1:0,reqH:rh,resH:{},sz:0};
-window._a_n.push(entry);if(window._a_p)try{window._a_p.net(entry)}catch(e){}
+window._a_n.push(entry);if(window._a_dp)try{window._a_dp.net(entry)}catch(e){}
 return _oF.apply(this,a).then(function(r){entry.s=r.status;entry.t1=Date.now();
 try{r.headers.forEach(function(v,k){entry.resH[k]=v});var ct=r.headers.get("content-type");if(ct)entry.ct=ct.split(";")[0];
 var cl=r.headers.get("content-length");if(cl)entry.sz=parseInt(cl,10)||0}catch(e){}
-if(window._a_p)try{window._a_p.netUpdate(entry)}catch(e){}return r},
-function(e){entry.s=-1;entry.t1=Date.now();if(window._a_p)try{window._a_p.netUpdate(entry)}catch(e2){}throw e})}}
+if(window._a_dp)try{window._a_dp.netUpdate(entry)}catch(e){}return r},
+function(e){entry.s=-1;entry.t1=Date.now();if(window._a_dp)try{window._a_dp.netUpdate(entry)}catch(e2){}throw e})}}
 if(typeof XMLHttpRequest!=="undefined"){var _oXO=XMLHttpRequest.prototype.open,_oXS=XMLHttpRequest.prototype.send;
 XMLHttpRequest.prototype.open=function(m,u){this._a_xm=m;this._a_xu=""+u;this._a_xt=Date.now();this._a_xh={};return _oXO.apply(this,arguments)};
 var _oSRH=XMLHttpRequest.prototype.setRequestHeader;
 XMLHttpRequest.prototype.setRequestHeader=function(k,v){try{this._a_xh[k]=v}catch(e){}return _oSRH.apply(this,arguments)};
 XMLHttpRequest.prototype.send=function(){var x=this,entry={m:x._a_xm||"GET",u:_cleanUrl(x._a_xu||""),s:0,tp:"xhr",t0:x._a_xt||Date.now(),t1:0,reqH:x._a_xh||{},resH:{},sz:0};
-window._a_n.push(entry);if(window._a_p)try{window._a_p.net(entry)}catch(e){}
+window._a_n.push(entry);if(window._a_dp)try{window._a_dp.net(entry)}catch(e){}
 x.addEventListener("loadend",function(){entry.s=x.status;entry.t1=Date.now();
 try{var h=x.getAllResponseHeaders()||"";h.split("\\r\\n").forEach(function(l){var p=l.indexOf(":");if(p>0)entry.resH[l.slice(0,p).trim().toLowerCase()]=l.slice(p+1).trim()});
 entry.ct=(entry.resH["content-type"]||"").split(";")[0];
 var cl=entry.resH["content-length"];if(cl)entry.sz=parseInt(cl,10)||0;else try{entry.sz=x.response?x.response.length||0:0}catch(e){}}catch(e){}
-if(window._a_p)try{window._a_p.netUpdate(entry)}catch(e){}});return _oXS.apply(this,arguments)}}
+if(window._a_dp)try{window._a_dp.netUpdate(entry)}catch(e){}});return _oXS.apply(this,arguments)}}
 try{var _oAEL=EventTarget.prototype.addEventListener;
 EventTarget.prototype.addEventListener=function(){window._a_ls++;return _oAEL.apply(this,arguments)}}catch(e){}
 var _oST=window.setTimeout,_oSI=window.setInterval;
