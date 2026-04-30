@@ -49,16 +49,11 @@ const dynamicImport = require('testcafe-hammerhead/lib/processing/script/transfo
 const scriptProcessor = require('testcafe-hammerhead/lib/processing/resources/script');
 
 const proto = Object.getPrototypeOf(scriptProcessor);
-console.log('[patchDynamicImport] loading, proto found:', !!proto, 'already patched:', !!(proto && proto._a_dynBase));
 if (proto && !proto._a_dynBase) {
     proto._a_dynBase = true;
     const origProcessResource = proto.processResource;
-    console.log('[patchDynamicImport] patched processResource on prototype');
     proto.processResource = function patchedProcessResource(script, ctx, charset, urlReplacer) {
         const destUrl = ctx && ctx.dest && ctx.dest.url;
-        if (process.env.RH_DEBUG_URL && destUrl && /chatgpt/i.test(destUrl)) {
-            process.stdout.write('[DYN_BASE_ENTER] ' + destUrl.slice(-70) + '\n');
-        }
         const previous = dynamicImport.baseUrl;
         try {
             if (destUrl && typeof destUrl === 'string') {
@@ -70,9 +65,6 @@ if (proto && !proto._a_dynBase) {
                     base = base + (base.endsWith('/') ? '' : '/');
                 }
                 dynamicImport.baseUrl = base;
-                if (process.env.RH_DEBUG_URL && /chatgpt/i.test(destUrl)) {
-                    process.stdout.write('[DYN_BASE] ' + destUrl.slice(-70) + ' base=' + base + '\n');
-                }
             }
             return origProcessResource.call(this, script, ctx, charset, urlReplacer);
         } finally {
