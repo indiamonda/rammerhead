@@ -2372,13 +2372,8 @@
                             }
                             
                             // === Tab-aware interception of all navigation inside proxied iframes ===
-                            
-                            // Resolve a possibly-relative URL against the page the iframe is showing
-                            function resolveUrl(raw) {
-                                if (!raw) return null;
-                                try { return new URL(raw, normalizedUrl).href; } catch (_) {}
-                                return raw;
-                            }
+                            // (URL resolution + proxy-URL → destination unwrapping happens
+                            // inside `_absToDestUrl` below, where it's actually used.)
 
                             // Build a lightweight mock Window returned by window.open() so callers
                             // that do `var w = window.open(...); w.focus(); w.close();` don't crash.
@@ -2404,8 +2399,24 @@
                             // --- window.open() ---
                             try {
                                 iframeWindow.open = function(url, target, features) {
-                                    var resolved = resolveUrl(url);
-                                    var norm = resolved ? normalizeUrl(resolved) : null;
+                                    // Pages call window.open with three flavors of URL:
+                                    //   (a) plain destination ("https://chat.deepseek.com")
+                                    //   (b) proxy-relative   ("/<sid>/<shuffled>")
+                                    //   (c) relative path    ("/login", "../foo")
+                                    // Resolve against the iframe's actual location to make
+                                    // it absolute first, then unwrap any proxy form so we
+                                    // hand `loadTabContent`/`createTab` a real destination
+                                    // URL (its job is to re-wrap into a proxy URL).
+                                    var norm = null;
+                                    if (url) {
+                                        var abs = url;
+                                        try { abs = new URL(url, iframeWindow.location.href).href; } catch (_) {}
+                                        var dest = extractRealUrl(abs, iframeWindow);
+                                        if (!dest && (abs.startsWith('http://') || abs.startsWith('https://'))) {
+                                            dest = abs;
+                                        }
+                                        if (dest) norm = normalizeUrl(dest);
+                                    }
                                     var t = (target || '').toLowerCase();
 
                                     if (t === '_self' || t === '') {
@@ -2457,9 +2468,51 @@
 
                             // --- Intercept <a> clicks & <form> submits that would escape the iframe ---
                             try {
+                                // Resolve a link/form action to a *destination* URL (not proxy URL).
+                                // We use `el.href` / `el.action` (which the browser resolves as
+                                // an absolute URL against the iframe's document base) instead of
+                                // `getAttribute(...)`, then unwrap the proxy form via
+                                // `extractRealUrl`. Three reasons:
+                                //   1. The HTML walker rewrites `<a href="https://...">` into
+                                //      a proxy-relative `<a href="/<sid>/<shuffled>">`. Using
+                                //      `getAttribute('href')` returns that relative string, and
+                                //      then resolving it against `normalizedUrl` (the destination)
+                                //      produces nonsense like `https://destination/<sid>/...`.
+                                //   2. Hammerhead's wrapped `getAttribute` returns the SAVED
+                                //      original (e.g. `_blank` from `target-_d-sv`) instead of
+                                //      the DOM value (`_top` after rewrite). Mixing those
+                                //      sources throws off the routing logic below.
+                                //   3. `el.href` / `el.action` are exactly what the browser
+                                //      will actually navigate to, so unwrapping that string
+                                //      gives us the user-visible destination every time.
+                                function _absToDestUrl(absHref) {
+                                    if (!absHref) return null;
+                                    var dest = extractRealUrl(absHref, iframeWindow);
+                                    if (dest) return dest;
+                                    if (absHref.startsWith('http://') || absHref.startsWith('https://')) return absHref;
+                                    return null;
+                                }
+                                // Read both the live `target` attribute and the saved
+                                // `target-_d-sv` (Hammerhead stash for the original value
+                                // before its DOM walker downgraded `_blank` → `_top`). We
+                                // treat _blank/_new from EITHER as "user intent: new tab"
+                                // so server-rewritten and dynamically-added links behave
+                                // identically. Hammerhead's per-attribute storage suffix
+                                // is renamed to `_d-sv` by patch-hammerhead.js, so we
+                                // also try the original `-hammerhead-stored-value` for
+                                // safety in case a page somehow predates the rename.
+                                function _resolvedTarget(el) {
+                                    var raw = (el.getAttribute('target') || '').toLowerCase();
+                                    var saved = (el.getAttribute('target-_d-sv') ||
+                                                 el.getAttribute('target-hammerhead-stored-value') || '').toLowerCase();
+                                    // Saved wins when it's a "new tab" intent that the
+                                    // walker downgraded. Otherwise prefer the live value.
+                                    if (saved === '_blank' || saved === '_new') return saved;
+                                    return raw || saved;
+                                }
                                 function _shouldOpenInNewProxyTab(e, a) {
-                                    var tgt = (a.getAttribute('target') || '').toLowerCase();
-                                    if (tgt === '_blank') return true;
+                                    var tgt = _resolvedTarget(a);
+                                    if (tgt === '_blank' || tgt === '_new') return true;
                                     // Modifier-driven new tab requests (Ctrl/Cmd-click, Shift-click)
                                     if (e && (e.ctrlKey || e.metaKey || e.shiftKey)) return true;
                                     // Middle-click (auxclick with button === 1)
@@ -2469,9 +2522,17 @@
                                 function handleLinkClick(e) {
                                     var a = e.target.closest ? e.target.closest('a[href]') : null;
                                     if (!a) return;
-                                    var href = a.getAttribute('href');
-                                    if (!href || href.startsWith('javascript:')) return;
-                                    var tgt = (a.getAttribute('target') || '').toLowerCase();
+                                    // `a.href` is the browser-resolved absolute URL, which
+                                    // for an in-iframe link is already the proxy form
+                                    // (http://localhost:8080/<sid>/<shuffled-or-plain>).
+                                    var absHref = a.href;
+                                    if (!absHref) return;
+                                    if (absHref.startsWith('javascript:') || absHref.startsWith('mailto:') ||
+                                        absHref.startsWith('tel:')        || absHref.startsWith('blob:')   ||
+                                        absHref.startsWith('data:')) return;
+                                    var dest = _absToDestUrl(absHref);
+                                    if (!dest) return;
+                                    var tgt = _resolvedTarget(a);
 
                                     if (_shouldOpenInNewProxyTab(e, a)) {
                                         e.preventDefault();
@@ -2479,11 +2540,14 @@
                                         if (typeof e.stopImmediatePropagation === 'function') {
                                             try { e.stopImmediatePropagation(); } catch(_) {}
                                         }
-                                        createTab(normalizeUrl(resolveUrl(href)));
+                                        createTab(normalizeUrl(dest));
                                     } else if (tgt === '_top' || tgt === '_parent') {
                                         e.preventDefault();
                                         e.stopPropagation();
-                                        loadTabContent(tabId, normalizeUrl(resolveUrl(href)));
+                                        if (typeof e.stopImmediatePropagation === 'function') {
+                                            try { e.stopImmediatePropagation(); } catch(_) {}
+                                        }
+                                        loadTabContent(tabId, normalizeUrl(dest));
                                     }
                                     // _self or no target — let the iframe handle it normally (stays inside iframe)
                                 }
@@ -2493,37 +2557,42 @@
                                     if (e.button !== 1) return;
                                     var a = e.target.closest ? e.target.closest('a[href]') : null;
                                     if (!a) return;
-                                    var href = a.getAttribute('href');
-                                    if (!href || href.startsWith('javascript:')) return;
+                                    var absHref = a.href;
+                                    if (!absHref) return;
+                                    if (absHref.startsWith('javascript:') || absHref.startsWith('mailto:') ||
+                                        absHref.startsWith('tel:')        || absHref.startsWith('blob:')   ||
+                                        absHref.startsWith('data:')) return;
+                                    var dest = _absToDestUrl(absHref);
+                                    if (!dest) return;
                                     e.preventDefault();
                                     e.stopPropagation();
                                     if (typeof e.stopImmediatePropagation === 'function') {
                                         try { e.stopImmediatePropagation(); } catch(_) {}
                                     }
-                                    createTab(normalizeUrl(resolveUrl(href)));
+                                    createTab(normalizeUrl(dest));
                                 }
 
                                 function handleFormSubmit(e) {
                                     var form = e.target;
                                     if (!form || form.tagName !== 'FORM') return;
-                                    var tgt = (form.getAttribute('target') || '').toLowerCase();
-                                    if (tgt === '_blank') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        var action = form.getAttribute('action') || '';
-                                        var resolved = resolveUrl(action);
-                                        if (form.method && form.method.toLowerCase() === 'get') {
-                                            var fd = new FormData(form);
-                                            var qs = new URLSearchParams(fd).toString();
-                                            createTab(normalizeUrl(resolved + (resolved.includes('?') ? '&' : '?') + qs));
-                                        } else {
-                                            createTab(normalizeUrl(resolved));
-                                        }
-                                    } else if (tgt === '_top' || tgt === '_parent') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        var act = form.getAttribute('action') || '';
-                                        loadTabContent(tabId, normalizeUrl(resolveUrl(act)));
+                                    var tgt = _resolvedTarget(form);
+                                    if (tgt !== '_blank' && tgt !== '_new' && tgt !== '_top' && tgt !== '_parent') return;
+                                    var absAction = form.action;
+                                    if (!absAction) return;
+                                    var dest = _absToDestUrl(absAction);
+                                    if (!dest) return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (form.method && form.method.toLowerCase() === 'get') {
+                                        var fd = new FormData(form);
+                                        var qs = new URLSearchParams(fd).toString();
+                                        var sep = dest.includes('?') ? '&' : '?';
+                                        dest = qs ? (dest + sep + qs) : dest;
+                                    }
+                                    if (tgt === '_blank' || tgt === '_new') {
+                                        createTab(normalizeUrl(dest));
+                                    } else {
+                                        loadTabContent(tabId, normalizeUrl(dest));
                                     }
                                 }
 
