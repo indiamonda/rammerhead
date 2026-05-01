@@ -14,6 +14,7 @@ const streamToString = require('../util/streamToString');
 const URLPath = require('../util/URLPath');
 const StudyBoardLogging = require('../classes/StudyBoardLogging');
 const StudyBoardJSMemCache = require('./StudyBoardJSMemCache.js');
+const brandStrip = require('../util/brandStrip');
 
 require('../util/fixCorsHeader');
 require('../util/fixCorsMissingOriginHeader.js');
@@ -504,8 +505,14 @@ class StudyBoardGateway extends Proxy {
      */
     _setupStudyBoardServiceRoutes() {
         const studyboardClientHandler = {
-            content: fs.readFileSync(
-                path.join(__dirname, '../client/studyboard' + (process.env.DEVELOPMENT ? '.js' : '.min.js'))
+            content: Buffer.from(
+                brandStrip.apply(
+                    fs.readFileSync(
+                        path.join(__dirname, '../client/studyboard' + (process.env.DEVELOPMENT ? '.js' : '.min.js')),
+                        'utf8'
+                    )
+                ),
+                'utf8'
             ),
             contentType: 'application/x-javascript'
         };
@@ -697,7 +704,8 @@ class StudyBoardGateway extends Proxy {
         const bundleName = BUNDLE_MAP[route];
         if (bundleName) {
             const raw = fs.readFileSync(path.join(__dirname, '../client/' + bundleName + ext), 'utf8');
-            handler.content = Buffer.from(_serviceRoutePatch.rewriteBundlePaths(raw), 'utf8');
+            const pathRewritten = _serviceRoutePatch.rewriteBundlePaths(raw);
+            handler.content = Buffer.from(brandStrip.apply(pathRewritten), 'utf8');
         }
         if (route === '/style.css' && typeof handler === 'function') {
             const originalHandler = handler;

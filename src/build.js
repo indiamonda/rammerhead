@@ -74,23 +74,32 @@ fs.writeFileSync(
         .replace('preventDefault: function () {', '$& if (!window) return null;')
 
         // expose hooks for studyboard.js
+        // NOTE: The brand-strip pass in scripts/patch-hammerhead.js renames
+        //   parseProxyUrl     -> parseGwUrl
+        //   getProxyUrl       -> getGwUrl
+        //   convertToProxyUrl -> convertToGwUrl
+        // patch-hammerhead runs BEFORE this build, so we anchor on the
+        // post-rename names. The window-level override hooks keep their
+        // brand-stripped names too (overrideParseGwUrl / overrideGetGwUrl)
+        // so studyboard.js can still find them after its own brand-strip
+        // pass at serve time.
         .replace(
-            'function parseProxyUrl$1',
-            'window.overrideParseProxyUrl = function(rewrite) {parseProxyUrl$$1 = rewrite(parseProxyUrl$$1)}; $&'
+            'function parseGwUrl$1',
+            'window.overrideParseGwUrl = function(rewrite) {parseGwUrl$$1 = rewrite(parseGwUrl$$1)}; $&'
         )
         .replace(
-            'function getProxyUrl$1',
-            'window.overrideGetProxyUrl = function(rewrite) {getProxyUrl$$1 = rewrite(getProxyUrl$$1)}; $&'
+            'function getGwUrl$1',
+            'window.overrideGetGwUrl = function(rewrite) {getGwUrl$$1 = rewrite(getGwUrl$$1)}; $&'
         )
         .replace('return window.location.search;', 'return (new URL(get$$2())).search;')
         .replace('return window.location.hash;', 'return (new URL(get$$2())).hash;')
         .replace(
             'setter: function (search) {',
-            '$& var url = new URL(get$$2()); url.search = search; window.location = convertToProxyUrl(url.href); return search;'
+            '$& var url = new URL(get$$2()); url.search = search; window.location = convertToGwUrl(url.href); return search;'
         )
         .replace(
             'setter: function (hash) {',
-            '$& var url = new URL(get$$2()); url.hash = hash; window.location.hash = (new URL(convertToProxyUrl(url.href))).hash; return hash;'
+            '$& var url = new URL(get$$2()); url.hash = hash; window.location.hash = (new URL(convertToGwUrl(url.href))).hash; return hash;'
         )
         // sometimes, postMessage doesn't work as expected when
         // postMessage gets run/received in same window without our wrappings.
