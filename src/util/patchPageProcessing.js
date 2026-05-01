@@ -561,6 +561,13 @@ const ANTIDETECT_SCRIPT = [
         'try{var m=e&&(e.message||(e.error&&e.error.message))||"";',
         'if(m&&_a_extRe.test(m)){e.preventDefault();if(e.stopImmediatePropagation)try{e.stopImmediatePropagation()}catch(_){}}}catch(_){}',
     '},true);',
+'// Disable ServiceWorkers globally to prevent infinite reload loops and hangs',
+    'try{if(navigator.serviceWorker){Object.defineProperty(navigator,\"serviceWorker\",{configurable:true,',
+    'get:function(){return{register:function(){return Promise.reject(new DOMException(\"blocked\",\"SecurityError\"))},',
+    'getRegistration:function(){return Promise.resolve(undefined)},',
+    'getRegistrations:function(){return Promise.resolve([])},',
+    'ready:new Promise(function(){}),controller:null,',
+    'addEventListener:function(){},removeEventListener:function(){}}}})}}catch(e){}',
     '}catch(e){}',
     '})();</script>',
 ].join('\n');
