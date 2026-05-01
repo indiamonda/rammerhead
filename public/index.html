@@ -2286,6 +2286,21 @@
                 contentElement.style.animation = '';
                 contentElement.innerHTML = `<iframe src="${proxiedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
 
+                // #region agent log — parent frame health monitor (runs in top frame, not proxied)
+                (function(_dbgUrl){
+                    function _b(m,d){try{navigator.sendBeacon('/_dbg_beacon',JSON.stringify({sessionId:'c32a59',src:'parent',message:m,data:d,ts:Date.now()}))}catch(e){}}
+                    _b('nav',{url:_dbgUrl});
+                    var _n=0,_prev=performance.now(),_d=0;
+                    function _t(){var now=performance.now();var delta=now-_prev;_n++;
+                        if(delta>150){_d++;if(_d<=8)_b('drop',{ms:Math.round(delta),n:_n,url:_dbgUrl})}
+                        _prev=now;if(_n<600)requestAnimationFrame(_t);
+                        else _b('done',{frames:_n,drops:_d,url:_dbgUrl})}
+                    requestAnimationFrame(_t);
+                    setTimeout(function(){_b('t5',{url:_dbgUrl,drops:_d})},5000);
+                    setTimeout(function(){_b('t15',{url:_dbgUrl,drops:_d})},15000);
+                })(normalizedUrl);
+                // #endregion
+
                 // Refresh DevTools so it shows data for the new page
                 if (tabId === activeTabId && _dtIsVisible()) _refreshCurrentDtTab();
                 

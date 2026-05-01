@@ -311,7 +311,6 @@ const AD_BLOCKER_SCRIPT = [
     // (relatively expensive) per-node bait check is queued with `_dbnc`
     // so dense SPAs don't pay the cost on every keystroke.
     'var _baitQ=[];var _scanBaitQ=_dbnc(function(){var q=_baitQ;_baitQ=[];for(var k=0;k<q.length;k++){var n=q[k];if(_looksLikeBait(n)&&!n._a_bs)_spoofBait(n)}},250);',
-    'new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var an=muts[i].addedNodes;for(var j=0;j<an.length;j++){_baitQ.push(an[j])}}_scanBaitQ()}).observe(document.documentElement||document,{childList:true,subtree:true});',
     '}catch(e){}',
     // --- YOUTUBE AD SKIPPER ---
     // If the page is YouTube, watch for ad-showing state and either skip or fast-forward.
@@ -328,7 +327,6 @@ const AD_BLOCKER_SCRIPT = [
     'try{["ytd-display-ad-renderer","ytd-companion-slot-renderer","ytd-promoted-sparkles-web-renderer","ytd-action-companion-ad-renderer","ytd-promoted-video-renderer","ytd-ad-slot-renderer","ytd-in-feed-ad-layout-renderer","ytd-banner-promo-renderer","ytd-statement-banner-renderer","#masthead-ad",".ytp-ad-overlay-container"].forEach(function(s){document.querySelectorAll(s).forEach(function(e){e.remove()})})}catch(e){}',
     '};',
     'setInterval(_ytSkip,500);',
-    'new MutationObserver(_ytSkip).observe(document.documentElement,{childList:true,subtree:true});',
     '}}catch(e){}',
     // --- EMPTY AD-CONTAINER COLLAPSER ---
     // Even after CSS hiding, some sites reserve huge blank slots for failed ads.
@@ -340,7 +338,6 @@ const AD_BLOCKER_SCRIPT = [
     'e.style.setProperty("display","none","important")}})})}',
     'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_collapseAds);',
     'else _collapseAds();',
-    'new MutationObserver(_dbnc(_collapseAds,500)).observe(document.documentElement||document,{childList:true,subtree:true});',
     '}catch(e){}',
     // --- COOKIE CONSENT / PAYWALL / SUBSCRIBE-WALL HIDER ---
     // Many news sites wrap their content behind a "Accept cookies to continue" or
@@ -1549,8 +1546,20 @@ function _injectFor(ctx) {
     return        enabled ? INJECT_PROD_ENABLED : INJECT_PROD_DISABLED;
 }
 
+// #region agent log — server-side debug: log processResource calls
+const _dbgFs = require('fs');
+const _dbgLogPath = require('path').join(__dirname, '../../.cursor/debug-c32a59.log');
+function _dbgLog(msg, data) {
+    try { _dbgFs.appendFileSync(_dbgLogPath, JSON.stringify({ sessionId: 'c32a59', message: msg, data, timestamp: Date.now() }) + '\n'); } catch (_) {}
+}
+// #endregion
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
     const inject = _injectFor(ctx);
+    // #region agent log — log each page processing
+    const _dbgHost = ctx && ctx.dest && ctx.dest.host || '?';
+    const _dbgT0 = Date.now();
+    _dbgLog('processResource-start', { host: _dbgHost, htmlLen: typeof html === 'string' ? html.length : 0, injectLen: inject.length, isSrcdoc: !!isSrcdoc });
+    // #endregion
 
     if (typeof html === 'string' && ctx && ctx.dest) {
         const destHost = (ctx.dest.host || '').toLowerCase();
@@ -1582,24 +1591,27 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
     // widget runs as the origin shipped it.
     if (typeof html === 'string' && !isSrcdoc && _isChallengeFrame(ctx)) {
         processingMode.markLiteHost(ctx);
+        // #region agent log
+        _dbgLog('processResource-earlyReturn', { host: _dbgHost, reason: 'challengeFrame', ms: Date.now() - _dbgT0 });
+        // #endregion
         return html;
     }
 
-    // Use lite processing for complex SPAs whose HTML shape suggests that full
-    // AST instrumentation is likely to break hydration/chunk loading. The host
-    // is remembered per session so external JS from the same app gets the same
-    // string-only script treatment without carrying a source-code domain list.
     if (typeof html === 'string' && !isSrcdoc && (
         processingMode.isMarkedLiteHost(ctx) || processingMode.htmlSuggestsLiteMode(html)
     )) {
         processingMode.markLiteHost(ctx);
+        // #region agent log
+        _dbgLog('processResource-earlyReturn', { host: _dbgHost, reason: 'liteMode', ms: Date.now() - _dbgT0 });
+        // #endregion
         return _liteProcess(html, ctx, inject);
     }
 
-    // Bot-challenge pages (AWS WAF, Cloudflare, DataDome, etc.): use lite processing
-    // so the browser can execute the challenge JS natively and auto-solve.
     if (typeof html === 'string' && _isChallengeResponse(html, ctx) && !isSrcdoc) {
         processingMode.markLiteHost(ctx);
+        // #region agent log
+        _dbgLog('processResource-earlyReturn', { host: _dbgHost, reason: 'challengeResponse', ms: Date.now() - _dbgT0 });
+        // #endregion
         return _liteProcess(html, ctx, inject);
     }
 
@@ -1608,6 +1620,9 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
         result = origProcess(html, ctx, charset, urlReplacer, isSrcdoc);
     } catch (e) {
         const host = ctx && ctx.dest && ctx.dest.host || '?';
+        // #region agent log
+        _dbgLog('processResource-error', { host: _dbgHost, error: e.message, ms: Date.now() - _dbgT0 });
+        // #endregion
         console.error(`[patchPageProcessing] processResource FAILED for ${host}: ${e.message}\n${e.stack}`);
         if (typeof html === 'string') {
             if (ctx && ctx.dest) {
@@ -1629,6 +1644,9 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
     result = _stripProxyOriginFromBody(result, ctx);
     result = _rewriteMissedAttrs(result, ctx);
     result = _rewriteJsonScriptUrls(result, ctx);
+    // #region agent log — log completion
+    _dbgLog('processResource-done', { host: _dbgHost, ms: Date.now() - _dbgT0, resultLen: result.length });
+    // #endregion
     return _injectAiHintIntoBody(result.replace(/<head[^>]*>/i, '$&' + inject));
 };
 
