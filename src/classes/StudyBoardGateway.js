@@ -376,20 +376,6 @@ class StudyBoardGateway extends Proxy {
      * @param {ServerInfo} serverInfo
      */
     async _onRequest(req, res, serverInfo) {
-        // #region agent log — debug beacon endpoint for parent-frame instrumentation
-        if (req.url === '/_dbg_beacon') {
-            if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' }); res.end(); return; }
-            if (req.method === 'POST') {
-                let body = '';
-                req.on('data', c => { body += c; if (body.length > 4096) body = body.slice(0, 4096); });
-                req.on('end', () => {
-                    try { fs.appendFileSync(path.join(__dirname, '../../.cursor/debug-c32a59.log'), body + '\n'); } catch (_) {}
-                    res.writeHead(204, { 'Access-Control-Allow-Origin': '*' }); res.end();
-                });
-                return;
-            }
-        }
-        // #endregion
         serverInfo = this._rewriteServerInfo(req);
 
         const isWebsocket = res instanceof stream.Duplex;

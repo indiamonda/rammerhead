@@ -23,6 +23,11 @@ function parseHostPatterns(value) {
 
 const LITE_HOST_OVERRIDES = parseHostPatterns(process.env.RAMMERHEAD_LITE_HOSTS);
 
+const BUILTIN_LITE_HOSTS = [
+    '.duckduckgo.com',
+];
+
+
 function matchesHostPattern(host, pattern) {
     if (!host || !pattern) return false;
     if (pattern[0] === '.') return host.endsWith(pattern);
@@ -35,7 +40,8 @@ function matchesHostPattern(host, pattern) {
 
 function hasLiteHostOverride(host) {
     host = normalizeHost(host);
-    return LITE_HOST_OVERRIDES.some(pattern => matchesHostPattern(host, pattern));
+    if (LITE_HOST_OVERRIDES.some(pattern => matchesHostPattern(host, pattern))) return true;
+    return BUILTIN_LITE_HOSTS.some(pattern => matchesHostPattern(host, pattern));
 }
 
 function markLiteHost(ctx) {
