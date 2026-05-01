@@ -1008,6 +1008,7 @@ function _isChallengeResponse(html, ctx) {
         if (/DataDome.*?captcha|dd\.js/i.test(html)) return true;
         if (/px-captcha|human-challenge|PerimeterX/i.test(html)) return true;
         if (/Kasada.*?challenge|ips\.js/i.test(html)) return true;
+        if (/_wafchallengeid|waf-aiso/i.test(html)) return true;
     }
     return false;
 }

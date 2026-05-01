@@ -24,6 +24,11 @@ function parseHostPatterns(value) {
 const LITE_HOST_OVERRIDES = parseHostPatterns(process.env.RAMMERHEAD_LITE_HOSTS);
 
 const BUILTIN_LITE_HOSTS = [
+    '.tiktokv.com',
+    '.byteoversea.com',
+    '.tiktok.com',
+    '.tiktokcdn.com',
+    '.tiktokcdn-us.com',
     '.duckduckgo.com',
 ];
 
