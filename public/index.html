@@ -2332,25 +2332,11 @@
                             iframeWindow.addEventListener('hashchange', () => { syncUrlFromIframe(); _saveTabs(); });
                             iframeWindow.addEventListener('popstate', () => { syncUrlFromIframe(); _saveTabs(); });
 
-                            // Poll injected DevTools data from iframe.
-                            // Uses requestAnimationFrame with a minimum interval
-                            // instead of a tight setInterval so heavy pages (TikTok,
-                            // Discord) don't choke the main thread with cross-frame
-                            // property reads every 300ms.
+                            // Poll injected DevTools data from iframe
                             (function pollDevTools(win) {
                                 if (!win || win._a_poll) return;
                                 win._a_poll = 1;
-                                var _dtPollMs = 1000;
-                                var _dtLastPoll = 0;
-                                var _dtStopped = false;
-                                function _dtTick() {
-                                    if (_dtStopped) return;
-                                    var now = performance.now();
-                                    if (now - _dtLastPoll < _dtPollMs) {
-                                        requestAnimationFrame(_dtTick);
-                                        return;
-                                    }
-                                    _dtLastPoll = now;
+                                var iv = setInterval(function() {
                                     try {
                                         var q = win._a_q;
                                         if (q && q.length) {
@@ -2392,12 +2378,9 @@
                                             if (added) _renderSourceIfVisible();
                                         }
                                     } catch(e) {
-                                        _dtStopped = true;
-                                        return;
+                                        clearInterval(iv);
                                     }
-                                    requestAnimationFrame(_dtTick);
-                                }
-                                requestAnimationFrame(_dtTick);
+                                }, 1000);
                             })(iframeWindow);
 
                             // Refresh DevTools after page load so all tabs show fresh data

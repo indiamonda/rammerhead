@@ -570,9 +570,7 @@ const ANTIDETECT_SCRIPT = [
 
 const DEVTOOLS_SCRIPT = `<script>(function(){
 if(typeof window==="undefined"||window._a_c)return;window._a_c=1;
-var _qMax=500,_nMax=500,_sMax=500;
-var _mkCapped=function(max){var a=[];a._cap=max;var _oPush=a.push;a.push=function(){if(this.length>=this._cap)return this.length;return _oPush.apply(this,arguments)};return a};
-window._a_q=_mkCapped(_qMax);window._a_n=_mkCapped(_nMax);window._a_src=_mkCapped(_sMax);
+window._a_q=[];window._a_n=[];window._a_src=[];
 window._a_dp=null;window._a_ls=0;
 window._a_tc={timeout:0,interval:0};
 var _oC=window.console||{},_srcSeen={},_groupDepth=0;
