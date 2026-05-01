@@ -64,6 +64,20 @@ const origError = pipelineUtils.error;
 pipelineUtils.error = function patchedError(ctx, err) {
     if (ctx.isPage && !ctx.isIframe) {
         ctx.session.handlePageError(ctx, err);
+    } else if (ctx.isAjax || ctx.isScript) {
+        if ('setHeader' in ctx.res && !ctx.res.headersSent) {
+            ctx.res.statusCode = 500;
+            // Send empty response or JSON to avoid SyntaxError from HTML
+            if (ctx.isScript) {
+                ctx.res.setHeader('content-type', 'application/javascript');
+                ctx.res.write('console.error("Proxy Error: " + ' + JSON.stringify(err ? err.toString() : 'Unknown error') + ');');
+            } else {
+                ctx.res.setHeader('content-type', 'application/json');
+                ctx.res.write(JSON.stringify({ error: err ? err.toString() : 'Unknown error' }));
+            }
+        }
+        ctx.res.end();
+        ctx.goToNextStage = false;
     } else {
         ctx.closeWithError(500, err ? err.toString() : 'Unknown error');
     }

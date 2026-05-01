@@ -30,11 +30,6 @@ const BUILTIN_LITE_HOSTS = [
     '.tiktokcdn.com',
     '.tiktokcdn-us.com',
     '.duckduckgo.com',
-    '.google.com',
-    '.youtube.com',
-    '.googlevideo.com',
-    '.ytimg.com',
-    '.ggpht.com',
 ];
 
 
