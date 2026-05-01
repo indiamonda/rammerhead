@@ -363,6 +363,16 @@
                         }
                     }
                     if (declaredValid) return declaredOut;
+                    if (str.includes(':/')) {
+                        const fixedStr = str.replace(':/', '://');
+                        const fixedPayload = fixedStr.substring(bodyStart);
+                        const fixedBody = fixedPayload.substring(0, declaredLen);
+                        const fixedSuffix = fixedPayload.substring(declaredLen);
+                        const fixedOut = this._unshuffleBody(fixedBody) + fixedSuffix;
+                        if (looksLikeValidUnshuffledUrl(fixedOut)) {
+                            return fixedOut;
+                        }
+                    }
                     for (let i = declaredLen - 1; i > 0; i--) {
                         if (fullPayload.charAt(i - 1) !== '/') continue;
                         const head = fullPayload.substring(0, i);

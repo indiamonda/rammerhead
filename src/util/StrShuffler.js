@@ -192,9 +192,24 @@ class StrShuffler {
                 }
             }
 
-            if (declaredValid) return declaredOut;
+                if (declaredValid) return declaredOut;
 
-            // Last-ditch fallback: scan every `/` in the body and pick the
+                // Frameworks like Next.js strip duplicate slashes in paths.
+                // This turns `_p1<len>:VDFdk://...` into `_p1<len>:VDFdk:/...`
+                // and `_p1<len>://...` into `_p1<len>:/...`.
+                // If the unshuffled result is invalid, try restoring the stripped slash.
+                if (str.includes(':/')) {
+                    const fixedStr = str.replace(':/', '://');
+                    const fixedPayload = fixedStr.substring(bodyStart);
+                    const fixedBody = fixedPayload.substring(0, declaredLen);
+                    const fixedSuffix = fixedPayload.substring(declaredLen);
+                    const fixedOut = this._unshuffleBody(fixedBody) + fixedSuffix;
+                    if (looksLikeValidUnshuffledUrl(fixedOut)) {
+                        return fixedOut;
+                    }
+                }
+
+                // Last-ditch fallback: scan every `/` in the body and pick the
             // longest split whose decoded prefix looks valid.
             for (let i = declaredLen - 1; i > 0; i--) {
                 if (fullPayload.charAt(i - 1) !== '/') continue;
