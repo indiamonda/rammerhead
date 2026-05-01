@@ -5,8 +5,7 @@
 app = "studyboard"
 
 [[vm]]
-  cpu_kind = "shared"
-  cpus = 1
+  size = "shared-cpu-1x"
   memory_mb = 1024
 
 primary_region = "sjc"
