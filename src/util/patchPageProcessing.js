@@ -1122,7 +1122,7 @@ function _liteProcess(html, ctx, inject) {
         html = html.replace(
             /(<script(?:[^>]*)>)([\s\S]*?)(<\/script>)/gi,
             (_m, open, body, close) => {
-                if (/type\s*=\s*["']application\/ld\+json["']/i.test(open)) return _m;
+                if (/type\s*=\s*["']application\/(?:ld\+)?json["']/i.test(open)) return _m;
                 // Rewrite relative asset paths in string literals that dynamic import() or
                 // framework routers use (can't be intercepted by the bridge script)
                 body = body.replace(/(["'`])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"'`]*)(["'`])/g,
@@ -1620,7 +1620,6 @@ pageProcessor.processResource = function patchedProcessResource(html, ctx, chars
     if (typeof result !== 'string') return result;
     result = _stripProxyOriginFromBody(result, ctx);
     result = _rewriteMissedAttrs(result, ctx);
-    result = _rewriteJsonScriptUrls(result, ctx);
     return _injectAiHintIntoBody(result.replace(/<head[^>]*>/i, '$&' + inject));
 };
 
@@ -1691,69 +1690,3 @@ function _rewriteMissedAttrs(html, ctx) {
 // objects/arrays correctly), and falls back to a regex sweep when the body
 // isn't valid JSON (HTML-encoded characters etc.). Both code paths are
 // idempotent: paths already starting with `/<sid>/` are skipped.
-function _rewriteJsonScriptUrls(html, ctx) {
-    if (!html || typeof html !== 'string') return html;
-    const sid = ctx && ctx.session && ctx.session.id;
-    const dest = ctx && ctx.dest;
-    if (!sid || !dest || !dest.host) return html;
-
-    const origin = (dest.protocol || 'https:') + '//' + dest.host;
-    const sidPrefix = '/' + sid + '/';
-    const proxiedPrefix = _PATH_PREFIX + sidPrefix + origin;
-
-    function rewriteString(s) {
-        if (typeof s !== 'string') return s;
-        if (!s) return s;
-        if (s.indexOf(sidPrefix) === 0) return s;
-        if (s.indexOf(_PATH_PREFIX + sidPrefix) === 0) return s;
-        if (s.indexOf('/_a/') === 0) return s;
-        if (s.charAt(0) === '/' && s.charAt(1) !== '/') {
-            return proxiedPrefix + s;
-        }
-        if (/^https?:\/\//i.test(s)) {
-            try {
-                const u = new URL(s);
-                if (u.host === dest.host) return _PATH_PREFIX + sidPrefix + s;
-            } catch (_) {}
-        }
-        return s;
-    }
-
-    function walk(v) {
-        if (Array.isArray(v)) {
-            for (let i = 0; i < v.length; i++) v[i] = walk(v[i]);
-            return v;
-        }
-        if (v && typeof v === 'object') {
-            for (const k in v) {
-                if (Object.prototype.hasOwnProperty.call(v, k)) v[k] = walk(v[k]);
-            }
-            return v;
-        }
-        if (typeof v === 'string') return rewriteString(v);
-        return v;
-    }
-
-    return html.replace(
-        /(<script\b[^>]*?\btype\s*=\s*["']application\/(?:[a-z0-9.+-]*\+)?json["'][^>]*>)([\s\S]*?)(<\/script>)/gi,
-        (_m, open, body, close) => {
-            if (/\bld\+json\b/i.test(open)) return _m;
-            const trimmed = body.trim();
-            if (!trimmed) return _m;
-            try {
-                const parsed = JSON.parse(trimmed);
-                const rewritten = walk(parsed);
-                return open + JSON.stringify(rewritten) + close;
-            } catch (_) {
-                const rewrittenBody = body.replace(
-                    /"((?:\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"\\\s]+))"/g,
-                    (m, path) => {
-                        if (path.indexOf(sidPrefix) === 0 || path.indexOf(_PATH_PREFIX + sidPrefix) === 0) return m;
-                        return '"' + proxiedPrefix + path + '"';
-                    }
-                );
-                return open + rewrittenBody + close;
-            }
-        }
-    );
-}
