@@ -42,7 +42,14 @@ process.on('uncaughtException', (err) => {
         }
     } else {
         // probably a TypeError or something important
-        console.error('About to throw: ' + err.message);
-        throw err;
+        console.error('Avoided crash (was about to throw): ' + err.stack || err.message);
+    }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    if (process.env.DEVELOPMENT) {
+        console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    } else {
+        console.error('Unhandled Rejection:', reason);
     }
 });

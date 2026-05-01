@@ -56,3 +56,16 @@ httpUtil.respond500 = function patchedRespond500(res, err) {
     return orig500.apply(this, arguments);
 };
 httpUtil.respond500._a_patched = true;
+
+// Prevent testcafe-hammerhead from destroying the socket for AJAX requests,
+// which causes Fly.io to return a 502 Bad Gateway error.
+const pipelineUtils = require('testcafe-hammerhead/lib/request-pipeline/utils');
+const origError = pipelineUtils.error;
+pipelineUtils.error = function patchedError(ctx, err) {
+    if (ctx.isPage && !ctx.isIframe) {
+        ctx.session.handlePageError(ctx, err);
+    } else {
+        ctx.closeWithError(500, err ? err.toString() : 'Unknown error');
+    }
+};
+pipelineUtils.error._a_patched = true;
