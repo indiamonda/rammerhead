@@ -64,11 +64,11 @@ const origError = pipelineUtils.error;
 pipelineUtils.error = function patchedError(ctx, err) {
     if (ctx.isPage && !ctx.isIframe) {
         ctx.session.handlePageError(ctx, err);
-    } else if (ctx.isAjax || ctx.isScript) {
+    } else if (ctx.isAjax || (ctx.dest && ctx.dest.isScript)) {
         if ('setHeader' in ctx.res && !ctx.res.headersSent) {
             ctx.res.statusCode = 500;
             // Send empty response or JSON to avoid SyntaxError from HTML
-            if (ctx.isScript) {
+            if (ctx.dest && ctx.dest.isScript) {
                 ctx.res.setHeader('content-type', 'application/javascript');
                 ctx.res.write('console.error("Proxy Error: " + ' + JSON.stringify(err ? err.toString() : 'Unknown error') + ');');
             } else {

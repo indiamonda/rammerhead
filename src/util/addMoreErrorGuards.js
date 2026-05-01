@@ -42,7 +42,8 @@ process.on('uncaughtException', (err) => {
         }
     } else {
         // probably a TypeError or something important
-        console.error('Avoided crash (was about to throw): ' + err.stack || err.message);
+        console.error('About to throw: ' + err.message);
+        throw err;
     }
 });
 
