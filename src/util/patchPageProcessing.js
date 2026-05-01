@@ -570,7 +570,9 @@ const ANTIDETECT_SCRIPT = [
 
 const DEVTOOLS_SCRIPT = `<script>(function(){
 if(typeof window==="undefined"||window._a_c)return;window._a_c=1;
-window._a_q=[];window._a_n=[];window._a_src=[];
+var _qMax=500,_nMax=500,_sMax=500;
+var _mkCapped=function(max){var a=[];a._cap=max;var _oPush=a.push;a.push=function(){if(this.length>=this._cap)return this.length;return _oPush.apply(this,arguments)};return a};
+window._a_q=_mkCapped(_qMax);window._a_n=_mkCapped(_nMax);window._a_src=_mkCapped(_sMax);
 window._a_dp=null;window._a_ls=0;
 window._a_tc={timeout:0,interval:0};
 var _oC=window.console||{},_srcSeen={},_groupDepth=0;
@@ -633,8 +635,7 @@ try{var h=x.getAllResponseHeaders()||"";h.split("\\r\\n").forEach(function(l){va
 entry.ct=(entry.resH["content-type"]||"").split(";")[0];
 var cl=entry.resH["content-length"];if(cl)entry.sz=parseInt(cl,10)||0;else try{entry.sz=x.response?x.response.length||0:0}catch(e){}}catch(e){}
 if(window._a_dp)try{window._a_dp.netUpdate(entry)}catch(e){}});return _oXS.apply(this,arguments)}}
-try{var _oAEL=EventTarget.prototype.addEventListener;
-EventTarget.prototype.addEventListener=function(){window._a_ls++;return _oAEL.apply(this,arguments)}}catch(e){}
+try{window._a_ls=0}catch(e){}
 var _oST=window.setTimeout,_oSI=window.setInterval;
 window.setTimeout=function(){window._a_tc.timeout++;return _oST.apply(this,arguments)};
 window.setInterval=function(){window._a_tc.interval++;return _oSI.apply(this,arguments)};

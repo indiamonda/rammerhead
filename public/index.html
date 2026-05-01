@@ -2332,13 +2332,26 @@
                             iframeWindow.addEventListener('hashchange', () => { syncUrlFromIframe(); _saveTabs(); });
                             iframeWindow.addEventListener('popstate', () => { syncUrlFromIframe(); _saveTabs(); });
 
-                            // Poll injected DevTools data from iframe
+                            // Poll injected DevTools data from iframe.
+                            // Uses requestAnimationFrame with a minimum interval
+                            // instead of a tight setInterval so heavy pages (TikTok,
+                            // Discord) don't choke the main thread with cross-frame
+                            // property reads every 300ms.
                             (function pollDevTools(win) {
                                 if (!win || win._a_poll) return;
                                 win._a_poll = 1;
-                                var iv = setInterval(function() {
+                                var _dtPollMs = 1000;
+                                var _dtLastPoll = 0;
+                                var _dtStopped = false;
+                                function _dtTick() {
+                                    if (_dtStopped) return;
+                                    var now = performance.now();
+                                    if (now - _dtLastPoll < _dtPollMs) {
+                                        requestAnimationFrame(_dtTick);
+                                        return;
+                                    }
+                                    _dtLastPoll = now;
                                     try {
-                                        // Console messages
                                         var q = win._a_q;
                                         if (q && q.length) {
                                             var batch = q.splice(0, 50);
@@ -2354,7 +2367,6 @@
                                                 keepalive: true
                                             }).catch(function(){});
                                         }
-                                        // Network requests
                                         var net = win._a_n;
                                         if (net && net.length) {
                                             var nb = net.splice(0, 100);
@@ -2368,7 +2380,6 @@
                                             if (networkRequests.length > 500) networkRequests = networkRequests.slice(-500);
                                             _renderNetworkIfVisible();
                                         }
-                                        // Source files
                                         var src = win._a_src;
                                         if (src && src.length) {
                                             var sb = src.splice(0, 200);
@@ -2381,9 +2392,12 @@
                                             if (added) _renderSourceIfVisible();
                                         }
                                     } catch(e) {
-                                        clearInterval(iv);
+                                        _dtStopped = true;
+                                        return;
                                     }
-                                }, 300);
+                                    requestAnimationFrame(_dtTick);
+                                }
+                                requestAnimationFrame(_dtTick);
                             })(iframeWindow);
 
                             // Refresh DevTools after page load so all tabs show fresh data
