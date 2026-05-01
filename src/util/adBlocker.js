@@ -218,8 +218,15 @@ const AD_DOMAINS_SUFFIX = [
     '.undertone.com', '.inmobi.com', '.chartboost.com',
     '.vungle.com', '.applovin.com', '.onclckds.com',
     '.adsco.re', '.clkads.com',
-    // Social retargeting / analytics pixels (suffix-match)
-    '.licdn.com', '.pinterest.com', '.tiktok.com',
+    // Social retargeting / analytics pixels (suffix-match).
+    // NOTE: do NOT add `.tiktok.com`, `.pinterest.com`, or `.licdn.com` here
+    // even though they host tracking subdomains — JS suffix-match would also
+    // hit `www.tiktok.com`, `pinterest.com`, `media.licdn.com`, etc. and
+    // black-hole the user's actual navigation. The specific tracking
+    // endpoints (analytics.tiktok.com, business-api.tiktok.com,
+    // ct.pinterest.com, log.pinterest.com, widgets.pinterest.com,
+    // snap.licdn.com, px.ads.linkedin.com, …) are already listed exactly in
+    // AD_DOMAINS_EXACT above, which only matches the exact host.
     '.ads-twitter.com', '.teads.tv', '.aniview.com', '.brid.tv',
     '.unrulymedia.com', '.spotxchange.com', '.jwpsrv.com',
     '.shareaholic.com', '.addthis.com', '.sharethis.com',
