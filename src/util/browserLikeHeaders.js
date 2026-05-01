@@ -311,11 +311,11 @@ const CDN_REFERER_MAP = [
     [/\.?gimkit\.com$/i, 'https://www.gimkit.com'],
 ];
 
-// Match unshuffled (https://...) and shuffled (legacy `_rhs...` or v2 `_rh1...`)
-// proxy URLs. Optional /studyboard prefix for reverse-proxy deployments.
-// Allow hammerhead-style metadata segments after the session id, e.g.:
-//   /<id>!s!utf-8/_rhs... or /<id>!a!1!s*host/_rh1...
-const PROXY_REQUEST_RE = /^(?:\/studyboard)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(?:https?:\/\/[^/]+|_rh[s1])/i;
+// Match unshuffled (https://...) and shuffled proxy URLs.
+// Accepts BOTH the current indicators (`_ps`, `_p1`) and the legacy ones
+// (`_rhs`, `_rh1`) so old saved/shared URLs still route correctly.
+// Optional /studyboard prefix for reverse-proxy deployments.
+const PROXY_REQUEST_RE = /^(?:\/studyboard)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(?:https?:\/\/[^/]+|_p[s1]|_rh[s1])/i;
 const UNSHUFFLED_ORIGIN_RE = /^(?:\/studyboard)?\/[a-z0-9]{32}(?:(?:![^\/]+)*)\/(https?:\/\/[^/]+)/i;
 
 /**
