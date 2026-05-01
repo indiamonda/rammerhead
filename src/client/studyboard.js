@@ -21,8 +21,8 @@
         fixElementGetter();
         fixCrossWindowLocalStorage();
 
-        delete window.overrideGetGwUrl;
-        delete window.overrideParseGwUrl;
+        delete window.overrideGetProxyUrl;
+        delete window.overrideParseProxyUrl;
         delete window.overrideIsCrossDomainWindows;
 
         // other code if they want to also hook onto hammerhead start //
@@ -403,47 +403,47 @@
             history.replaceState(null, null, newUrl);
         }
 
-        const getGwUrl = hammerhead.utils.url.getGwUrl;
-        const parseGwUrl = hammerhead.utils.url.parseGwUrl;
-        hammerhead.utils.url.overrideGetGwUrl(function (url, opts) {
+        const getProxyUrl = hammerhead.utils.url.getProxyUrl;
+        const parseProxyUrl = hammerhead.utils.url.parseProxyUrl;
+        hammerhead.utils.url.overrideGetProxyUrl(function (url, opts) {
             if (noShuffling) {
-                return getGwUrl(url, opts);
+                return getProxyUrl(url, opts);
             }
-            return replaceUrl(getGwUrl(url, opts), (u) => _pm.shuffle(u), true);
+            return replaceUrl(getProxyUrl(url, opts), (u) => _pm.shuffle(u), true);
         });
-        hammerhead.utils.url.overrideParseGwUrl(function (url) {
-            return parseGwUrl(replaceUrl(url, (u) => _pm.unshuffle(u), false));
+        hammerhead.utils.url.overrideParseProxyUrl(function (url) {
+            return parseProxyUrl(replaceUrl(url, (u) => _pm.unshuffle(u), false));
         });
         // manual hooks //
-        window.overrideGetGwUrl(
-            (getGwUrl$1) =>
+        window.overrideGetProxyUrl(
+            (getProxyUrl$1) =>
                 function (url, opts) {
                     if (noShuffling) {
-                        return getGwUrl$1(url, opts);
+                        return getProxyUrl$1(url, opts);
                     }
-                    return replaceUrl(getGwUrl$1(url, opts), (u) => _pm.shuffle(u), true);
+                    return replaceUrl(getProxyUrl$1(url, opts), (u) => _pm.shuffle(u), true);
                 }
         );
-        window.overrideParseGwUrl(
-            (parseGwUrl$1) =>
+        window.overrideParseProxyUrl(
+            (parseProxyUrl$1) =>
                 function (url) {
-                    return parseGwUrl$1(replaceUrl(url, (u) => _pm.unshuffle(u), false));
+                    return parseProxyUrl$1(replaceUrl(url, (u) => _pm.unshuffle(u), false));
                 }
         );
     }
     function fixUrlRewrite() {
         const port = location.port || (location.protocol === 'https:' ? '443' : '80');
-        const getGwUrl = hammerhead.utils.url.getGwUrl;
-        hammerhead.utils.url.overrideGetGwUrl(function (url, opts = {}) {
-            if (!opts.gwPort) {
-                opts.gwPort = port;
+        const getProxyUrl = hammerhead.utils.url.getProxyUrl;
+        hammerhead.utils.url.overrideGetProxyUrl(function (url, opts = {}) {
+            if (!opts.proxyPort) {
+                opts.proxyPort = port;
             }
-            return getGwUrl(url, opts);
+            return getProxyUrl(url, opts);
         });
-        window.overrideParseGwUrl(
-            (parseGwUrl$1) =>
+        window.overrideParseProxyUrl(
+            (parseProxyUrl$1) =>
                 function (url) {
-                    const parsed = parseGwUrl$1(url);
+                    const parsed = parseProxyUrl$1(url);
                     if (!parsed || !parsed.proxy) return parsed;
                     if (!parsed.proxy.port) {
                         parsed.proxy.port = port;
@@ -472,7 +472,7 @@
             HTMLSourceElement: ['src'],
             HTMLTrackElement: ['src']
         };
-        const urlRewrite = (url) => (hammerhead.utils.url.parseGwUrl(url) || {}).destUrl || url;
+        const urlRewrite = (url) => (hammerhead.utils.url.parseProxyUrl(url) || {}).destUrl || url;
         for (const ElementClass in fixList) {
             for (const attr of fixList[ElementClass]) {
                 if (!window[ElementClass]) {
@@ -507,7 +507,7 @@
         // completely replace hammerhead's implementation as restore() and save() on every
         // call is just not viable (mainly memory issues as the garbage collector is sometimes not fast enough)
 
-        const getLocHost = win => (new URL(hammerhead.utils.url.parseGwUrl(win.location.href).destUrl)).host;
+        const getLocHost = win => (new URL(hammerhead.utils.url.parseProxyUrl(win.location.href).destUrl)).host;
         const prefix = win => `_a|sw|${hammerhead.settings._settings.sessionId}|${
             getLocHost(win)
         }|`;

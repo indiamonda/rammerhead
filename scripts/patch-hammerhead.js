@@ -577,67 +577,29 @@ const BRAND_REPLACEMENTS = [
     ['sourceURL=hammerhead.js', 'sourceURL=app.js'],
     ['testcafe-hammerhead:', 'app:'],
     // ---------------------------------------------------------------
-    // SECTION 5 — `proxy` plain-text leaks.
+    // SECTION 5 — `proxy` plain-text leaks (CONSERVATIVE).
     //
-    // hammerhead's bundles (and the task.js mustache template) ship with
-    // a long list of identifiers and embedded marker strings that contain
-    // the bare keyword `proxy`. Any AI/keyword filter that scans the
-    // served JS will trip on these. We rename them to neutral
-    // gateway-themed equivalents in lockstep with the runtime brand-strip
-    // pass in `src/util/brandStrip.js`, so:
+    // We tried renaming the full proxy-keyword set across hammerhead's
+    // entire call-graph and broke the runtime: the AST-rewriter emits
+    // calls to `__get$ProxyUrl` etc. in the rewritten user code, and a
+    // global rename of those symbols decoupled the rewriter from the
+    // runtime helpers, so every script-rewritten page hung on first
+    // URL access.
     //
-    //   • the wire (task.js / iframe-task.js) emits the new names,
-    //   • the client bundle reads the new names,
-    //   • our own code (src/util/*, public/*) accesses them via the new
-    //     names, and
-    //   • the on-disk client bundles (.js / .min.js) match the runtime.
+    // Stick to renames that are SAFE to do:
+    //   • ServeR-side error messages that go on the wire as response
+    //     bodies (don't affect any code paths).
+    //   • Internal class methods / marker strings that are set+read
+    //     inside the same client bundle and never crossed by an
+    //     AST-rewritten user script (which keeps the keyword `proxy`
+    //     on the source side).
     //
-    // Order: longer keys first, so substring overlap doesn't corrupt
-    // earlier rewrites. (e.g. `crossDomainProxyPort` MUST replace before
-    // `proxyPort`.)
+    // The rest of the rewriting happens at SERVE TIME via
+    // `src/util/brandStrip.js`, which only touches the bytes on the
+    // wire and never alters the on-disk node_modules files. That keeps
+    // hammerhead's call-graph intact and still drops the visible
+    // keyword count in the bundles browsers download.
     // ---------------------------------------------------------------
-    ['crossDomainProxyPort',     'crossDomainGwPort'],
-    ['forceProxySrcForImage',    'forceGwSrcForImage'],
-    ['overrideParseProxyUrl',    'overrideParseGwUrl'],
-    ['overrideGetProxyUrl',      'overrideGetGwUrl'],
-    ['parseProxyUrl',            'parseGwUrl'],
-    ['getProxyUrl',              'getGwUrl'],
-    ['proxyProtocol',            'gwProto'],
-    ['proxyHostname',            'gwHost'],
-    ['proxyPort',                'gwPort'],
-    ['force-proxy-src-flag',     'force-gw-src-flag'],
-    ['proxy-handler-flag',       'gw-handler-flag'],
-    ['is-proxy-object',          'is-gw-object'],
-    ['proxy-object',             'gw-object'],
-    ['proxy-table',              'gw-table'],
-    // _proxyConsoleMeth — class method name in the client console
-    // sandbox wrapper. Internal, safe to rename.
-    ['_proxyConsoleMeth',        '_intConsoleMeth'],
-    // style sandbox internal marker `_d|style|proxy-target`.
-    ['style|proxy-target',       'style|gw-target'],
-    // -- Public method names on hammerhead.utils.url.*
-    //    (read by our own code AND inside the bundle internals).
-    //    Renamed in lockstep across all caller / definer files.
-    ['getCrossDomainIframeProxyUrl', 'getCrossDomainIframeGwUrl'],
-    ['getCrossDomainProxyOrigin',    'getCrossDomainGwOrigin'],
-    ['getCrossDomainProxyPort',      'getCrossDomainGwPort'],
-    ['convertToProxyUrl',            'convertToGwUrl'],
-    ['getAjaxProxyUrl',              'getAjaxGwUrl'],
-    // -- __get$ProxyUrl: the runtime URL-resolution helper that the
-    //    AST script transformers emit at every URL-bearing site
-    //    (`window.location`, dynamic import, etc). Used in:
-    //      • lib/processing/script/instruction.js (defines symbol)
-    //      • lib/processing/script/transformers/dynamic-import.js (emits call)
-    //      • lib/client/{hammerhead,worker-hammerhead}.* (default impl)
-    //    Safe rename because every call site is rewritten by the same
-    //    transformer pass that produces the symbol.
-    ['__get$ProxyUrl',           '__get$GwUrl'],
-    // -- Proxy-sandbox methods on `hammerhead.sandbox.code-instrumentation
-    //    .properties.proxy-property-accessors`.
-    ['overrideProxyInWindow',    'overrideGwInWindow'],
-    ['isProxyObject',            'isGwObject'],
-    // -- Worker-side proxy-config setter.
-    ['_setProxySettings',        '_setGwSettings'],
     // server-side error messages that surface in HTTP response bodies.
     ['Session is not opened in proxy', 'Session is not opened'],
 ];
@@ -669,29 +631,7 @@ const BRAND_FILES = [
     'session/injectables.js',
     // SESSION_IS_NOT_OPENED_ERR & related response-body strings live here
     'session/index.js',
-    // page processing emits crossDomainProxyPort / forceProxySrcForImage
-    // into the renderable options object (server-side, not on the wire,
-    // but mirrored here for keyword-scan parity).
-    'processing/resources/page.js',
-    // DOM processor maintains forceProxySrcForImage / parseProxyUrl etc.
     'processing/dom/index.js',
-    'processing/dom/parse5-dom-adapter.js',
-    'utils/url.js',
-    // The server-side caller-graph for parseProxyUrl/getProxyUrl. If
-    // we rename the definition (utils/url.js) we MUST also rename the
-    // call sites here, otherwise dispatch crashes with
-    // `urlUtils.parseProxyUrl is not a function`. These were tracked
-    // down by grep'ing the lib/ tree for every name in the rename
-    // table after the first patch attempt blew up at startup.
-    'request-pipeline/context/index.js',
-    'processing/script/index.js',
-    'processing/script/instruction.js',
-    'processing/script/node-builder.js',
-    'processing/script/transform.js',
-    'processing/script/transformers/static-import.js',
-    'processing/script/transformers/dynamic-import.js',
-    'utils/stack-processing.js',
-    'index.js',
     // client mustache (re-served as task.js with the new path)
     'client/task.js.mustache',
     // unminified client bundles (consumed by src/build.js)
