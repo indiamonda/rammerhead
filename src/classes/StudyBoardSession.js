@@ -49,7 +49,15 @@ class StudyBoardSession extends Session {
         this.getPayloadScript = async () => '';
         this.getAuthCredentials = () => ({});
         this.handleFileDownload = () => void 0;
-        this.handlePageError = () => void 0;
+        this.handlePageError = (ctx, err) => {
+            if ('setHeader' in ctx.res && !ctx.res.headersSent) {
+                ctx.res.statusCode = 500;
+                ctx.res.setHeader('content-type', 'text/html');
+                ctx.res.write('<h1>StudyBoard Gateway Error</h1><p>' + (err ? err.toString() : 'Unknown error') + '</p>');
+            }
+            ctx.res.end();
+            ctx.goToNextStage = false;
+        };
         this.handleAttachment = () => void 0;
         // this.handlePageError = (ctx, err) => {
         //     console.error(ctx.req.url);
