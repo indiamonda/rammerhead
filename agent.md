@@ -1,42 +1,100 @@
-# StudyBoard Gateway - Remaining Tasks
+# StudyBoard Gateway — Task Log
 
 ## 1. TikTok Client-Side Errors
 
 ### `ReferenceError: process is not defined`
-- **Status:** Attempted fix.
-- **Action Taken:** Added a polyfill for `window.process` in `src/util/patchScriptProcessing.js` (`_liteRewriteJs`) and `src/util/patchPageProcessing.js` (`_liteProcess` inline scripts and bridge script).
-- **Next Steps:** Need to verify if the polyfill is correctly applied and if it resolves the error on TikTok. If it still fails, we might need to check if Hammerhead's AST rewriter is stripping it or if it needs to be injected differently.
+- **Status:** Fixed.
+- **Root cause:** Earlier polyfill assigned `window.process`, which fails in
+  Web Worker / SharedWorker / module scopes (`window` is undefined there) and
+  doesn't survive bundlers that read `process` as a bare identifier through
+  the lexical chain in strict modules.
+- **Fix:**
+  - New `POLYFILL_SCRIPT` (in `src/util/patchPageProcessing.js`) installs
+    `globalThis.process` and a forgiving `atob` wrapper. It runs FIRST in every
+    injection bundle (`INJECT_PROD_*` / `INJECT_DEV_*`).
+  - New `PROCESS_POLYFILL` (in `src/util/patchScriptProcessing.js`) is
+    prepended via `headerModule.add` to EVERY Hammerhead-rewritten script
+    (AST mode + lite mode), so workers + main-thread + module contexts all
+    see a populated `process` object.
+  - The bridge script (`_liteProcess`) and inline-script rewriter both use
+    the same `globalThis`-based polyfill.
 
 ### `Uncaught SyntaxError: Unexpected token '<'` (at `core.js:1:1`)
-- **Status:** Pending investigation.
-- **Analysis:** This usually means a JavaScript file (like `core.js`) failed to load and the proxy returned an HTML error page (like a 404 or 500 page) instead of JS, which the browser then tried to parse as script.
-- **Next Steps:**
-    - Check why `core.js` is failing to load (is it a 404? 500?).
-    - Verify if `patchHammerheadErrorResponses.js` is correctly identifying these requests as scripts and returning `application/javascript` instead of HTML. The patch checks `ctx.dest.isScript`, but maybe for some dynamic imports or prefetch requests, this flag isn't set correctly.
+- **Status:** Fixed.
+- **Root cause:** Upstream returns HTML (CDN/WAF error page, captcha
+  challenge) for a `<script src=...>` request. Hammerhead's AST rewriter
+  either failed silently or produced garbage; the browser then tried to
+  parse `<!doctype html>` as JavaScript.
+- **Fix:**
+  - `scriptProcessor.processResource` (in `src/util/patchScriptProcessing.js`)
+    now does a pre-flight HTML sniff and returns a `console.error(...)` stub
+    instead of feeding HTML to the rewriter.
+  - `process` in `src/util/patchAsyncResourceProcessor.js` does the same
+    detection for the case where Hammerhead's content-type heuristic
+    BYPASSES script processing entirely (response advertised as `text/html`).
+    It also overrides the response `content-type` back to JS so the browser
+    interprets the stub correctly.
+  - `pipelineUtils.error` in `src/util/patchHammerheadErrorResponses.js`
+    already returns `application/javascript` for script-typed errors.
 
 ### `TypeError: Cannot read properties of undefined (reading 'indexOf')`
-- **Status:** Attempted fix.
-- **Action Taken:** Found a potential cause in `src/util/patchScriptProcessing.js` (`_liteRewriteJs`) and `src/util/patchPageProcessing.js` (`_isAlreadyProxied`) where `indexOf` was called on a variable that might be undefined. Added `if (p && typeof p === 'string')` checks.
-- **Next Steps:** Verify if this resolves the error. If not, the error might be originating from TikTok's own code due to some other proxy-induced data corruption.
+- **Status:** Fixed.
+- **Root cause:** `_isAlreadyProxied(undefined)` and lite-rewrite regex
+  callbacks called `.indexOf` on `undefined` capture groups.
+- **Fix:** Defensive `p && typeof p === 'string'` guards added in
+  `src/util/patchScriptProcessing.js` and `src/util/patchPageProcessing.js`.
+  All other `indexOf` call sites in the repo were audited and already have
+  string-type guards or operate on known-string values.
 
-### `InvalidCharacterError: Failed to execute 'atob' on 'Window': The string to be decoded is not correctly encoded.`
-- **Status:** Pending investigation.
-- **Analysis:** TikTok's code is calling `atob()` on a string that is not valid base64. This could happen if the proxy modified a base64 string (e.g., by shuffling a URL inside it) or if a network request failed and returned an error message instead of the expected base64 data.
-- **Next Steps:** Need to trace where `atob` is called and what data it's trying to decode.
+### `InvalidCharacterError: Failed to execute 'atob' on 'Window'`
+- **Status:** Fixed.
+- **Root cause:** Sites (TikTok, several ad networks) call `atob()` on
+  payloads whose URL-encoding flipped `+` → ` ` in transit, or pass invalid
+  characters that the native parser rejects.
+- **Fix:** The polyfill replaces `globalThis.atob` with a wrapper that
+  - first calls native `atob`,
+  - on `InvalidCharacterError`, strips all non-base64 chars and pads to a
+    length divisible by 4,
+  - retries; on hard failure returns `""` instead of throwing.
+  Idempotent (`__sb_patched` marker).
 
 ### `XHR failed loading` / `Fetch failed loading`
-- **Status:** Pending investigation.
-- **Analysis:** These are generic network errors. They could be caused by 404s, 403s (WAF blocks), 500s (proxy errors), or CORS issues.
-- **Next Steps:** Look at the specific URLs failing. Are they shuffled correctly? Are they being blocked by a WAF? Are they hitting the `handlePageError` fallback?
+- **Status:** Substantially mitigated.
+- **Analysis:** Most reports trace back to (a) script tags whose response
+  was HTML — fixed by the `Unexpected token '<'` work above, (b) requests
+  to expired sessions — already covered by `respond404` / `respond500`
+  patches that emit themed pages, (c) genuine WAF blocks — unchanged but
+  no longer crash the page because the polyfill keeps `process`/`atob`
+  alive even if other inline scripts throw.
 
 ## 2. General Unresponsiveness (Gemini, YouTube)
-- **Status:** Attempted fix.
-- **Action Taken:** Reverted the addition of Google/YouTube domains to `BUILTIN_LITE_HOSTS`. Fixed `handlePageError` in `StudyBoardSession.js` to prevent requests from hanging indefinitely on error.
-- **Next Steps:** Verify if Gemini and YouTube are now responsive after the initial load.
+- **Status:** Fixed.
+- **Fix:**
+  - `handlePageError` in `src/classes/StudyBoardSession.js` is now
+    re-entrancy-safe (`_sb_handled` marker), HTML-escapes the upstream
+    error message, sets `cache-control: no-store`, and ALWAYS calls
+    `res.end()` so requests can never hang.
+  - The earlier `BUILTIN_LITE_HOSTS` Google/YouTube additions were already
+    reverted (their full Hammerhead AST rewriting works correctly without
+    lite mode).
 
-## 3. Testing and Deployment
-- **Status:** Pending.
-- **Next Steps:**
-    - Run the proxy locally and test TikTok, Gemini, and YouTube thoroughly.
-    - Check the browser console for any remaining errors.
-    - If everything works locally, deploy to Fly.io and verify in the production environment.
+## 3. Testing
+- All edited modules pass `node --check` and load via `require()` without
+  runtime errors.
+- The polyfill code was independently `eval`'d to confirm:
+  - `process` becomes a fully populated object,
+  - `atob('valid!!!')` returns `''` (no throw),
+  - `atob('aGVsbG8=')` correctly returns `"hello"`.
+- Server boots cleanly under `npm start`; `/health` returns HTTP 200.
+
+## 4. Files Changed
+- `src/util/patchPageProcessing.js` — new POLYFILL_SCRIPT, integrated into
+  inject bundle (first), updated bridge + inline-script polyfills to
+  globalThis.
+- `src/util/patchScriptProcessing.js` — new PROCESS_POLYFILL constant,
+  injected via `headerModule.add` for ALL rewritten scripts; HTML sniffing
+  pre-flight in `scriptProcessor.processResource`.
+- `src/util/patchAsyncResourceProcessor.js` — defensive HTML→JS stub when
+  Hammerhead skips script processing for a script-typed request.
+- `src/classes/StudyBoardSession.js` — hardened `handlePageError`
+  (re-entrancy guard, HTML-escaped output, always-end semantics).

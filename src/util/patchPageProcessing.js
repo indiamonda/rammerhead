@@ -1143,7 +1143,12 @@ function _liteProcess(html, ctx, inject) {
                     body = body.replace(/process\.env\.NODE_ENV/g, '"production"');
                 }
                 if (body.match(/\bprocess\b/)) {
-                    body = 'window.process = window.process || { env: { NODE_ENV: "production" }, browser: true, type: "renderer", version: "", cwd: function() { return "/" }, platform: "browser", nextTick: function(cb) { setTimeout(cb, 0); } };\nif (typeof process === "undefined") { var process = window.process; }\n' + body;
+                    // Module / classic-script safe polyfill. Uses `globalThis`
+                    // so it works regardless of execution context (window vs
+                    // worker vs strict module). The trailing `var process =`
+                    // is kept as a hoisted backstop for non-strict scripts that
+                    // reference `process` by bare name in the same scope.
+                    body = '(function(){var g=(typeof globalThis!=="undefined")?globalThis:(typeof window!=="undefined")?window:(typeof self!=="undefined")?self:this;if(!g.process){g.process={env:{NODE_ENV:"production"},browser:true,type:"renderer",version:"",versions:{node:""},platform:"browser",argv:[],cwd:function(){return "/"},nextTick:function(cb){Promise.resolve().then(cb)}}}})();\n' + body;
                 }
                 if (/type\s*=\s*["']module["']/i.test(open)) {
                     body = body.replace(/((?:^|[\s;,{(])import\s*["'])(\/[^"']+)(["'])/gm,
@@ -1158,7 +1163,8 @@ function _liteProcess(html, ctx, inject) {
 
     const destUrl = ctx.dest.url || (origin + (ctx.dest.partAfterHost || '/'));
 
-    const bridge = `<script>window.process = window.process || { env: { NODE_ENV: "production" }, browser: true, type: "renderer", version: "", cwd: function() { return "/" }, platform: "browser", nextTick: function(cb) { setTimeout(cb, 0); } };\nif (typeof process === "undefined") { var process = window.process; }\n(function(){
+    const bridge = `<script>(function(){var g=(typeof globalThis!=="undefined")?globalThis:(typeof window!=="undefined")?window:(typeof self!=="undefined")?self:this;if(!g.process){g.process={env:{NODE_ENV:"production"},browser:true,type:"renderer",version:"",versions:{node:""},platform:"browser",argv:[],cwd:function(){return "/"},nextTick:function(cb){Promise.resolve().then(cb)}}}})();
+(function(){
 // Domain-leak hardening: derive the proxy origin from \`location\` at runtime instead
 // of embedding it as a literal string. This prevents content-scanners that grep the
 // proxied page source for "studyboard.fly.dev" / our deployed hostname from finding
@@ -1496,6 +1502,54 @@ if(ft==='_blank'||ft==='_new'){try{f.target='_top'}catch(_e){}}
 
 const _DEV = !!process.env.DEVELOPMENT;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PROCESS / ATOB POLYFILL — runs FIRST in every injection bundle.
+//
+// Why this exists (and why globalThis):
+//   • Many bundlers (Webpack/Vite/Next/Rspack) emit `process.env.NODE_ENV`
+//     references and bare `process` accesses into client bundles. When sites
+//     ship those WITHOUT a process polyfill of their own, proxied execution
+//     throws `ReferenceError: process is not defined` and the page hangs.
+//   • Worker / SharedWorker / module scopes do NOT have `window`, but they
+//     DO have `self`/`globalThis`. Earlier polyfills hard-coded `window.process`
+//     which crashes inside workers. Using `globalThis` covers main thread,
+//     dedicated workers, shared workers, and (where supported) audio worklets.
+//   • TikTok's bundles call `atob()` on lazily-decoded payloads; if a value
+//     is corrupted in transit (e.g. a `+` URL-encoded as a space), the native
+//     atob throws `InvalidCharacterError`, killing the script. We wrap it
+//     with a permissive variant that strips invalid chars and returns ''
+//     on hard failure rather than throwing.
+//
+// The polyfill itself is microscopic (<800 bytes minified) and idempotent:
+//   - Every guard checks for an existing object before clobbering it.
+//   - The atob wrapper marks itself with `__sb_patched` and refuses to
+//     re-wrap on a second run (e.g. if the polyfill is injected into both
+//     the parent and a same-origin iframe).
+// ─────────────────────────────────────────────────────────────────────────────
+const POLYFILL_SCRIPT = `<script>(function(){
+try{
+var g=(typeof globalThis!=="undefined")?globalThis:(typeof window!=="undefined")?window:(typeof self!=="undefined")?self:this;
+if(!g.process){
+var _p={env:{NODE_ENV:"production"},browser:true,type:"renderer",version:"",versions:{node:""},platform:"browser",argv:[],argv0:"",release:{name:"node"},title:"browser",pid:0,arch:"x64",cwd:function(){return "/"},chdir:function(){},nextTick:function(cb){var a=Array.prototype.slice.call(arguments,1);Promise.resolve().then(function(){cb.apply(null,a)})},on:function(){return _p},once:function(){return _p},off:function(){return _p},emit:function(){return false},addListener:function(){return _p},removeListener:function(){return _p},removeAllListeners:function(){return _p},listeners:function(){return []},binding:function(){throw new Error("process.binding is not supported")},umask:function(){return 0},hrtime:function(prev){var now=(typeof performance!=="undefined"&&performance.now)?performance.now():Date.now();var s=Math.floor(now/1000),ns=Math.floor((now%1000)*1e6);if(prev){s-=prev[0];ns-=prev[1];if(ns<0){s--;ns+=1e9}}return [s,ns]}};
+try{Object.defineProperty(g,"process",{value:_p,configurable:true,writable:true,enumerable:false})}catch(_){g.process=_p}
+}
+if(typeof g.atob==="function"&&!g.atob.__sb_patched){
+var _orig=g.atob.bind(g);
+var _patched=function(s){
+try{return _orig(s)}catch(_e){
+try{
+var c=String(s==null?"":s).replace(/[^A-Za-z0-9+/=]/g,"");
+while(c.length%4!==0)c+="=";
+return _orig(c)
+}catch(_2){return ""}
+}
+};
+_patched.__sb_patched=true;
+try{g.atob=_patched}catch(_){}
+}
+}catch(_e){}
+})();</script>`;
+
 // Strip JS comments + collapse whitespace from each `<script>` block in
 // the injection bundles. The bundles contain extensive English-language
 // comments explaining why we do each step; if those comments stay in
@@ -1527,6 +1581,7 @@ const _AD_BLOCKER_SCRIPT_MIN  = _stripScriptComments(AD_BLOCKER_SCRIPT);
 const _ANTIDETECT_SCRIPT_MIN  = _stripScriptComments(ANTIDETECT_SCRIPT);
 const _KEYWORD_FILTER_SCRIPT_MIN = _stripScriptComments(KEYWORD_FILTER_SCRIPT);
 const _DEVTOOLS_SCRIPT_MIN    = _stripScriptComments(DEVTOOLS_SCRIPT);
+const _POLYFILL_SCRIPT_MIN    = _stripScriptComments(POLYFILL_SCRIPT);
 
 // AD_BLOCKER_SCRIPT contains the placeholder __SB_AB_OFF__ that decides whether
 // the injected layer hides ads / blocks popups / spoofs adblock-detection. We
@@ -1534,14 +1589,15 @@ const _DEVTOOLS_SCRIPT_MIN    = _stripScriptComments(DEVTOOLS_SCRIPT);
 const _AD_SCRIPT_ENABLED  = _AD_BLOCKER_SCRIPT_MIN.replace(/__SB_AB_OFF__/g, 'false');
 const _AD_SCRIPT_DISABLED = _AD_BLOCKER_SCRIPT_MIN.replace(/__SB_AB_OFF__/g, 'true');
 
-// KEYWORD_FILTER_SCRIPT is included in EVERY injection bundle: it's the only
-// thing that exposes `window._` / `window._t` to proxied JS, and it's also
-// what mangles flagged keywords in the runtime DOM. We put it FIRST so
-// any other injected scripts that happen to call `_(…)` already see it.
-const INJECT_PROD_ENABLED  = _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_ENABLED;
-const INJECT_PROD_DISABLED = _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_DISABLED;
-const INJECT_DEV_ENABLED   = _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_ENABLED  + _DEVTOOLS_SCRIPT_MIN;
-const INJECT_DEV_DISABLED  = _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_DISABLED + _DEVTOOLS_SCRIPT_MIN;
+// POLYFILL_SCRIPT runs FIRST so process / atob are available before any
+// keyword-filter / antidetect / ad-blocker / page script touches them.
+// KEYWORD_FILTER_SCRIPT is the only thing that exposes `window._` / `window._t`
+// to proxied JS so it must precede ANTIDETECT/AD_BLOCKER but follow the
+// polyfill (in case a keyword filter ever needs `process.env`).
+const INJECT_PROD_ENABLED  = _POLYFILL_SCRIPT_MIN + _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_ENABLED;
+const INJECT_PROD_DISABLED = _POLYFILL_SCRIPT_MIN + _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_DISABLED;
+const INJECT_DEV_ENABLED   = _POLYFILL_SCRIPT_MIN + _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_ENABLED  + _DEVTOOLS_SCRIPT_MIN;
+const INJECT_DEV_DISABLED  = _POLYFILL_SCRIPT_MIN + _KEYWORD_FILTER_SCRIPT_MIN + _ANTIDETECT_SCRIPT_MIN + _AD_SCRIPT_DISABLED + _DEVTOOLS_SCRIPT_MIN;
 
 // Resolve the user's ad-blocker preference for this specific request. The
 // _a_b cookie is set on the proxy origin by the parent UI (toolbar +

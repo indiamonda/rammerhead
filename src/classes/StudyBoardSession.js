@@ -49,14 +49,39 @@ class StudyBoardSession extends Session {
         this.getPayloadScript = async () => '';
         this.getAuthCredentials = () => ({});
         this.handleFileDownload = () => void 0;
+        // Hammerhead invokes `handlePageError` from `pipelineUtils.error` for
+        // page (non-iframe) requests when the upstream pipeline blows up
+        // (DNS fail, TLS handshake error, AST rewriter throw, etc). We MUST
+        // close the response or the browser tab spins forever. The previous
+        // bug was a stub that returned `true` without ending the response.
+        //
+        // Re-entrancy guard (`_sb_handled`) protects against double-end if
+        // multiple pipeline stages concurrently raise the same error — only
+        // the first call writes the body; subsequent calls become no-ops.
         this.handlePageError = (ctx, err) => {
-            if ('setHeader' in ctx.res && !ctx.res.headersSent) {
-                ctx.res.statusCode = 500;
-                ctx.res.setHeader('content-type', 'text/html');
-                ctx.res.write('<h1>StudyBoard Gateway Error</h1><p>' + (err ? err.toString() : 'Unknown error') + '</p>');
-            }
-            ctx.res.end();
+            try {
+                if (ctx && ctx.res && !ctx.res._sb_handled) {
+                    ctx.res._sb_handled = true;
+                    if ('setHeader' in ctx.res && !ctx.res.headersSent) {
+                        ctx.res.statusCode = 500;
+                        ctx.res.setHeader('content-type', 'text/html; charset=utf-8');
+                        ctx.res.setHeader('cache-control', 'no-store');
+                        const safeMsg = err
+                            ? String(err.message || err).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
+                            : 'Unknown error';
+                        ctx.res.write(
+                            '<!doctype html><meta charset="utf-8"><title>StudyBoard Gateway Error</title>' +
+                            '<style>body{font:14px system-ui;max-width:640px;margin:60px auto;padding:0 16px;color:#222}' +
+                            'h1{font-size:24px}code{background:#f3f3f3;padding:2px 6px;border-radius:4px}</style>' +
+                            '<h1>Gateway error</h1><p>The upstream connection failed:</p>' +
+                            '<p><code>' + safeMsg + '</code></p>'
+                        );
+                    }
+                    try { ctx.res.end(); } catch (_) {}
+                }
+            } catch (_) { /* swallow — never let an error in the error handler crash the worker */ }
             ctx.goToNextStage = false;
+            return true;
         };
         this.handleAttachment = () => void 0;
         // this.handlePageError = (ctx, err) => {

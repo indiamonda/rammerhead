@@ -38,6 +38,32 @@ const FALLBACK = [
     '}'
 ].join('');
 
+// Process / atob polyfill prepended to EVERY Hammerhead-rewritten script
+// (lite + full AST). Keeps `process.env.NODE_ENV` references working in proxied
+// React/Webpack/Vite bundles and prevents `atob()` `InvalidCharacterError`
+// crashes when sites feed corrupted base64 (TikTok, several ad networks).
+//
+// `globalThis` covers main thread, dedicated workers, shared workers, and
+// service workers. The IIFE walls off `g` from leaking into the surrounding
+// script's scope. Every guard is idempotent so repeated execution is safe.
+const PROCESS_POLYFILL = (
+    '(function(){try{' +
+        'var g=(typeof globalThis!=="undefined")?globalThis:' +
+            '(typeof window!=="undefined")?window:' +
+            '(typeof self!=="undefined")?self:this;' +
+        'if(g&&!g.process){' +
+            'var _p={env:{NODE_ENV:"production"},browser:true,type:"renderer",version:"",versions:{node:""},platform:"browser",argv:[],argv0:"",release:{name:"node"},title:"browser",pid:0,arch:"x64",cwd:function(){return "/"},chdir:function(){},nextTick:function(cb){var a=Array.prototype.slice.call(arguments,1);Promise.resolve().then(function(){cb.apply(null,a)})},on:function(){return _p},once:function(){return _p},off:function(){return _p},emit:function(){return false},addListener:function(){return _p},removeListener:function(){return _p},removeAllListeners:function(){return _p},listeners:function(){return []},binding:function(){throw new Error("process.binding is not supported")},umask:function(){return 0},hrtime:function(prev){var now=(typeof performance!=="undefined"&&performance.now)?performance.now():Date.now();var s=Math.floor(now/1000),ns=Math.floor((now%1000)*1e6);if(prev){s-=prev[0];ns-=prev[1];if(ns<0){s--;ns+=1e9}}return [s,ns]}};' +
+            'try{Object.defineProperty(g,"process",{value:_p,configurable:true,writable:true,enumerable:false})}catch(_){g.process=_p}' +
+        '}' +
+        'if(g&&typeof g.atob==="function"&&!g.atob.__sb_patched){' +
+            'var _orig=g.atob.bind(g);' +
+            'var _f=function(s){try{return _orig(s)}catch(_e){try{var c=String(s==null?"":s).replace(/[^A-Za-z0-9+\\/=]/g,"");while(c.length%4!==0)c+="=";return _orig(c)}catch(_2){return ""}}};' +
+            '_f.__sb_patched=true;' +
+            'try{g.atob=_f}catch(_){}' +
+        '}' +
+    '}catch(_e){}})();'
+);
+
 // Apparatus-style iframe safety net — catches dynamically created iframes that
 // bypass hammerhead's URL rewriting (race conditions, __proc$Html fallback, etc.).
 // Uses MutationObserver to detect iframes with unproxied src attributes.
@@ -207,13 +233,20 @@ function _liteRewriteJs(script, ctx) {
         if (p && typeof p === 'string' && p.indexOf('/' + sid + '/') === 0) return _m;
         return pre + relPrefix + origin + p + post;
     });
-        // Polyfill process.env.NODE_ENV for lite rewritten scripts
+    // Inline-substitute `process.env.NODE_ENV` literals — Webpack's DefinePlugin
+    // does this at build time but bundlers that ship in dev mode (or sites that
+    // run a custom bundler) leave bare references in the proxied JS. The string
+    // replace is safe because `.NODE_ENV` is exclusively a build-time token.
     if (result.includes('process.env.NODE_ENV')) {
         result = result.replace(/process\.env\.NODE_ENV/g, '"production"');
     }
-    // Polyfill process for lite rewritten scripts
-    if (result.match(/\bprocess\b/)) {
-        result = 'window.process = window.process || { env: { NODE_ENV: "production" }, browser: true, type: "renderer", version: "", cwd: function() { return "/" }, platform: "browser", nextTick: function(cb) { setTimeout(cb, 0); } };\nif (typeof process === "undefined") { var process = window.process; }\n' + result;
+    // Polyfill `process`/`atob` for lite-rewritten scripts. Uses globalThis so
+    // the same body works in main-thread + worker scopes (window is undefined
+    // inside workers). PROCESS_POLYFILL is also injected by `headerModule.add`,
+    // but lite scripts skip Hammerhead's AST pipeline entirely so the script
+    // header is never appended — we have to splice the polyfill in here.
+    if (result.match(/\bprocess\b/) || result.match(/\batob\s*\(/)) {
+        result = PROCESS_POLYFILL + '\n' + result;
     }
     return result;
 }
@@ -278,7 +311,27 @@ function _stripProxyOriginFromScript(script, ctx) {
     return out;
 }
 
+// Detect responses that the upstream served as HTML (think 4xx/5xx error pages,
+// Cloudflare/AWS WAF challenge, "Are you a robot?" gating) but the browser is
+// trying to load via a `<script>` tag. Hammerhead's AST rewriter would either
+// fail to parse the HTML or emit broken JS, and the browser would log the
+// classic `Uncaught SyntaxError: Unexpected token '<' (at core.js:1:1)`.
+// Replace the body with a no-op + console.error so the script tag finishes
+// loading cleanly and the page surfaces a useful error message in DevTools.
+const _HTML_SHEBANG_RE = /^[\s\uFEFF]*<(?:!doctype|!--|html|head|body|script|meta|title|link|style)\b/i;
+function _looksLikeHtml(s) {
+    if (!s || typeof s !== 'string') return false;
+    return _HTML_SHEBANG_RE.test(s);
+}
+
 scriptProcessor.processResource = async function patchedProcessResource(script, ctx, charset, urlReplacer) {
+    // Pre-flight: if the upstream returned HTML for a script-typed request
+    // there's nothing for the AST rewriter (or our lite rewriter) to do —
+    // both will produce garbage. Synthesize a JS error stub instead.
+    if (_looksLikeHtml(script)) {
+        const url = (ctx && ctx.dest && ctx.dest.url) || '<unknown>';
+        return 'console.error("[StudyBoard] Expected JavaScript, received HTML from " + ' + JSON.stringify(url) + ');';
+    }
     if (processingMode.isMarkedLiteHost(ctx)) {
         return _stripProxyOriginFromScript(_liteRewriteJs(script, ctx), ctx);
     }
@@ -318,7 +371,10 @@ const originalAdd = headerModule.add;
 headerModule.add = function patchedAdd(code, isStrictMode, swScopeHeaderValue, nativeAutomation, workerSettings) {
     let result = originalAdd.call(this, code, isStrictMode, swScopeHeaderValue, nativeAutomation, workerSettings);
     if (result.includes(END_HEADER)) {
-        result = result.replace(END_HEADER, END_HEADER + '\n' + FALLBACK + '\n' + IFRAME_PROXY + '\n');
+        // PROCESS_POLYFILL must be FIRST after the header marker so any later
+        // user code (and the IFRAME_PROXY block, which references `window`)
+        // sees a populated `globalThis.process` and a forgiving `atob`.
+        result = result.replace(END_HEADER, END_HEADER + '\n' + PROCESS_POLYFILL + '\n' + FALLBACK + '\n' + IFRAME_PROXY + '\n');
     }
     return result;
 };
