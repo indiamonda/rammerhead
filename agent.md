@@ -105,7 +105,58 @@
 - `src/classes/StudyBoardSession.js` — hardened `handlePageError`
   (re-entrancy guard, HTML-escaped output, always-end semantics).
 
-## 5. Real-World Site Verification (May 2026)
+## 5. TikTok-Specific Bugs (May 2026, Round 2)
+
+### Self-referential proxy URL loop (`https://localhost:8080/ttwid/check/`)
+- **Status:** Fixed.
+- **Root cause:** TikTok's JS reads `window.location.origin` via a saved
+  native property descriptor that bypasses Hammerhead's `Location` hooks.
+  It then builds API calls like `axios.create({ baseURL: origin })` and
+  fetches `/ttwid/check/`. The browser resolves this to
+  `GET /<sid>/https://localhost:8080/ttwid/check/` — the destination is
+  THIS proxy. Hammerhead attempts a TLS handshake against its own HTTP
+  listener, producing 500 or `ERR_ALPN_NEGOTIATION_FAILED`.
+- **Fix:** `setupPipeline.js` now wraps `proxyServer._onRequest` at the
+  very top (before pipeline handlers that rewrite `req.headers.referer`)
+  with a self-loop detector (`_resolveSelfLoop`). When the inner
+  destination host matches `req.headers.host`:
+  - If the browser's pristine `Referer` has a valid session + destination,
+    `req.url` is rewritten in-place to point at the real destination.
+  - Otherwise, return a benign stub (JS `void 0` for scripts, 204 for
+    everything else).
+
+### `StrShuffler.unshuffle` single-slash protocol bug
+- **Status:** Fixed.
+- **Root cause:** Next.js-style path normalization collapses `://` to `:/`
+  in shuffled URLs. The previous fix tried to restore the slash in the
+  *still-shuffled* string (`str.replace(':/', '://')`), which shifts every
+  subsequent byte position by +1 and completely breaks the position-
+  dependent cipher. Result: `https://www.tiktok.com/foryou` decoded to
+  nonsense like `https://vvv.shjsnj.bnl/enqxnz`, causing DNS failure.
+- **Fix:** `src/util/StrShuffler.js` now applies the `://` restoration on
+  the *decoded* output, not the encoded input. Regex:
+  `^(https?|wss?|file|ftp):\/(?!\/)` → `$1://`.
+- **Impact:** Every URL that was mangled by this bug now round-trips
+  correctly. This was the root cause of:
+  - TikTok's "Couldn't find this page" 404 (the page URL decoded to a
+    non-existent domain)
+  - `/404?fromUrl=…` returning 500 (the `fromUrl` contained the broken
+    shuffled destination)
+  - CDN assets returning DNS errors
+
+### `ERR_ALPN_NEGOTIATION_FAILED` on `/api/global-footer/graphql`
+- **Status:** Fixed (same root cause as self-loop above).
+- The browser tried to HTTPS-connect to `localhost:8080` (plain HTTP) for
+  the GraphQL endpoint. The self-loop rescue now redirects it to
+  `https://www.tiktok.com/api/global-footer/graphql`.
+
+## 6. Files Changed (Round 2)
+- `src/server/setupPipeline.js` — added self-loop detector wrapping
+  `proxyServer._onRequest`, running before all pipeline handlers.
+- `src/util/StrShuffler.js` — fixed `unshuffle()` single-slash protocol
+  recovery to operate on decoded output instead of encoded input.
+
+## 7. Real-World Site Verification (May 2026)
 
 End-to-end browser tests via local server confirm the proxy machinery
 itself is healthy. Failure modes that remain are **destination-side
@@ -119,6 +170,7 @@ bot detection**, not proxy bugs.
 | `chatgpt.com` | 200 | 200 | "Get started" sign-in screen | Partial — login screen renders, but FedCM / OAuth federated sign-in cannot tunnel through a proxy by design. |
 | `gemini.google.com` | redirect | n/a | Google sign-in screen | Same as ChatGPT — login required. |
 | `duckduckgo.com` (lite mode) | 200 | 200 | Full search results | **Yes** — works on Fly per user. |
+| `tiktok.com` | 200 | 200 | Full UI shell (nav, search, login, "For You" link) | Partial — main page renders with full UI. `ttwid/check` and GraphQL API calls no longer 500 (self-loop fixed). Remaining `S.context` / `_instance is not a function` errors are TikTok's telemetry SDK failing to initialize — non-blocking. |
 
 Console error inventory after fixes:
 
@@ -141,14 +193,24 @@ Console error inventory after fixes:
   benign Chrome warning that does not affect functionality.
 - `LegacyDataMixin will be applied…` — Polymer informational warning
   in YouTube; harmless.
+- `S.context: TypeError: t is not a function` / `this._instance is not
+  a function` (TikTok) — telemetry/analytics SDK (Slardar) failing to
+  initialize. Non-blocking; the page renders and navigates correctly.
+- `Uncaught TypeError: Cannot read properties of undefined (reading
+  'indexOf')` (TikTok) — occurs in Hammerhead's `postMessage` handler
+  when TikTok's cross-window messaging payload doesn't match the
+  expected proxy URL format. Non-blocking.
 
 ### Honest summary for the user
 - Proxy infrastructure (URL rewriting, JS rewriting, polyfills, error
   recovery) is working correctly.
+- **TikTok** now loads its full UI shell including navigation, search,
+  and account prompts. The critical self-loop bug (where the proxy
+  tried to connect to itself) is fixed.
 - Sites that ship with sophisticated anti-bot stacks (Google search
-  results, ChatGPT auth, YouTube video API, TikTok video API) will
-  remain partially or fully blocked by **the destination**, not the
-  proxy. A pure HTTP proxy cannot defeat token-bound anti-bot defenses
-  without residential IPs and per-site origin spoofing.
-- Sites that work today: DuckDuckGo, Google home, Wikipedia, Reddit
-  (read-only), arbitrary static educational content.
+  results, ChatGPT auth, YouTube video API) will remain partially or
+  fully blocked by **the destination**, not the proxy. A pure HTTP
+  proxy cannot defeat token-bound anti-bot defenses without
+  residential IPs and per-site origin spoofing.
+- Sites that work today: DuckDuckGo, Google home, TikTok (UI shell),
+  Wikipedia, Reddit (read-only), arbitrary static educational content.

@@ -281,6 +281,86 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         };
     }
 
+    // Self-referential proxy URL detector. When a destination's JS reads the
+    // wrong `window.location.origin` (e.g. directly via a saved native
+    // descriptor that bypasses Hammerhead's hooks), it constructs requests like
+    //   GET /<sid>/https://<own-proxy-host>/ttwid/check/
+    // i.e. the inner destination is THIS proxy. If we let this through,
+    // Hammerhead would attempt a TLS handshake against its own HTTP listener
+    // and the client either gets a 500 or hangs.
+    //
+    // Run as the *very first* mutation step (wrapping `_onRequest` directly,
+    // NOT via `addToOnRequestPipeline`) so we read the BROWSER's pristine
+    // Referer header — not the spoofed one written by `injectBrowserLikeHeaders`
+    // later in the pipeline. We rewrite `req.url` in-place to point at the real
+    // destination recovered from Referer, or short-circuit with a benign stub
+    // if no Referer is available.
+    const SELF_LOOP_DEST_RE = /^\/[a-f0-9]{32}(?:![^/]*)*\/(https?:\/\/)([^/]+)(\/.*)?$/i;
+    function _resolveSelfLoop(req, res) {
+        const url = req && req.url;
+        if (!url || !url.startsWith('/')) return false;
+        const m = url.match(SELF_LOOP_DEST_RE);
+        if (!m) return false;
+        const destHost = String(m[2] || '').toLowerCase();
+        const ownHost = String((req.headers && req.headers['host']) || '').toLowerCase();
+        if (!destHost || !ownHost || destHost !== ownHost) return false;
+        const referer = (req.headers && req.headers['referer']) || '';
+        const refSid = getSessionId(referer);
+        let recovered = null;
+        if (refSid) {
+            const refOriginMatch = referer.match(/\/[a-f0-9]{32}(?:![^/]*)?\/(https?:\/\/[^/]+)/i);
+            if (refOriginMatch) recovered = { sessionId: refSid, origin: refOriginMatch[1] };
+            if (!recovered) {
+                try {
+                    const session = sessionStore.get(refSid) || proxyServer.openSessions.get(refSid);
+                    const refPathMatch = referer.match(/\/[a-f0-9]{32}(?:![^/]*)?\/(.+?)(?:\?|$)/i);
+                    if (session && session.shuffleDict && refPathMatch && StrShuffler.isShuffled(refPathMatch[1])) {
+                        const shuffler = new StrShuffler(session.shuffleDict);
+                        const unshuffled = shuffler.unshuffle(refPathMatch[1]);
+                        const m2 = unshuffled.match(/^(https?:\/\/[^/]+)/i);
+                        if (m2) recovered = { sessionId: refSid, origin: m2[1] };
+                    }
+                } catch (_) {}
+            }
+        }
+        if (recovered) {
+            const tail = m[3] || '/';
+            const newUrl = '/' + recovered.sessionId + '/' + recovered.origin + tail;
+            if (process.env.DEVELOPMENT) {
+                process.stdout.write(`\x1b[90m[SELF-LOOP RESCUED]\x1b[0m ${url.substring(0, 120)} -> ${newUrl.substring(0, 120)}\n`);
+            }
+            req.url = newUrl;
+            return false;
+        }
+        if (process.env.DEVELOPMENT) {
+            process.stdout.write(`\x1b[31m[SELF-LOOP DROPPED]\x1b[0m ${url.substring(0, 160)} (no usable referer)\n`);
+        }
+        if (!res || typeof res.writeHead !== 'function') return true;
+        const accept = String((req.headers && req.headers['accept']) || '').toLowerCase();
+        const pathOnly = (url.split('?')[0] || '').toLowerCase();
+        const isScript = /javascript|ecmascript/.test(accept) || /\.m?js$/.test(pathOnly);
+        try {
+            if (isScript) {
+                res.writeHead(200, {
+                    'Content-Type': 'application/javascript; charset=utf-8',
+                    'Cache-Control': 'no-store',
+                });
+                res.end('/* sb: self-referential proxy URL stubbed */void 0;');
+            } else {
+                res.writeHead(204, { 'Cache-Control': 'no-store' });
+                res.end();
+            }
+        } catch (_) {}
+        return true;
+    }
+    {
+        const _origOnRequest = proxyServer._onRequest.bind(proxyServer);
+        proxyServer._onRequest = function (req, res, serverInfo) {
+            if (_resolveSelfLoop(req, res)) return;
+            return _origOnRequest(req, res, serverInfo);
+        };
+    }
+
     // Extract the real destination URL from a proxied request. Handles unshuffled
     // (`/<sid>/https://...`) and shuffled (legacy `_rhs...` or v2 `_rh1...`) URL
     // forms. Returns null when the URL can't be mapped to a destination.

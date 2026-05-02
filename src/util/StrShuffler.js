@@ -196,17 +196,16 @@ class StrShuffler {
 
                 // Frameworks like Next.js strip duplicate slashes in paths.
                 // This turns `_p1<len>:VDFdk://...` into `_p1<len>:VDFdk:/...`
-                // and `_p1<len>://...` into `_p1<len>:/...`.
-                // If the unshuffled result is invalid, try restoring the stripped slash.
-                if (str.includes(':/')) {
-                    const fixedStr = str.replace(':/', '://');
-                    const fixedPayload = fixedStr.substring(bodyStart);
-                    const fixedBody = fixedPayload.substring(0, declaredLen);
-                    const fixedSuffix = fixedPayload.substring(declaredLen);
-                    const fixedOut = this._unshuffleBody(fixedBody) + fixedSuffix;
-                    if (looksLikeValidUnshuffledUrl(fixedOut)) {
-                        return fixedOut;
-                    }
+                // and the encoded body's payload now decodes to e.g.
+                // `https:/www.tiktok.com/foryou` instead of `https://www....`.
+                // Re-insert the missing slash on the *decoded* URL — patching
+                // the still-shuffled body shifts every later byte by one and
+                // the position-dependent cipher then produces garbage like
+                // `https://vvv.shjsnj.bnl/enqxnz`.
+                const SINGLE_SLASH_PROTO_RE = /^(https?|wss?|file|ftp):\/(?!\/)/i;
+                if (SINGLE_SLASH_PROTO_RE.test(declaredOut)) {
+                    const fixed = declaredOut.replace(SINGLE_SLASH_PROTO_RE, '$1://');
+                    if (looksLikeValidUnshuffledUrl(fixed)) return fixed;
                 }
 
                 // Last-ditch fallback: scan every `/` in the body and pick the
