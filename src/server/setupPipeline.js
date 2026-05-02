@@ -7,15 +7,17 @@ const { injectBrowserLikeHeaders } = require('../util/browserLikeHeaders');
 const sessionAffinity = require('../util/sessionAffinity');
 const adBlocker = require('../util/adBlocker');
 const { NEW_PATHS, OLD_PATHS, PROXY_PATHS } = require('../util/patchServiceRoutes');
-const { sendErrorPage } = require('../util/errorPages');
 const fs = require('fs');
 const path = require('path');
 
-// Helper: does a request URL match the opaque service path? Legacy aliases
-// were retired (they were textbook URL-shuffling-proxy fingerprints) so the
-// match is now a single substring check.
-function _urlMatches(reqUrl, p) {
-    return !!(reqUrl && p && reqUrl.indexOf(p) !== -1);
+// Helper: does a request URL match either the new (/_a/...) path or its legacy
+// (/__rh_*/api/shuffleDict/...) alias? We accept both during the transition so
+// any cached page or bookmarked link still works.
+function _urlMatchesEither(reqUrl, newPath, oldPath) {
+    if (!reqUrl) return false;
+    if (newPath && reqUrl.indexOf(newPath) !== -1) return true;
+    if (oldPath && reqUrl.indexOf(oldPath) !== -1) return true;
+    return false;
 }
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16, timeout: 60000 });
@@ -108,20 +110,11 @@ function printConsoleMessage(entry) {
 
 // Apparatus-style bridge script: lightweight URL interception without JS rewriting.
 // Injected into raw-mode pages so fetch/XHR/dynamic elements route through the proxy.
-//
-// Note: proxyOrigin parameter is intentionally unused now. We derive O from
-// location.origin at runtime so the proxy hostname is never embedded as a string
-// literal in served HTML (anti-fingerprinting). The arg stays for API stability.
-function buildBridgeScript(_proxyOrigin, sessionId, targetUrl) {
+function buildBridgeScript(proxyOrigin, sessionId, targetUrl) {
     return `<script>(function(){
-var O=(typeof location!=='undefined'&&location.origin)||(location.protocol+'//'+location.host);
-var S=${JSON.stringify(sessionId)},D=${JSON.stringify(targetUrl || '')};
-// Best-effort cleanup of a legacy session cookie that older proxy
-// versions used to set on the proxy origin. The literal cookie name
-// is obfuscated through atob() so the served bytes never contain
-// the brand-shaped marker (\`__sb_sess\`) that content-filters look
-// for when fingerprinting proxies.
-try{document.cookie=atob('X19yaF9zZXNz')+'=; Max-Age=0; path=/'}catch(e){}
+var O=${JSON.stringify(proxyOrigin)},S=${JSON.stringify(sessionId)},D=${JSON.stringify(targetUrl || '')};
+// Clear any legacy __rh_sess cookie (removed to prevent cross-destination header leaks).
+try{document.cookie='__rh_sess=; Max-Age=0; path=/'}catch(e){}
 function px(u){return O+'/'+S+'/'+u}
 function isExt(u){if(!u||typeof u!=='string')return false;u=u.trim();
 return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
@@ -152,7 +145,7 @@ window.EventSource=function(u,o){if(isExt(u))u=px(u);return new oE(u,o)};
 window.EventSource.prototype=oE.prototype}
 var oW=window.open;if(oW)window.open=function(u){
 if(typeof u==='string'&&isExt(u))arguments[0]=px(u);return oW.apply(this,arguments)};
-function fixEl(el){if(!el||el.nodeType!==1||el._a_raw)return;el._a_raw=1;
+function fixEl(el){if(!el||el.nodeType!==1||el.__rhRaw)return;el.__rhRaw=1;
 var t=el.tagName;
 if((t==='IFRAME'||t==='SCRIPT'||t==='IMG'||t==='SOURCE'||t==='VIDEO'||t==='AUDIO'||t==='EMBED')&&isExt(el.getAttribute('src')))el.setAttribute('src',px(el.getAttribute('src')));
 if((t==='LINK'||t==='A'||t==='AREA')&&isExt(el.getAttribute('href')))el.setAttribute('href',px(el.getAttribute('href')));
@@ -232,138 +225,9 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     const stream = require('stream');
     const StrShuffler = require('../util/StrShuffler');
 
-    // ── Pluggable URL path style ─────────────────────────────────────────────
-    // When `config.pathStyle` is non-empty (e.g. "cdn-cgi/p"), incoming
-    // requests arrive as `/<pathStyle>/<sid>/<dest>`. We strip the prefix at
-    // the *very* top of `_onRequest` — BEFORE Hammerhead's `checkIsRoute`,
-    // BEFORE every StudyBoard pipeline handler, BEFORE `super._onRequest`.
-    // This is critical: many handlers (notably `injectBrowserLikeHeaders` →
-    // see `PROXY_REQUEST_RE` in browserLikeHeaders.js) recognise a request as
-    // "proxied" only if the path starts with `/<32-hex-sid>/`. If we strip
-    // later in the pipeline, those handlers see `/<pathStyle>/...`, decide
-    // it's not a proxy URL, and silently leave headers alone — including the
-    // client's `Accept: */*` which makes Hammerhead's `isPage()` return false
-    // and skip page processing entirely (raw upstream HTML, no antidetect
-    // injection, no URL rewriting).
-    //
-    // Outgoing URLs in HTML/JS/CSS get the prefix re-injected by
-    // `_stripProxyOriginFromBody` (in patchPageProcessing.js) and
-    // `_stripProxyOriginFromScript` (in patchScriptProcessing.js), so the
-    // served bytes refer to `/cdn-cgi/p/<sid>/...` while the server-side
-    // pipeline only ever sees `/<sid>/...`. See config.js for full rationale.
-    //
-    // Edge case: we accept the bare `/<sid>/<dest>` form too. Hammerhead's
-    // client-side getProxyUrl can't see the configured prefix and so emits
-    // bare URLs in runtime fetch/XHR rewrites; rejecting them would break
-    // proxied SPAs. The prefix is therefore a "decorative" stealth feature
-    // that wins on initial navigation and rewritten attribute URLs.
-    const _pathStyle = (require('../config').pathStyle || '').replace(/^\/+|\/+$/g, '');
-    const _pathPrefix = _pathStyle ? '/' + _pathStyle : '';
-    if (_pathPrefix) {
-        function _stripPrefix(req) {
-            const u = req && req.url;
-            if (!u) return;
-            if (u === _pathPrefix || u.startsWith(_pathPrefix + '/') || u.startsWith(_pathPrefix + '?')) {
-                const before = u;
-                req.url = u.slice(_pathPrefix.length) || '/';
-                if (process.env.PATH_STYLE_DEBUG) console.error('[pathStrip]', before, '→', req.url);
-            }
-        }
-        const _origOnRequest = proxyServer._onRequest.bind(proxyServer);
-        proxyServer._onRequest = function (req, res, serverInfo) {
-            _stripPrefix(req);
-            return _origOnRequest(req, res, serverInfo);
-        };
-        const _origOnUpgrade = proxyServer._onUpgradeRequest.bind(proxyServer);
-        proxyServer._onUpgradeRequest = function (req, socket, head, serverInfo) {
-            _stripPrefix(req);
-            return _origOnUpgrade(req, socket, head, serverInfo);
-        };
-    }
-
-    // Self-referential proxy URL detector. When a destination's JS reads the
-    // wrong `window.location.origin` (e.g. directly via a saved native
-    // descriptor that bypasses Hammerhead's hooks), it constructs requests like
-    //   GET /<sid>/https://<own-proxy-host>/ttwid/check/
-    // i.e. the inner destination is THIS proxy. If we let this through,
-    // Hammerhead would attempt a TLS handshake against its own HTTP listener
-    // and the client either gets a 500 or hangs.
-    //
-    // Run as the *very first* mutation step (wrapping `_onRequest` directly,
-    // NOT via `addToOnRequestPipeline`) so we read the BROWSER's pristine
-    // Referer header — not the spoofed one written by `injectBrowserLikeHeaders`
-    // later in the pipeline. We rewrite `req.url` in-place to point at the real
-    // destination recovered from Referer, or short-circuit with a benign stub
-    // if no Referer is available.
-    const SELF_LOOP_DEST_RE = /^\/[a-f0-9]{32}(?:![^/]*)*\/(https?:\/\/)([^/]+)(\/.*)?$/i;
-    function _resolveSelfLoop(req, res) {
-        const url = req && req.url;
-        if (!url || !url.startsWith('/')) return false;
-        const m = url.match(SELF_LOOP_DEST_RE);
-        if (!m) return false;
-        const destHost = String(m[2] || '').toLowerCase();
-        const ownHost = String((req.headers && req.headers['host']) || '').toLowerCase();
-        if (!destHost || !ownHost || destHost !== ownHost) return false;
-        const referer = (req.headers && req.headers['referer']) || '';
-        const refSid = getSessionId(referer);
-        let recovered = null;
-        if (refSid) {
-            const refOriginMatch = referer.match(/\/[a-f0-9]{32}(?:![^/]*)?\/(https?:\/\/[^/]+)/i);
-            if (refOriginMatch) recovered = { sessionId: refSid, origin: refOriginMatch[1] };
-            if (!recovered) {
-                try {
-                    const session = sessionStore.get(refSid) || proxyServer.openSessions.get(refSid);
-                    const refPathMatch = referer.match(/\/[a-f0-9]{32}(?:![^/]*)?\/(.+?)(?:\?|$)/i);
-                    if (session && session.shuffleDict && refPathMatch && StrShuffler.isShuffled(refPathMatch[1])) {
-                        const shuffler = new StrShuffler(session.shuffleDict);
-                        const unshuffled = shuffler.unshuffle(refPathMatch[1]);
-                        const m2 = unshuffled.match(/^(https?:\/\/[^/]+)/i);
-                        if (m2) recovered = { sessionId: refSid, origin: m2[1] };
-                    }
-                } catch (_) {}
-            }
-        }
-        if (recovered) {
-            const tail = m[3] || '/';
-            const newUrl = '/' + recovered.sessionId + '/' + recovered.origin + tail;
-            if (process.env.DEVELOPMENT) {
-                process.stdout.write(`\x1b[90m[SELF-LOOP RESCUED]\x1b[0m ${url.substring(0, 120)} -> ${newUrl.substring(0, 120)}\n`);
-            }
-            req.url = newUrl;
-            return false;
-        }
-        if (process.env.DEVELOPMENT) {
-            process.stdout.write(`\x1b[31m[SELF-LOOP DROPPED]\x1b[0m ${url.substring(0, 160)} (no usable referer)\n`);
-        }
-        if (!res || typeof res.writeHead !== 'function') return true;
-        const accept = String((req.headers && req.headers['accept']) || '').toLowerCase();
-        const pathOnly = (url.split('?')[0] || '').toLowerCase();
-        const isScript = /javascript|ecmascript/.test(accept) || /\.m?js$/.test(pathOnly);
-        try {
-            if (isScript) {
-                res.writeHead(200, {
-                    'Content-Type': 'application/javascript; charset=utf-8',
-                    'Cache-Control': 'no-store',
-                });
-                res.end('/* sb: self-referential proxy URL stubbed */void 0;');
-            } else {
-                res.writeHead(204, { 'Cache-Control': 'no-store' });
-                res.end();
-            }
-        } catch (_) {}
-        return true;
-    }
-    {
-        const _origOnRequest = proxyServer._onRequest.bind(proxyServer);
-        proxyServer._onRequest = function (req, res, serverInfo) {
-            if (_resolveSelfLoop(req, res)) return;
-            return _origOnRequest(req, res, serverInfo);
-        };
-    }
-
     // Extract the real destination URL from a proxied request. Handles unshuffled
-    // (`/<sid>/https://...`) and shuffled (legacy `_rhs...` or v2 `_rh1...`) URL
-    // forms. Returns null when the URL can't be mapped to a destination.
+    // (`/<sid>/https://...`) and shuffled (`/<sid>!a!1!s*host/_rhs...`) URL forms.
+    // Returns null when the URL can't be mapped to a destination.
     const _PROXY_DEST_RE = /^(?:\/studyboard)?\/([a-f0-9]{32})(?:(?:![^/]+)*)\/(.+?)(?:\?|$)/i;
     function _extractDestForAdBlock(reqUrl) {
         if (!reqUrl) return null;
@@ -570,9 +434,9 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // The browser resolves them to http://proxy/path without a session ID.
     // We extract the session from the Referer and rewrite to the correct proxy URL.
     // Match all known proxy-internal paths (both renamed `/_a/...` and legacy
-    // `/__sb_*` / `/hammerhead.js` etc.) so the rescue mechanism doesn't try to
+    // `/__rh_*` / `/hammerhead.js` etc.) so the rescue mechanism doesn't try to
     // proxy them to the destination.
-    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getresourceurl|generatelink|health|debug-status|syncLocalStorage|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|[a-f0-9]{32}[\/?!])/i;
+    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getresourceurl|generatelink|health|debug-status|syncLocalStorage|api\/shuffleDict|__rh_|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__rh_devtools\.js|[a-f0-9]{32}[\/?!])/i;
 
     function _extractOriginFromReferer(referer) {
         const sessionId = getSessionId(referer);
@@ -605,27 +469,11 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Referer header covers >99% of real subresource rescues; anything without a Referer
     // that we can't identify via URL/Referer now gracefully 404s instead of being mis-routed.
 
-    // Paths handled by setupRoutes' homepage logic (cover page + stealth portal).
-    // These must not enter relative-path rescue or they'll be misinterpreted as
-    // sub-resources of whatever site the user was last on.
-    const _stealthPortal = (require('../config').stealthPortal || '').trim() || null;
-    const HOMEPAGE_PATHS = new Set([
-        '/', '/index.html', '/index.htm',
-        '/studyboard', '/studyboard/', '/studyboard/index.html', '/studyboard/index.htm',
-    ]);
-    if (_stealthPortal) {
-        HOMEPAGE_PATHS.add('/' + _stealthPortal);
-        HOMEPAGE_PATHS.add('/' + _stealthPortal + '/');
-        HOMEPAGE_PATHS.add('/studyboard/' + _stealthPortal);
-        HOMEPAGE_PATHS.add('/studyboard/' + _stealthPortal + '/');
-    }
-
     proxyServer.addToOnRequestPipeline((req, res) => {
         const url = req.url || '';
         if (!url.startsWith('/')) return false;
         if (KNOWN_ROUTE_RE.test(url)) return false;
-        const pathOnly = url.split('?')[0];
-        if (HOMEPAGE_PATHS.has(pathOnly)) return false;
+        if (url === '/' || url === '/rammerhead' || url === '/rammerhead/') return false;
 
         const referer = req.headers['referer'] || '';
         const info = _extractOriginFromReferer(referer);
@@ -726,7 +574,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             if (req.headers['accept']) extraHeaders['Accept'] = req.headers['accept'];
 
             rawFetch(targetUrl, (err, status, headers, respBody) => {
-                if (err) { devErr('rawFetch ' + targetUrl, err); sendErrorPage(req, res, 502, { detail: 'Raw proxy error: ' + err.message }); return; }
+                if (err) { devErr('rawFetch ' + targetUrl, err); try { if (!res.headersSent) { res.writeHead(502); res.end('Raw proxy error: ' + err.message); } } catch(_){} return; }
                 const ct = (headers['content-type'] || '').toLowerCase();
                 const isHtml = ct.includes('text/html') || ct.includes('application/xhtml');
 
@@ -766,9 +614,9 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return true;
     }, true);
 
-    // Console capture endpoint.
+    // Console capture endpoint — accepts either the new generic path or the legacy /__rh_console.
     proxyServer.addToOnRequestPipeline((req, res) => {
-        if (!_urlMatches(req.url, PROXY_PATHS.console)) return false;
+        if (!_urlMatchesEither(req.url, PROXY_PATHS.console, PROXY_PATHS.consoleLegacy)) return false;
         if (req.method === 'POST') {
             let body = '';
             req.on('data', chunk => { body += chunk; if (body.length > 65536) body = body.substring(0, 65536); });
@@ -788,6 +636,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     }, true);
 
     // Source file fetch endpoint for DevTools Sources tab.
+    // GET /__rh_sources?url=<encoded-url> → fetches raw content and returns as text.
     // Handles proxy-rewritten URLs by extracting the real target URL.
     const PROXY_URL_RE = /\/[a-z0-9]{32}(?:![a-z]*)?\/(https?:\/\/.+)/i;
     function _extractRealUrl(url) {
@@ -800,7 +649,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return null;
     }
     proxyServer.addToOnRequestPipeline((req, res) => {
-        if (!_urlMatches(req.url, PROXY_PATHS.sources)) return false;
+        if (!_urlMatchesEither(req.url, PROXY_PATHS.sources, PROXY_PATHS.sourcesLegacy)) return false;
         if (req.method === 'OPTIONS') {
             res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Allow-Headers': 'Content-Type' });
             res.end();
@@ -809,13 +658,13 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         try {
             const parsed = new URL(req.url, 'http://localhost');
             const rawParam = parsed.searchParams.get('url');
-            if (!rawParam) { sendErrorPage(req, res, 400, { detail: 'Missing url param' }); return true; }
+            if (!rawParam) { res.writeHead(400); res.end('Missing url param'); return true; }
 
             const targetUrl = _extractRealUrl(rawParam);
-            if (!targetUrl) { sendErrorPage(req, res, 400, { detail: 'Non-fetchable URL' }); return true; }
+            if (!targetUrl) { res.writeHead(400); res.end('Non-fetchable URL'); return true; }
 
             rawFetch(targetUrl, (err, status, headers, body) => {
-                if (err) { devErr('sources fetch', err); sendErrorPage(req, res, 502, { detail: 'Fetch failed: ' + err.message }); return; }
+                if (err) { devErr('sources fetch', err); try { res.writeHead(502); res.end('Fetch failed: ' + err.message); } catch(_){} return; }
                 const ct = headers['content-type'] || 'text/plain';
                 compressAndSend(req, res, 200, {
                     'Content-Type': ct,
@@ -825,7 +674,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             });
         } catch (e) {
             devErr('sources', e);
-            sendErrorPage(req, res, 500, { detail: e && e.message });
+            try { res.writeHead(500); res.end('Error: ' + e.message); } catch(_){}
         }
         return true;
     }, true);
@@ -834,27 +683,27 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // POST { url, session } → fetches raw HTML, injects <base> + bridge script.
     // Used by the IFRAME_PROXY client-side fallback when hammerhead-processed iframes fail.
     proxyServer.addToOnRequestPipeline((req, res) => {
-        if (!_urlMatches(req.url, PROXY_PATHS.raw)) return false;
+        if (!_urlMatchesEither(req.url, PROXY_PATHS.raw, PROXY_PATHS.rawLegacy)) return false;
 
         if (req.method === 'OPTIONS') {
             res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' });
             res.end();
             return true;
         }
-        if (req.method !== 'POST') { sendErrorPage(req, res, 405, { detail: 'Only POST is allowed on this endpoint' }); return true; }
+        if (req.method !== 'POST') { res.writeHead(405); res.end(); return true; }
 
         let body = '';
         req.on('data', chunk => { body += chunk; if (body.length > 4096) body = body.substring(0, 4096); });
         req.on('end', () => {
             let targetUrl, sessionId;
-            try { const p = JSON.parse(body); targetUrl = p.url; sessionId = p.session; } catch (e) { devErr('raw parse', e); sendErrorPage(req, res, 400, { detail: 'Invalid JSON body' }); return; }
-            if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) { sendErrorPage(req, res, 400, { detail: 'Missing or invalid url field' }); return; }
+            try { const p = JSON.parse(body); targetUrl = p.url; sessionId = p.session; } catch (e) { devErr('raw parse', e); res.writeHead(400); res.end(); return; }
+            if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) { res.writeHead(400); res.end(); return; }
 
             const serverInfo = proxyServer.getServerInfo(req);
             const proxyOrigin = `${serverInfo.protocol}//${serverInfo.hostname}${serverInfo.port == 443 || serverInfo.port == 80 ? '' : ':' + serverInfo.port}`;
 
             rawFetch(targetUrl, (err, status, headers, buf) => {
-                if (err) { devErr('raw fetch ' + targetUrl, err); sendErrorPage(req, res, 502, { detail: err && err.message }); return; }
+                if (err) { devErr('raw fetch ' + targetUrl, err); try { if (!res.headersSent) { res.writeHead(502); res.end(); } } catch(_){} return; }
                 let html = buf.toString('utf-8');
                 html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']content-security-policy["'][^>]*>/gi, '');
                 html = html.replace(/\s+integrity\s*=\s*["'][^"']*["']/gi, '');
@@ -917,10 +766,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         if (!targetMachine || targetMachine === sessionAffinity.FLY_MACHINE_ID) return false;
         res.writeHead(307, {
             'Fly-Replay': `instance=${targetMachine}`,
-            // Cookie name is generic ("affinity routing") so it doesn't broadcast "studyboard"
-            // when a user inspects their cookie jar. Functionally only used for Fly multi-machine
-            // sticky routing — never read back by us.
-            'Set-Cookie': `_aff=${sessionId}; Path=/; Max-Age=3600; SameSite=Lax`
+            'Set-Cookie': `rh_sid=${sessionId}; Path=/; Max-Age=3600; SameSite=Lax`
         });
         res.end();
         return true;
@@ -928,13 +774,8 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
 
     // Inject browser-like headers on proxied requests to bypass 403 (Discord, Poki, etc.)
     // Pass sessionStore for Referer/Origin spoofing when URL is shuffled.
-    //
-    // CRITICAL: skip on WebSocket upgrades. The upgrade handshake has tightly-bound
-    // Connection/Upgrade headers that this middleware otherwise rewrites — replacing
-    // `Connection: Upgrade` with `Connection: keep-alive` causes the destination
-    // server to terminate the connection, which surfaces as the silent
-    // "WebSocket connection failed" error every WS-using site (Twitch, Discord
-    // gateway, jchat, Douyin captcha, ...) was hitting.
+    // Skip on WebSocket upgrades — the upgrade handshake has tightly-bound
+    // Connection/Upgrade headers that this middleware would overwrite, breaking WS.
     proxyServer.addToOnRequestPipeline((req, _res, _serverInfo, isRoute, isWebsocket) => {
         if (isWebsocket) return false;
         injectBrowserLikeHeaders(req, isRoute, sessionStore);
@@ -956,24 +797,13 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         return false;
     }, true);
 
-    // task.js / iframe-task.js are served as routes (isRoute=true) so the warm-up above is skipped;
-    // warm session from Referer so hammerhead's _onTaskScriptRequest can find the session in
-    // openSessions and serve a real task script (otherwise it 500s and the client sandbox never
-    // initializes, leaving sandbox.document=null → _onBodyCreated crashes with "Cannot read
-    // properties of null (reading 'body')" on every proxied page).
-    //
-    // CRITICAL: After Tier-1.1 rename, hammerhead serves these scripts at NEW_PATHS.task /
-    // NEW_PATHS.iframeTask (e.g. /_a/t.js, /_a/i.js). The legacy paths are also accepted as
-    // a back-compat alias.
-    //
-    // CRITICAL #2: Hammerhead's _onTaskScriptRequest extracts sessionId via parseProxyUrl(referer),
-    // whose internal SUPPORTED_PROTOCOL_RE (/^(?:https?|file):/i) only matches real protocols. When
-    // URL shuffling is on, the referer's destination part is `_rhsfMSD-://...` (shuffled), which
-    // FAILS that protocol check, parseProxyUrl returns null, and hammerhead responds 500 even
-    // though the session exists. We must unshuffle the referer's dest part in-place so
-    // hammerhead's parseProxyUrl can extract the sessionId.
-    const TASK_PATHS = new Set([NEW_PATHS.task, NEW_PATHS.iframeTask, OLD_PATHS.task, OLD_PATHS.iframeTask]);
-    const REFERER_DEST_RE = /^(.+?\/[a-f0-9]{32}(?:![^/?]+)*\/)([^?#]*)(.*)$/i;
+    // task.js / iframe-task.js are served as routes (isRoute=true) so the warm-up above
+    // is skipped; warm session from Referer so addUrlShuffling can unshuffle and
+    // hammerhead doesn't 500. Accept both old paths and new renamed paths.
+    const TASK_PATHS = new Set([
+        NEW_PATHS.task, NEW_PATHS.iframeTask,
+        OLD_PATHS.task, OLD_PATHS.iframeTask,
+    ]);
     proxyServer.addToOnRequestPipeline((req, _res, _serverInfo) => {
         let pathname = (req.url || '').split('?')[0];
         try {
@@ -984,7 +814,16 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         const sessionId = getSessionId(referer);
         if (!sessionId || !sessionStore.has(sessionId)) return false;
         const session = sessionStore.get(sessionId);
+        if (session && !proxyServer.openSessions.get(sessionId)) {
+            try {
+                if (typeof session.serializeSession === 'function') {
+                    proxyServer.openSessions.addSerializedSession(sessionId, session.serializeSession());
+                }
+            } catch (e) { devErr('task.js session warm-up', e); }
+        }
+        // Unshuffle referer dest so hammerhead's parseProxyUrl can extract the session
         if (session?.shuffleDict) {
+            const REFERER_DEST_RE = /^(.+?\/[a-f0-9]{32}(?:![^/?]+)*\/)([^?#]*)(.*)$/i;
             const m = referer.match(REFERER_DEST_RE);
             if (m) {
                 const [, prefix, destPart, suffix] = m;
@@ -999,19 +838,13 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 }
             }
         }
-        if (proxyServer.openSessions.get(sessionId)) return false;
-        try {
-            if (session && typeof session.serializeSession === 'function') {
-                proxyServer.openSessions.addSerializedSession(sessionId, session.serializeSession());
-            }
-        } catch (e) { devErr('task.js session warm-up', e); }
         return false;
     }, true);
 
     // Ad Blocker (request-level). Short-circuits requests to ad networks and tracker
     // endpoints with an empty stub (1x1 GIF / empty JS / 204). Matches on the real
     // destination host+path extracted from the proxied URL (including shuffled form).
-    // Disabled per-request via the `_a_b=0` cookie set by the user settings UI.
+    // Disabled per-request via the `__rh_ab=0` cookie set by the user settings UI.
     proxyServer.addToOnRequestPipeline((req, res, _serverInfo, isRoute) => {
         if (isRoute) return false;
         if (!req.url || !adBlocker.isEnabledFor(req)) return false;
@@ -1078,10 +911,8 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             const session = sessionId && sessionStore.get(sessionId);
             // Never-expiring sessions bypass IP restriction
             if (session && !session.data.neverExpire && session.data.restrictIP && session.data.restrictIP !== config.getIP(req)) {
-                sendErrorPage(req, res, 403, {
-                    description: 'This session is locked to a different IP address. Open a new session to continue.',
-                    detail: 'Sessions must come from the same IP'
-                });
+                res.writeHead(403);
+                res.end('Sessions must come from the same IP');
                 return true;
             }
         }

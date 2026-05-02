@@ -263,6 +263,20 @@ patchRegex(
 );
 
 // ---------------------------------------------------------------------------
+// Patch 3.5: Authorization header passthrough
+// Hammerhead's transformAuthorizationHeader drops the header (returns void 0)
+// when it doesn't have the internal prefix. On lite-rewritten pages the
+// client runtime doesn't add the prefix, so Discord/GitHub/etc. API calls
+// lose their Authorization header and get 401. Pass through the raw value.
+// ---------------------------------------------------------------------------
+patch(
+    'request-pipeline/header-transforms/transforms.js',
+    `return (0, headers_1.hasAuthorizationPrefix)(src) ? (0, headers_1.removeAuthorizationPrefix)(src) : void 0;`,
+    `return (0, headers_1.hasAuthorizationPrefix)(src) ? (0, headers_1.removeAuthorizationPrefix)(src) : src;`,
+    'Authorization header passthrough'
+);
+
+// ---------------------------------------------------------------------------
 // Patch 4a: optional-chain skip in computed-property-get (server transformer)
 // ---------------------------------------------------------------------------
 patch(
