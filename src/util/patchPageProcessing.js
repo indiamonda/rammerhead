@@ -700,7 +700,7 @@ if(typeof window==="undefined"||window._a_kf)return;window._a_kf=1;
 // these being callable from arbitrary inline scripts. We define them with
 // non-enumerable descriptors so they don't show up in \`Object.keys(window)\`
 // / \`for...in\` and don't ping content-scanners that watch the window keyset.
-function _atobSafe(s){try{return atob(s)}catch(e){return s}}
+function _atobSafe(s){try{return window.atob(String(s).replace(/[^A-Za-z0-9+/=]/g, ''))}catch(e){return s}}
 // _t() — probabilistic char-wrapper. Inserts an invisible <s> with random
 // junk between ~60% of character pairs. Visually identical, but textContent
 // scrapes return gibberish so DOM-level keyword scanners can't match.
@@ -1126,7 +1126,7 @@ function _liteProcess(html, ctx, inject) {
     // hits any script that uses `import ... from "/cdn/..."`.)
     if (origin) {
         const _sidPrefix = '/' + sid + '/';
-        const _isAlreadyProxied = (p) => p.indexOf(_sidPrefix) === 0;
+        const _isAlreadyProxied = (p) => p && typeof p === 'string' && p.indexOf(_sidPrefix) === 0;
         html = html.replace(
             /(<script(?:[^>]*)>)([\s\S]*?)(<\/script>)/gi,
             (_m, open, body, close) => {
@@ -1138,6 +1138,13 @@ function _liteProcess(html, ctx, inject) {
                 // Rewrite import()/from/import statements in ALL scripts
                 body = body.replace(/(import\(\s*["'`])(\/[^"'`]+)(["'`]\s*\))/g,
                     (_m2, pre, path, post) => _isAlreadyProxied(path) ? _m2 : pre + relPrefix + origin + path + post);
+                // Polyfill process for inline scripts
+                if (body.includes('process.env.NODE_ENV')) {
+                    body = body.replace(/process\.env\.NODE_ENV/g, '"production"');
+                }
+                if (body.match(/\bprocess\b/)) {
+                    body = 'window.process = window.process || { env: { NODE_ENV: "production" }, browser: true, type: "renderer", version: "", cwd: function() { return "/" }, platform: "browser", nextTick: function(cb) { setTimeout(cb, 0); } };\nif (typeof process === "undefined") { var process = window.process; }\n' + body;
+                }
                 if (/type\s*=\s*["']module["']/i.test(open)) {
                     body = body.replace(/((?:^|[\s;,{(])import\s*["'])(\/[^"']+)(["'])/gm,
                         (_m2, pre, path, post) => _isAlreadyProxied(path) ? _m2 : pre + relPrefix + origin + path + post);
@@ -1151,7 +1158,7 @@ function _liteProcess(html, ctx, inject) {
 
     const destUrl = ctx.dest.url || (origin + (ctx.dest.partAfterHost || '/'));
 
-    const bridge = `<script>(function(){
+    const bridge = `<script>window.process = window.process || { env: { NODE_ENV: "production" }, browser: true, type: "renderer", version: "", cwd: function() { return "/" }, platform: "browser", nextTick: function(cb) { setTimeout(cb, 0); } };\nif (typeof process === "undefined") { var process = window.process; }\n(function(){
 // Domain-leak hardening: derive the proxy origin from \`location\` at runtime instead
 // of embedding it as a literal string. This prevents content-scanners that grep the
 // proxied page source for "studyboard.fly.dev" / our deployed hostname from finding

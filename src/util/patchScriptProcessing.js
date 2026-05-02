@@ -200,13 +200,21 @@ function _liteRewriteJs(script, ctx) {
     let result = script;
     result = result.replace(LITE_PATH_LITERAL_RE, (_m, q1, p, q2) => {
         // Skip already-proxied paths
-        if (p.indexOf('/' + sid + '/') === 0) return _m;
+        if (p && typeof p === 'string' && p.indexOf('/' + sid + '/') === 0) return _m;
         return q1 + relPrefix + origin + p + q2;
     });
     result = result.replace(LITE_IMPORT_DYNAMIC_RE, (_m, pre, p, post) => {
-        if (p.indexOf('/' + sid + '/') === 0) return _m;
+        if (p && typeof p === 'string' && p.indexOf('/' + sid + '/') === 0) return _m;
         return pre + relPrefix + origin + p + post;
     });
+        // Polyfill process.env.NODE_ENV for lite rewritten scripts
+    if (result.includes('process.env.NODE_ENV')) {
+        result = result.replace(/process\.env\.NODE_ENV/g, '"production"');
+    }
+    // Polyfill process for lite rewritten scripts
+    if (result.match(/\bprocess\b/)) {
+        result = 'window.process = window.process || { env: { NODE_ENV: "production" }, browser: true, type: "renderer", version: "", cwd: function() { return "/" }, platform: "browser", nextTick: function(cb) { setTimeout(cb, 0); } };\nif (typeof process === "undefined") { var process = window.process; }\n' + result;
+    }
     return result;
 }
 
