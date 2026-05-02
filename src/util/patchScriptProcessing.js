@@ -311,13 +311,19 @@ function _stripProxyOriginFromScript(script, ctx) {
     return out;
 }
 
-// Detect responses that the upstream served as HTML (think 4xx/5xx error pages,
-// Cloudflare/AWS WAF challenge, "Are you a robot?" gating) but the browser is
-// trying to load via a `<script>` tag. Hammerhead's AST rewriter would either
-// fail to parse the HTML or emit broken JS, and the browser would log the
-// classic `Uncaught SyntaxError: Unexpected token '<' (at core.js:1:1)`.
-// Replace the body with a no-op + console.error so the script tag finishes
-// loading cleanly and the page surfaces a useful error message in DevTools.
+// Detect responses that the upstream served as HTML (4xx/5xx error pages,
+// Cloudflare/AWS WAF challenge, "Are you a robot?" gating, ad-blocker stubs,
+// regional gating, etc.) but the browser is trying to load via a `<script>`
+// tag. Hammerhead's AST rewriter would either fail to parse the HTML or
+// emit broken JS, and the browser would log the classic
+// `Uncaught SyntaxError: Unexpected token '<' (at core.js:1:1)`.
+// Replace the body with a SILENT no-op so the script tag finishes loading
+// cleanly. We deliberately avoid console.error here: subresource HTML/404
+// stubs are common (ads, trackers, region-blocked widgets, optional
+// privacy-framework loaders that the destination rejects when proxied) and
+// surfacing every one as a red console error makes pages look broken when
+// they only had a benign sub-resource fail. The script will be visible in
+// the DevTools Network tab if the user wants to debug.
 const _HTML_SHEBANG_RE = /^[\s\uFEFF]*<(?:!doctype|!--|html|head|body|script|meta|title|link|style)\b/i;
 function _looksLikeHtml(s) {
     if (!s || typeof s !== 'string') return false;
@@ -327,10 +333,10 @@ function _looksLikeHtml(s) {
 scriptProcessor.processResource = async function patchedProcessResource(script, ctx, charset, urlReplacer) {
     // Pre-flight: if the upstream returned HTML for a script-typed request
     // there's nothing for the AST rewriter (or our lite rewriter) to do —
-    // both will produce garbage. Synthesize a JS error stub instead.
+    // both will produce garbage. Emit a silent stub so the <script> tag
+    // resolves without polluting the console.
     if (_looksLikeHtml(script)) {
-        const url = (ctx && ctx.dest && ctx.dest.url) || '<unknown>';
-        return 'console.error("[StudyBoard] Expected JavaScript, received HTML from " + ' + JSON.stringify(url) + ');';
+        return '/* sb: html-for-script stubbed */void 0;';
     }
     if (processingMode.isMarkedLiteHost(ctx)) {
         return _stripProxyOriginFromScript(_liteRewriteJs(script, ctx), ctx);

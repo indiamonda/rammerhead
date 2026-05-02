@@ -81,13 +81,15 @@ require('testcafe-hammerhead/lib/processing/resources/index').process = async fu
     }
 
     // No processor matched but the request was for a JS resource AND the body
-    // looks like HTML — substitute a console.error stub so the browser's JS
-    // parser doesn't choke. This handles CDN error pages / WAF stubs that
-    // come back with `text/html` for `<script src="…">` requests.
+    // looks like HTML — substitute a SILENT no-op so the browser's JS parser
+    // doesn't choke. This handles CDN error pages / WAF stubs that come back
+    // with `text/html` for `<script src="…">` requests. We deliberately
+    // avoid console.error: real-world destinations frequently return HTML
+    // for ad/tracker scripts, region-blocked widgets, or expired CDN URLs,
+    // and surfacing each one as a console error makes pages look broken
+    // when they're only missing a benign sub-resource.
     if (ctx.dest && ctx.dest.isScript && _bodyLooksLikeHtml(destResBody)) {
-        const url = (ctx.dest && ctx.dest.url) || '<unknown>';
-        const stub = 'console.error("[StudyBoard] Expected JavaScript, received HTML from " + ' + JSON.stringify(url) + ');';
-        // Force JS content type so the browser parses the stub correctly.
+        const stub = '/* sb: html-for-script stubbed */void 0;';
         try {
             if (ctx.destRes && ctx.destRes.headers) {
                 ctx.destRes.headers['content-type'] = 'application/javascript; charset=utf-8';
