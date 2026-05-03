@@ -262,14 +262,19 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     // Pure-HTML cover page. No JS, no fonts, no external resources, no proxy/
     // unblock/session keywords. Looks like a brand-new domain placeholder
     // for an early-stage learning project.
+    // The cover page has a discreet "Continue" link that takes real users to
+    // the configured stealth portal. Since the link target is the portal token
+    // (which the operator chose), bots/filters scanning the page see only a
+    // generic relative href like "/go" — no proxy/session/unblock keywords.
+    const _portalHref = _stealthPortal ? '/' + _stealthPortal + '/' : '/';
     const COVER_HTML = [
         '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">',
         '<meta name="viewport" content="width=device-width,initial-scale=1">',
         '<meta name="robots" content="noindex,nofollow">',
         '<title>Welcome</title>',
         '<style>',
-        ':root{--bg:#fafafa;--fg:#1a1a1a;--mu:#666}',
-        '@media (prefers-color-scheme:dark){:root{--bg:#0a0a0a;--fg:#e5e5e5;--mu:#888}}',
+        ':root{--bg:#fafafa;--fg:#1a1a1a;--mu:#666;--ac:#2563eb}',
+        '@media (prefers-color-scheme:dark){:root{--bg:#0a0a0a;--fg:#e5e5e5;--mu:#888;--ac:#60a5fa}}',
         '*{box-sizing:border-box}',
         'html,body{margin:0;padding:0;height:100%}',
         'body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background:var(--bg);color:var(--fg)}',
@@ -278,10 +283,13 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         'h1{font-size:32px;margin:0 0 12px;font-weight:600}',
         'p{color:var(--mu);margin:0 0 16px}',
         '.dot{display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;margin-right:8px;vertical-align:middle}',
+        'a{color:var(--ac);text-decoration:none;font-weight:500}',
+        'a:hover{text-decoration:underline}',
         '</style></head><body>',
         '<main><section class="c">',
         '<h1>Welcome</h1>',
         '<p><span class="dot"></span> Service is available.</p>',
+        '<p><a href="' + _portalHref + '">Continue &rarr;</a></p>',
         '</section></main></body></html>',
     ].join('');
 
