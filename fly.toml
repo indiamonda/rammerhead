@@ -1,12 +1,11 @@
 # Fly.io deployment configuration
 # Deploy with: fly launch (first time) or fly deploy (updates)
-# App name must match your Fly app (e.g. rammerhead.fly.dev -> app = "rammerhead")
 
-app = "rammerhead"
+app = "ulw"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory_mb = 1024
+  memory_mb = 512
 
 primary_region = "sjc"
 
@@ -15,22 +14,10 @@ primary_region = "sjc"
 [env]
   NODE_ENV = "production"
   PORT = "8080"
-  STEALTH_PORTAL = "go"
   PATH_STYLE = "cdn-cgi/p"
+  SINGLE_PROCESS = "1"
+  STUDYBOARD_BRAND = "_a"
 
-# Persistent volume for session storage. The app writes session files to
-# /data/sessions (see src/config.js). Without this mount, session files
-# live on the ephemeral rootfs and are wiped every time the machine
-# restarts (deploy, health-check failure, infra maintenance, etc.), which
-# causes "Generate Link" never-expire URLs to silently stop working.
-#
-# One-time setup (per Fly region/machine). Volumes MUST be created in the
-# same region as the machine that will mount them -- check with
-# `fly machines list -a rammerhead` and use that region below:
-#   fly volumes create data --region <region> --size 1
-# After the volume exists, `fly deploy` will auto-attach it on the next
-# machine boot. If you scale to multiple machines in the same region you
-# must create one volume per machine (fly volumes list).
 [mounts]
   source = "data"
   destination = "/data"

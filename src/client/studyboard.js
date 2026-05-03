@@ -26,25 +26,25 @@
         delete window.overrideIsCrossDomainWindows;
 
         // other code if they want to also hook onto hammerhead start //
-        if (window._a_startListeners) {
-            for (const eachListener of window._a_startListeners) {
+        if (window.__SBRAND__startListeners) {
+            for (const eachListener of window.__SBRAND__startListeners) {
                 try {
                     eachListener();
                 } catch (e) {
                     console.error(e);
                 }
             }
-            delete window._a_startListeners;
+            delete window.__SBRAND__startListeners;
         }
 
         // sync localStorage code //
         // disable if other code wants to implement their own localStorage site wrapper
-        if (window._a_disableLocalStorageImpl) {
-            delete window._a_disableLocalStorageImpl;
+        if (window.__SBRAND__disableLocalStorageImpl) {
+            delete window.__SBRAND__disableLocalStorageImpl;
             return;
         }
         // consts
-        var timestampKey = '_a_synctimestamp';
+        var timestampKey = '__SBRAND__synctimestamp';
         var updateInterval = 5000;
         var isSyncing = false;
 
@@ -518,7 +518,7 @@
         // call is just not viable (mainly memory issues as the garbage collector is sometimes not fast enough)
 
         const getLocHost = win => (new URL(hammerhead.utils.url.parseProxyUrl(win.location.href).destUrl)).host;
-        const prefix = win => `_a|sw|${hammerhead.settings._settings.sessionId}|${
+        const prefix = win => `__SBRAND__|sw|${hammerhead.settings._settings.sessionId}|${
             getLocHost(win)
         }|`;
         const toRealStorageKey = (key = '', win = window) => prefix(win) + key;

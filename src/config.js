@@ -7,6 +7,14 @@ const StudyBoardJSFileCache = require('./classes/StudyBoardJSFileCache.js');
 // Use simple cluster mode (not sticky-session-custom which has Node.js v24+ issues)
 const enableWorkers = os.cpus().length > 1 && !process.env.SINGLE_PROCESS;
 
+const brand = (() => {
+    const v = (process.env.STUDYBOARD_BRAND || '_a').toLowerCase();
+    if (!/^[_a-z0-9]{2,8}$/.test(v)) {
+        throw new Error('STUDYBOARD_BRAND must be 2-8 chars [_a-z0-9]');
+    }
+    return v;
+})();
+
 // Auto-detect cloud/reverse-proxy environments (Render, Fly.io, Heroku, etc.)
 const isCloudDeployment = !!(
     process.env.RENDER ||
@@ -16,6 +24,9 @@ const isCloudDeployment = !!(
 );
 
 module.exports = {
+    //// BRAND CONFIGURATION ////
+    brand,
+
     //// HOSTING CONFIGURATION ////
 
     bindingAddress: '0.0.0.0',

@@ -4,9 +4,9 @@
  * runs BEFORE Hammerhead's own runtime and before any page scripts.
  *
  * Provides three data channels on `window`:
- *   _a_q[]   - console messages  (polled by parent → /__rh_console)
- *   _a_n[] - network requests  (polled by parent → DevTools Network tab)
- *   _a_src[] - resource URLs     (polled by parent → DevTools Sources tab)
+ *   __SBRAND__q[]   - console messages  (polled by parent → /__rh_console)
+ *   __SBRAND__n[] - network requests  (polled by parent → DevTools Network tab)
+ *   __SBRAND__src[] - resource URLs     (polled by parent → DevTools Sources tab)
  */
 
 const pageProcessor = require('testcafe-hammerhead/lib/processing/resources/page');
@@ -77,7 +77,7 @@ const AD_CSS_RULES = [
     '[class*="leaderboard-ad"], [class*="MPUholder"], [class*="dfp-ad"]',
 ].join('');
 const AD_BLOCKER_SCRIPT = [
-    '<style id="_a_css">',
+    '<style id="__SBRAND__css">',
     // Hide ad containers. !important so sites can\'t override.
     AD_CSS_RULES,
     '{display:none!important;visibility:hidden!important;height:0!important;width:0!important;min-height:0!important;min-width:0!important;max-height:0!important;max-width:0!important;pointer-events:none!important;}',
@@ -85,13 +85,13 @@ const AD_BLOCKER_SCRIPT = [
     '.ad-showing video.html5-main-video{display:none!important;}',
     '.ad-showing .ytp-chrome-bottom, .ad-showing .ytp-ad-skip-button-modern, .ad-showing .ytp-ad-skip-button-slot{display:none!important;}',
     '</style>',
-    '<script id="_a_js">',
+    '<script id="__SBRAND__js">',
     '(function(){',
-    'if(typeof window==="undefined"||window._a_abi)return;window._a_abi=1;',
+    'if(typeof window==="undefined"||window.__SBRAND__abi)return;window.__SBRAND__abi=1;',
     'var _off=false;',
     'try{_off=localStorage.getItem("adBlockerEnabled")==="0"}catch(e){}',
     'if(!_off){try{_off=document.cookie.indexOf("_a_b=0")!==-1}catch(e){}}',
-    'if(_off){try{var cs=document.getElementById("_a_css");if(cs)cs.remove()}catch(e){}return}',
+    'if(_off){try{var cs=document.getElementById("__SBRAND__css");if(cs)cs.remove()}catch(e){}return}',
     // --- POPUP / POPUNDER GUARD ---
     // Block ad popups while still allowing legitimate cross-origin popups (Discord invite
     // links, OAuth flows, share buttons). Decision tree inside the window.open override:
@@ -137,7 +137,7 @@ const AD_BLOCKER_SCRIPT = [
     // receive the ORIGINAL URL the page passed to window.open. We retry over a growing
     // window to account for async runtime init.
     'function _installOpenGuard(){try{',
-    'var cur=window.open;if(!cur||cur._a_ag)return;',
+    'var cur=window.open;if(!cur||cur.__SBRAND__ag)return;',
     'var _guardDepth=0;',
     'var _oOpen=cur;',
     'var guarded=function(u,n,f){',
@@ -169,7 +169,7 @@ const AD_BLOCKER_SCRIPT = [
     'return _oOpen.apply(this,arguments);',
     '}finally{_guardDepth--}',
     '};',
-    'guarded._a_ag=true;',
+    'guarded.__SBRAND__ag=true;',
     'window.open=guarded;',
     '}catch(e){}}',
     // Install now (in case no runtime wraps window.open) AND after short delays so we end
@@ -192,7 +192,7 @@ const AD_BLOCKER_SCRIPT = [
     'function _isAdRedirect(u){try{if(typeof u!=="string")return false;if(_blockedHosts.test(u))return true;var uh="";try{uh=new URL(u,location.href).hostname}catch(e){}return uh&&_blockedHosts.test(uh)}catch(e){return false}}',
     // Intercept location.assign / replace methods
     'function _installLocGuard(){try{',
-    'var _loc=window.location;if(!_loc||_loc._a_lg)return;',
+    'var _loc=window.location;if(!_loc||_loc.__SBRAND__lg)return;',
     'try{var _oAssign=_loc.assign.bind(_loc);_loc.assign=function(u){if(_isAdRedirect(u)){try{console.debug("[ab] blocked location.assign:",u)}catch(e){}return}return _oAssign(u)}}catch(e){}',
     'try{var _oReplace=_loc.replace.bind(_loc);_loc.replace=function(u){if(_isAdRedirect(u)){try{console.debug("[ab] blocked location.replace:",u)}catch(e){}return}return _oReplace(u)}}catch(e){}',
     // Intercept location.href setter on this Location instance (may be hammerhead-wrapped Location)
@@ -210,7 +210,7 @@ const AD_BLOCKER_SCRIPT = [
     'try{var _dlDesc=Object.getOwnPropertyDescriptor(Document.prototype,"location")||Object.getOwnPropertyDescriptor(document,"location");',
     'if(_dlDesc&&_dlDesc.set){var _oDLSet=_dlDesc.set,_oDLGet=_dlDesc.get;',
     'try{Object.defineProperty(document,"location",{configurable:true,get:function(){return _oDLGet?_oDLGet.call(this):_loc},set:function(v){if(_isAdRedirect(v)){try{console.debug("[ab] blocked document.location=:",v)}catch(e){}return}return _oDLSet.call(this,v)}})}catch(e){}}}catch(e){}',
-    '_loc._a_lg=true;',
+    '_loc.__SBRAND__lg=true;',
     '}catch(e){}}',
     // Install now AND after hammerhead init so our guard sits on top
     '_installLocGuard();',
@@ -276,13 +276,13 @@ const AD_BLOCKER_SCRIPT = [
     'Object.defineProperty(el,"clientWidth",{configurable:true,get:function(){return 160}});',
     'Object.defineProperty(el,"offsetParent",{configurable:true,get:function(){return document.body||document.documentElement}});',
     'var _oElGBC=el.getBoundingClientRect;el.getBoundingClientRect=function(){return{top:0,left:0,right:160,bottom:100,width:160,height:100,x:0,y:0,toJSON:function(){return this}}};',
-    'el._a_bs=true}catch(e){}}',
+    'el.__SBRAND__bs=true}catch(e){}}',
     'window.getComputedStyle=function(el,ps){var cs=_oCompS.call(this,el,ps);',
-    'try{if(el&&el._a_bs){return new Proxy(cs,{get:function(t,k){if(k==="display")return"block";if(k==="visibility")return"visible";if(k==="opacity")return"1";if(k==="height")return"100px";if(k==="width")return"160px";var v=t[k];return typeof v==="function"?v.bind(t):v}})}}catch(e){}return cs};',
+    'try{if(el&&el.__SBRAND__bs){return new Proxy(cs,{get:function(t,k){if(k==="display")return"block";if(k==="visibility")return"visible";if(k==="opacity")return"1";if(k==="height")return"100px";if(k==="width")return"160px";var v=t[k];return typeof v==="function"?v.bind(t):v}})}}catch(e){}return cs};',
     // Scan existing DOM now + observe for new bait elements
-    'function _scanBait(){try{document.querySelectorAll("[class*=\\"ads\\"],[id*=\\"ads\\"],[class*=\\"ad-\\"],[id*=\\"ad-\\"],[class*=\\"banner\\"],[id*=\\"banner\\"],[class*=\\"sponsor\\"],ins.adsbygoogle").forEach(function(el){if(_looksLikeBait(el)&&!el._a_bs)_spoofBait(el)})}catch(e){}}',
+    'function _scanBait(){try{document.querySelectorAll("[class*=\\"ads\\"],[id*=\\"ads\\"],[class*=\\"ad-\\"],[id*=\\"ad-\\"],[class*=\\"banner\\"],[id*=\\"banner\\"],[class*=\\"sponsor\\"],ins.adsbygoogle").forEach(function(el){if(_looksLikeBait(el)&&!el.__SBRAND__bs)_spoofBait(el)})}catch(e){}}',
     'if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_scanBait);else _scanBait();',
-    'new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var an=muts[i].addedNodes;for(var j=0;j<an.length;j++){var n=an[j];if(_looksLikeBait(n)&&!n._a_bs)_spoofBait(n)}}}).observe(document.documentElement||document,{childList:true,subtree:true});',
+    'new MutationObserver(function(muts){for(var i=0;i<muts.length;i++){var an=muts[i].addedNodes;for(var j=0;j<an.length;j++){var n=an[j];if(_looksLikeBait(n)&&!n.__SBRAND__bs)_spoofBait(n)}}}).observe(document.documentElement||document,{childList:true,subtree:true});',
     '}catch(e){}',
     // --- YOUTUBE AD SKIPPER ---
     // If the page is YouTube, watch for ad-showing state and either skip or fast-forward.
@@ -367,7 +367,7 @@ const AD_BLOCKER_SCRIPT = [
     '"[class*=\\"consent-banner\\"]","[id*=\\"consent-banner\\"]",',
     '"[class*=\\"gdpr-notice\\"]","[id*=\\"gdpr-notice\\"]"',
     '].join(",");',
-    'var _s=document.createElement("style");_s.id="_a_consent_css";',
+    'var _s=document.createElement("style");_s.id="__SBRAND__consent_css";',
     '_s.textContent=_CONSENT_SEL+"{display:none!important;visibility:hidden!important;pointer-events:none!important;opacity:0!important;}"+',
     // Restore scroll when CMPs lock the body
     '"html,body{overflow:visible!important;}html.no-scroll,body.no-scroll,body.modal-open,html.modal-open,body.is-locked,body.overlay-open,body.stop-scroll,body.fixed-body,body.lock-scroll,html.lock-scroll,body.scroll-lock,html.scroll-lock{overflow:auto!important;position:static!important;}";',
@@ -400,7 +400,7 @@ const AD_BLOCKER_SCRIPT = [
 const ANTIDETECT_SCRIPT = [
     '<script>',
     '(function(){',
-    'if(typeof window==="undefined"||window._a_ad)return;window._a_ad=1;',
+    'if(typeof window==="undefined"||window.__SBRAND__ad)return;window.__SBRAND__ad=1;',
     'try{Object.defineProperty(navigator,"webdriver",{get:function(){return undefined},configurable:true})}catch(e){}',
     'try{if(!navigator.plugins||!navigator.plugins.length){',
         'var _mkP=function(n,d,fn,mt){var p=Object.create(Plugin.prototype);',
@@ -472,10 +472,10 @@ const ANTIDETECT_SCRIPT = [
 ].join('\n');
 
 const DEVTOOLS_SCRIPT = `<script>(function(){
-if(typeof window==="undefined"||window._a_c)return;window._a_c=1;
-window._a_q=[];window._a_n=[];window._a_src=[];
-window._a_dp=null;window._a_ls=0;
-window._a_tc={timeout:0,interval:0};
+if(typeof window==="undefined"||window.__SBRAND__c)return;window.__SBRAND__c=1;
+window.__SBRAND__q=[];window.__SBRAND__n=[];window.__SBRAND__src=[];
+window.__SBRAND__dp=null;window.__SBRAND__ls=0;
+window.__SBRAND__tc={timeout:0,interval:0};
 var _oC=window.console||{},_srcSeen={},_groupDepth=0;
 var _proxyRe=/\\/[a-z0-9]{32}(?:![a-z]*)?\\/((https?):\\/\\/.+)/i;
 function _cleanUrl(u){if(!u)return u;var m=(""+u).match(_proxyRe);return m?m[1]:""+u}
@@ -484,69 +484,69 @@ var o=_oC[m]||function(){};
 _oC[m]=function(){try{o.apply(_oC,arguments)}catch(e){}
 var raw=[];for(var i=0;i<arguments.length;i++)raw.push(arguments[i]);
 var entry={l:m,raw:raw,t:Date.now(),d:_groupDepth};
-window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}}});
+window.__SBRAND__q.push(entry);if(window.__SBRAND__dp)try{window.__SBRAND__dp.log(entry)}catch(e){}}});
 var _origTable=_oC.table;
 _oC.table=function(data,cols){try{if(_origTable)_origTable.apply(_oC,arguments)}catch(e){}
 var entry={l:"table",raw:[data,cols],t:Date.now(),d:_groupDepth};
-window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}};
+window.__SBRAND__q.push(entry);if(window.__SBRAND__dp)try{window.__SBRAND__dp.log(entry)}catch(e){}};
 _oC.group=_oC.groupCollapsed=function(){var raw=[];for(var i=0;i<arguments.length;i++)raw.push(arguments[i]);
 var entry={l:"group",raw:raw,t:Date.now(),d:_groupDepth};_groupDepth++;
-window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}};
-_oC.groupEnd=function(){if(_groupDepth>0)_groupDepth--;window._a_q.push({l:"groupEnd",t:Date.now(),d:_groupDepth})};
+window.__SBRAND__q.push(entry);if(window.__SBRAND__dp)try{window.__SBRAND__dp.log(entry)}catch(e){}};
+_oC.groupEnd=function(){if(_groupDepth>0)_groupDepth--;window.__SBRAND__q.push({l:"groupEnd",t:Date.now(),d:_groupDepth})};
 var _cTimers={};
 _oC.time=function(l){_cTimers[l||"default"]=performance.now()};
 _oC.timeEnd=function(l){l=l||"default";var s=_cTimers[l];if(s!==undefined){delete _cTimers[l];
 var entry={l:"log",raw:[l+": "+(performance.now()-s).toFixed(3)+"ms"],t:Date.now(),d:_groupDepth};
-window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}}};
+window.__SBRAND__q.push(entry);if(window.__SBRAND__dp)try{window.__SBRAND__dp.log(entry)}catch(e){}}};
 _oC.timeLog=function(l){l=l||"default";var s=_cTimers[l];if(s!==undefined){var entry={l:"log",raw:[l+": "+(performance.now()-s).toFixed(3)+"ms"],t:Date.now(),d:_groupDepth};
-window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}}};
+window.__SBRAND__q.push(entry);if(window.__SBRAND__dp)try{window.__SBRAND__dp.log(entry)}catch(e){}}};
 var _cCounts={};
 _oC.count=function(l){l=l||"default";_cCounts[l]=(_cCounts[l]||0)+1;
 var entry={l:"log",raw:[l+": "+_cCounts[l]],t:Date.now(),d:_groupDepth};
-window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e){}};
+window.__SBRAND__q.push(entry);if(window.__SBRAND__dp)try{window.__SBRAND__dp.log(entry)}catch(e){}};
 _oC.countReset=function(l){_cCounts[l||"default"]=0};
 var _origClear=_oC.clear;_oC.clear=function(){try{if(_origClear)_origClear.call(_oC)}catch(e){}
-window._a_q.length=0;if(window._a_dp)try{window._a_dp.clear()}catch(e){}};
+window.__SBRAND__q.length=0;if(window.__SBRAND__dp)try{window.__SBRAND__dp.clear()}catch(e){}};
 window.console=_oC;
 window.addEventListener("error",function(e){if(e.defaultPrevented)return;var msg=e.error?(e.error.stack||e.error.message):e.message;
 var entry={l:"error",raw:["[Uncaught] "+(msg||"Unknown error")],t:Date.now(),d:0};
-window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e2){}});
+window.__SBRAND__q.push(entry);if(window.__SBRAND__dp)try{window.__SBRAND__dp.log(entry)}catch(e2){}});
 window.addEventListener("unhandledrejection",function(e){if(e.defaultPrevented)return;var r=e.reason;
 var entry={l:"error",raw:["[Promise] "+(r&&r.stack?r.stack:String(r))],t:Date.now(),d:0};
-window._a_q.push(entry);if(window._a_dp)try{window._a_dp.log(entry)}catch(e2){}});
+window.__SBRAND__q.push(entry);if(window.__SBRAND__dp)try{window.__SBRAND__dp.log(entry)}catch(e2){}});
 if(typeof fetch==="function"){var _oF=fetch;window.fetch=function(){var a=arguments,u="",m="GET",rh={},st=Date.now();
 try{if(typeof a[0]==="string")u=a[0];else if(a[0]&&a[0].url)u=a[0].url;
 if(a[1]){if(a[1].method)m=a[1].method;var h=a[1].headers;if(h){if(h instanceof Headers)h.forEach(function(v,k){rh[k]=v});
 else if(typeof h==="object")for(var k in h)rh[k]=h[k]}}}catch(e){}
 var entry={m:m,u:_cleanUrl(u),s:0,tp:"fetch",t0:st,t1:0,reqH:rh,resH:{},sz:0};
-window._a_n.push(entry);if(window._a_dp)try{window._a_dp.net(entry)}catch(e){}
+window.__SBRAND__n.push(entry);if(window.__SBRAND__dp)try{window.__SBRAND__dp.net(entry)}catch(e){}
 return _oF.apply(this,a).then(function(r){entry.s=r.status;entry.t1=Date.now();
 try{r.headers.forEach(function(v,k){entry.resH[k]=v});var ct=r.headers.get("content-type");if(ct)entry.ct=ct.split(";")[0];
 var cl=r.headers.get("content-length");if(cl)entry.sz=parseInt(cl,10)||0}catch(e){}
-if(window._a_dp)try{window._a_dp.netUpdate(entry)}catch(e){}return r},
-function(e){entry.s=-1;entry.t1=Date.now();if(window._a_dp)try{window._a_dp.netUpdate(entry)}catch(e2){}throw e})}}
+if(window.__SBRAND__dp)try{window.__SBRAND__dp.netUpdate(entry)}catch(e){}return r},
+function(e){entry.s=-1;entry.t1=Date.now();if(window.__SBRAND__dp)try{window.__SBRAND__dp.netUpdate(entry)}catch(e2){}throw e})}}
 if(typeof XMLHttpRequest!=="undefined"){var _oXO=XMLHttpRequest.prototype.open,_oXS=XMLHttpRequest.prototype.send;
 XMLHttpRequest.prototype.open=function(m,u){this.__rhM=m;this.__rhU=""+u;this.__rhT0=Date.now();this.__rhRH={};return _oXO.apply(this,arguments)};
 var _oSRH=XMLHttpRequest.prototype.setRequestHeader;
 XMLHttpRequest.prototype.setRequestHeader=function(k,v){try{this.__rhRH[k]=v}catch(e){}return _oSRH.apply(this,arguments)};
 XMLHttpRequest.prototype.send=function(){var x=this,entry={m:x.__rhM||"GET",u:_cleanUrl(x.__rhU||""),s:0,tp:"xhr",t0:x.__rhT0||Date.now(),t1:0,reqH:x.__rhRH||{},resH:{},sz:0};
-window._a_n.push(entry);if(window._a_dp)try{window._a_dp.net(entry)}catch(e){}
+window.__SBRAND__n.push(entry);if(window.__SBRAND__dp)try{window.__SBRAND__dp.net(entry)}catch(e){}
 x.addEventListener("loadend",function(){entry.s=x.status;entry.t1=Date.now();
 try{var h=x.getAllResponseHeaders()||"";h.split("\\r\\n").forEach(function(l){var p=l.indexOf(":");if(p>0)entry.resH[l.slice(0,p).trim().toLowerCase()]=l.slice(p+1).trim()});
 entry.ct=(entry.resH["content-type"]||"").split(";")[0];
 var cl=entry.resH["content-length"];if(cl)entry.sz=parseInt(cl,10)||0;else try{entry.sz=x.response?x.response.length||0:0}catch(e){}}catch(e){}
-if(window._a_dp)try{window._a_dp.netUpdate(entry)}catch(e){}});return _oXS.apply(this,arguments)}}
+if(window.__SBRAND__dp)try{window.__SBRAND__dp.netUpdate(entry)}catch(e){}});return _oXS.apply(this,arguments)}}
 try{var _oAEL=EventTarget.prototype.addEventListener;
-EventTarget.prototype.addEventListener=function(){window._a_ls++;return _oAEL.apply(this,arguments)}}catch(e){}
+EventTarget.prototype.addEventListener=function(){window.__SBRAND__ls++;return _oAEL.apply(this,arguments)}}catch(e){}
 var _oST=window.setTimeout,_oSI=window.setInterval;
-window.setTimeout=function(){window._a_tc.timeout++;return _oST.apply(this,arguments)};
-window.setInterval=function(){window._a_tc.interval++;return _oSI.apply(this,arguments)};
+window.setTimeout=function(){window.__SBRAND__tc.timeout++;return _oST.apply(this,arguments)};
+window.setInterval=function(){window.__SBRAND__tc.interval++;return _oSI.apply(this,arguments)};
 window.__rhPerf={lcp:0,cls:0,fid:0,fcp:0,ttfb:0,inp:0};
 try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){window.__rhPerf.lcp=e.startTime})}).observe({type:"largest-contentful-paint",buffered:true})}catch(e){}
 try{var _clsVal=0;new PerformanceObserver(function(l){l.getEntries().forEach(function(e){if(!e.hadRecentInput){_clsVal+=e.value;window.__rhPerf.cls=_clsVal}})}).observe({type:"layout-shift",buffered:true})}catch(e){}
 try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){window.__rhPerf.fid=e.processingStart-e.startTime})}).observe({type:"first-input",buffered:true})}catch(e){}
 try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){if(e.name==="first-contentful-paint")window.__rhPerf.fcp=e.startTime})}).observe({type:"paint",buffered:true})}catch(e){}
-function _addSrc(url,type){url=_cleanUrl(url);if(!url||typeof url!=="string"||_srcSeen[url])return;_srcSeen[url]=1;window._a_src.push({u:url,tp:type})}
+function _addSrc(url,type){url=_cleanUrl(url);if(!url||typeof url!=="string"||_srcSeen[url])return;_srcSeen[url]=1;window.__SBRAND__src.push({u:url,tp:type})}
 function _scanDOM(){try{document.querySelectorAll("script[src]").forEach(function(e){_addSrc(e.src,"js")})}catch(e){}
 try{document.querySelectorAll("link[rel=stylesheet]").forEach(function(e){_addSrc(e.href,"css")})}catch(e){}
 try{document.querySelectorAll("img[src]").forEach(function(e){_addSrc(e.src,"img")})}catch(e){}

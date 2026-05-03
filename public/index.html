@@ -399,7 +399,7 @@
                     }
                 } catch (_) {}
                 try {
-                    if (iframeWindow && iframeWindow._a_du) return iframeWindow._a_du;
+                    if (iframeWindow && iframeWindow.__SBRAND__du) return iframeWindow.__SBRAND__du;
                 } catch (_) {}
                 return null;
             }
@@ -1535,7 +1535,7 @@
                     const perf = win.performance;
                     let html = '';
                     // Web Vitals from injected script
-                    const vitals = win._a_perf;
+                    const vitals = win.__SBRAND__perf;
                     if (vitals) {
                         html += '<div class="dt-section-title">Core Web Vitals</div><div class="dt-metric-grid">';
                         const vd = [
@@ -1642,12 +1642,12 @@
                     const nodeCount = doc.querySelectorAll('*').length;
                     html += '<div class="dt-metric-card"><div class="dt-metric-value">' + nodeCount + '</div><div class="dt-metric-label">DOM Nodes</div></div>';
                     // Listeners & timers from injected script
-                    if (typeof win._a_ls === 'number') {
-                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + win._a_ls + '</div><div class="dt-metric-label">Event Listeners</div></div>';
+                    if (typeof win.__SBRAND__ls === 'number') {
+                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + win.__SBRAND__ls + '</div><div class="dt-metric-label">Event Listeners</div></div>';
                     }
-                    if (win._a_tc) {
-                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + (win._a_tc.timeout || 0) + '</div><div class="dt-metric-label">setTimeout calls</div></div>';
-                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + (win._a_tc.interval || 0) + '</div><div class="dt-metric-label">setInterval calls</div></div>';
+                    if (win.__SBRAND__tc) {
+                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + (win.__SBRAND__tc.timeout || 0) + '</div><div class="dt-metric-label">setTimeout calls</div></div>';
+                        html += '<div class="dt-metric-card"><div class="dt-metric-value">' + (win.__SBRAND__tc.interval || 0) + '</div><div class="dt-metric-label">setInterval calls</div></div>';
                     }
                     // Chrome heap (if available)
                     if (win.performance && win.performance.memory) {
@@ -1774,7 +1774,7 @@
                             else if (nav.loadEventEnd - nav.fetchStart < 5000) perfPts += 2;
                             else perfPts += 1;
                         }
-                        const vitals = win._a_perf;
+                        const vitals = win.__SBRAND__perf;
                         if (vitals) {
                             perfMax += 3;
                             if (vitals.lcp && vitals.lcp < 2500) perfPts += 1.5; else if (vitals.lcp && vitals.lcp < 4000) perfPts += 0.75;
@@ -2336,11 +2336,11 @@
 
                             // Poll injected DevTools data from iframe
                             (function pollDevTools(win) {
-                                if (!win || win._a_poll) return;
-                                win._a_poll = 1;
+                                if (!win || win.__SBRAND__poll) return;
+                                win.__SBRAND__poll = 1;
                                 var iv = setInterval(function() {
                                     try {
-                                        var q = win._a_q;
+                                        var q = win.__SBRAND__q;
                                         if (q && q.length) {
                                             var batch = q.splice(0, 50);
                                             batch.forEach(function(e) { consoleMessages.push(e); });
@@ -2355,7 +2355,7 @@
                                                 keepalive: true
                                             }).catch(function(){});
                                         }
-                                        var net = win._a_n;
+                                        var net = win.__SBRAND__n;
                                         if (net && net.length) {
                                             var nb = net.splice(0, 100);
                                             nb.forEach(function(e) {
@@ -2368,7 +2368,7 @@
                                             if (networkRequests.length > 500) networkRequests = networkRequests.slice(-500);
                                             _renderNetworkIfVisible();
                                         }
-                                        var src = win._a_src;
+                                        var src = win.__SBRAND__src;
                                         if (src && src.length) {
                                             var sb = src.splice(0, 200);
                                             var seen = {};
