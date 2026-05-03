@@ -75,6 +75,15 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         let out = html.replace(/<!--[\s\S]*?-->/g, '');
         // Strip JS comments inside <script> blocks via the AST minifier.
         out = _stripScriptCommentsForUI(out);
+
+        // Inject <base href="/"> right after <head> so relative asset paths
+        // (favicon.png, embedded-styles.css, manifest.json, ...) resolve from
+        // the origin root regardless of the URL the page is served at. This
+        // is critical when STEALTH_PORTAL is set — without it, /go/ would
+        // try to load /go/embedded-styles.css and break all styling.
+        if (!/<base\b[^>]*>/i.test(out)) {
+            out = out.replace(/<head(\s[^>]*)?>/i, function (m) { return m + '<base href="/">'; });
+        }
         return out;
     }
     function _serveSanitizedUI(res, contents) {
@@ -126,6 +135,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/favicon.png', serveCached('favicon.png', 'image/png'));
     proxyServer.GET('/embedded-styles.css', serveCached('embedded-styles.css', 'text/css'));
     proxyServer.GET('/manifest.json', serveCached('manifest.json', 'application/json'));
+    proxyServer.GET('/bot-shield.js', serveCached('bot-shield.js', 'application/javascript'));
     // Devtools script: served under a generic CDN-shaped path only.
     proxyServer.GET(PROXY_PATHS.devtoolsJs, serveCached('devtools.js', 'application/javascript'));
 
