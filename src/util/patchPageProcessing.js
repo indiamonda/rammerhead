@@ -448,6 +448,20 @@ const ANTIDETECT_SCRIPT = [
         'if(typeof tgt==="string"&&tgt!=="*"&&cur&&tgt.indexOf(cur)!==0){tgt="*"}',
         'return _oPM2.call(self,msg,tgt)};',
     '}catch(e){}',
+    // Hide hammerhead globals from enumeration (Discord fingerprints window properties).
+    'try{var _hhProps=["%hammerhead%","%is-hammerhead%","__rhAD","__rhQ","__rhNet","__rhSrc","__rhPanel","__rhC","__rhTimerCount","__rhDestUrl"];',
+    'for(var _hi=0;_hi<_hhProps.length;_hi++){try{var _hp=_hhProps[_hi];if(_hp in window){Object.defineProperty(window,_hp,{enumerable:false,configurable:true,writable:true,value:window[_hp]})}}catch(e){}}',
+    // Trap Object.keys/getOwnPropertyNames on window to filter proxy artifacts
+    'var _origKeys=Object.keys,_origNames=Object.getOwnPropertyNames;',
+    'var _hhSet=new Set(_hhProps);',
+    'Object.keys=function(o){var r=_origKeys.call(this,o);if(o===window||o===globalThis)r=r.filter(function(k){return!_hhSet.has(k)&&k.indexOf("__rh")!==0&&k.charAt(0)!=="%"});return r};',
+    'Object.getOwnPropertyNames=function(o){var r=_origNames.call(this,o);if(o===window||o===globalThis)r=r.filter(function(k){return!_hhSet.has(k)&&k.indexOf("__rh")!==0&&k.charAt(0)!=="%"});return r};',
+    '}catch(e){}',
+    // Spoof performance.navigation.type to match fresh navigation (Discord checks this)
+    'try{if(window.performance&&window.performance.navigation){Object.defineProperty(window.performance.navigation,"type",{get:function(){return 0},configurable:true})}}catch(e){}',
+    // Ensure PerformanceNavigationTiming.type returns "navigate" consistently
+    'try{if(window.PerformanceNavigationTiming){var _pntDesc=Object.getOwnPropertyDescriptor(PerformanceNavigationTiming.prototype,"type");',
+    'if(_pntDesc){Object.defineProperty(PerformanceNavigationTiming.prototype,"type",{get:function(){return"navigate"},configurable:true})}}}catch(e){}',
     '})();</script>',
 ].join('\n');
 

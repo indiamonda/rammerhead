@@ -64,12 +64,16 @@ const CHROME_H2_SETTINGS = {
 // window 65535 + 15663105 = 15728640
 const CHROME_H2_WINDOW_SIZE = 15728640;
 
-// 1. Patch HTTP/1.1: set Chrome TLS options on every HTTPS request
+// 1. Patch HTTP/1.1: set Chrome TLS options on every HTTPS request (including WebSocket upgrades)
 const originalAssign = agentModule.assign;
 agentModule.assign = function (reqOpts) {
     originalAssign(reqOpts);
     if (reqOpts.isHttps || reqOpts.protocol === 'https:') {
         Object.assign(reqOpts, CHROME_TLS);
+        if (reqOpts.isWebSocket) {
+            reqOpts.ALPNProtocols = ['http/1.1'];
+            reqOpts.servername = reqOpts.hostname || reqOpts.host;
+        }
     }
 };
 

@@ -467,6 +467,32 @@ function _isCaptchaDest(destOrigin, url) {
     return false;
 }
 
+const DISCORD_HOST_RE = /\.?discord\.com$|\.?discordapp\.com$/i;
+const DISCORD_API_RE = /\/api\//i;
+const DISCORD_SUPER_PROPERTIES = Buffer.from(JSON.stringify({
+    os: 'Windows',
+    browser: 'Chrome',
+    device: '',
+    system_locale: 'en-US',
+    browser_user_agent: CHROME_UA,
+    browser_version: '131.0.0.0',
+    os_version: '10',
+    referrer: '',
+    referring_domain: '',
+    referrer_current: '',
+    referring_domain_current: '',
+    release_channel: 'stable',
+    client_build_number: 335084,
+    client_event_source: null,
+    design_id: 0
+})).toString('base64');
+
+function _isDiscordDest(destOrigin) {
+    if (!destOrigin) return false;
+    try { return DISCORD_HOST_RE.test(new URL(destOrigin + '/').hostname); } catch (_) {}
+    return false;
+}
+
 /**
  * @param {http.IncomingMessage} req
  * @param {boolean} isRoute - from pipeline; session proxy requests are false
@@ -516,14 +542,30 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
         }
     } catch (_) {}
 
-    // Sites that expect same-origin sec-fetch-site for document requests
+    // Sites that expect same-origin sec-fetch-site for in-site document navigations.
+    // For initial loads (no referer or referer from a different domain), use 'none' to
+    // match what a fresh Chrome tab navigation looks like. Only force 'same-origin' when
+    // the referer indicates the user is already on the same site.
     const SAME_ORIGIN_DOC_RE = /\.?bilibili\.(com|cn)$|\.?twitter\.com$|\.?x\.com$|\.?instagram\.com$|\.?facebook\.com$|\.?tiktok\.com$|\.?reddit\.com$|\.?netflix\.com$|\.?discord\.com$|\.?amazon\.(com|co\.\w+)$|\.?linkedin\.com$|\.?canva\.com$|\.?slack\.com$|\.?gitlab\.com$|\.?figma\.com$|\.?youtube\.com$|\.?docs\.google\.com$|\.?vercel\.com$|\.?netlify\.com$|\.?chatgpt\.com$|\.?openai\.com$|\.?deepseek\.com$|\.?claude\.ai$|\.?anthropic\.com$|\.?gemini\.google\.com$|\.?doubao\.com$|\.?qianwen\.com$|\.?poki\.com$|\.?gimkit\.com$/i;
     const docOrigin = destOrigin || getRefererOriginFallback(req.url, req.headers['referer']);
     if (isDoc && docOrigin) {
         try {
             const host = new URL(docOrigin + '/').hostname.replace(/^www\./, '');
             if (SAME_ORIGIN_DOC_RE.test(host)) {
-                headersToInject['sec-fetch-site'] = 'same-origin';
+                const rawReferer = req.headers['referer'] || '';
+                const refOriginForSFS = getRefererOriginFromHeader(rawReferer, sessionStore)
+                    || getRefererOriginFallback(req.url, rawReferer);
+                let refererMatchesDest = false;
+                if (refOriginForSFS) {
+                    try {
+                        const refHost = new URL(refOriginForSFS + '/').hostname.replace(/^www\./, '');
+                        const destHost = host;
+                        refererMatchesDest = refHost === destHost
+                            || refHost.endsWith('.' + destHost)
+                            || destHost.endsWith('.' + refHost);
+                    } catch (_) {}
+                }
+                headersToInject['sec-fetch-site'] = refererMatchesDest ? 'same-origin' : 'none';
             }
         } catch (_) {}
     }
@@ -597,6 +639,26 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
         } else if (looksLikeFont) {
             req.headers['sec-fetch-dest'] = 'font';
             req.headers['accept'] = 'font/woff2,font/woff,*/*;q=0.9';
+        }
+    }
+
+    // Discord API: inject x-super-properties if not already present. Discord's
+    // client always sends this on /api/ requests; missing it is a strong bot signal.
+    if (!isDoc && destOrigin && _isDiscordDest(destOrigin)) {
+        const pathLower = (req.url || '').split('?')[0].toLowerCase();
+        if (DISCORD_API_RE.test(pathLower)) {
+            if (!req.headers['x-super-properties']) {
+                req.headers['x-super-properties'] = DISCORD_SUPER_PROPERTIES;
+            }
+            if (!req.headers['x-discord-locale']) {
+                req.headers['x-discord-locale'] = 'en-US';
+            }
+            if (!req.headers['x-discord-timezone']) {
+                req.headers['x-discord-timezone'] = 'America/New_York';
+            }
+            if (!req.headers['x-debug-options']) {
+                req.headers['x-debug-options'] = 'bugReporterEnabled';
+            }
         }
     }
 
