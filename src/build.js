@@ -25,10 +25,10 @@ fs.writeFileSync(
         // hammerhead bundle.
         .replace('(function initHammerheadClient () {', '(function initHammerheadClient () {' +
             'if (window["%_isd%"]) throw new TypeError("already ran"); window["%_isd%"] = true;' +
-            'window.__SBRAND__t = (function() {var w = window; while (w !== w.top && w.parent["%_d%"]) w = w.parent; return w;})();' +
-            'window.__SBRAND__p = window.__SBRAND__t === window ? window : window.parent;' +
-            'window.__SBRAND__dt = (function() { var i=0,w=window; while (w !== window.top) {i++;w=w.parent} return i; })();' +
-            'window.__SBRAND__ao = Array.from(location.ancestorOrigins).slice(0, -window.__SBRAND__dt);\n')
+            'window.__SBRAND__t = (function() {var w = window; try { while (w !== w.top) { try { if (!w.parent["%_d%"]) break; } catch(e) { break; } w = w.parent; } } catch(e) {} return w;})();' +
+            'window.__SBRAND__p = (function() { try { return window.__SBRAND__t === window ? window : window.parent; } catch(e) { return window; } })();' +
+            'window.__SBRAND__dt = (function() { var i=0,w=window; try { while (w !== w.top) {i++;w=w.parent} } catch(e) {} return i; })();' +
+            'window.__SBRAND__ao = (function() { try { var a=Array.from(location.ancestorOrigins); return window.__SBRAND__dt > 0 ? a.slice(0, -window.__SBRAND__dt) : a; } catch(e) { return []; } })();\n')
         // fix iframing proxy issue.
         // we replace window.top comparisons with the most upper window that's still a proxied page
         .replace(

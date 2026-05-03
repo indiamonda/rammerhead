@@ -138,6 +138,7 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/embedded-styles.css', serveCached('embedded-styles.css', 'text/css'));
     proxyServer.GET('/manifest.json', serveCached('manifest.json', 'application/json'));
     proxyServer.GET('/bot-shield.js', serveCached('bot-shield.js', 'application/javascript'));
+    proxyServer.GET('/unblocker.html', serveCached('launcher.html', 'text/html'));
     // Devtools script: served under a generic CDN-shaped path only.
     // Brand-substituted so __SBRAND__ tokens become the active brand prefix.
     let _devtoolsCache = null;
