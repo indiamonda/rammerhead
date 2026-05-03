@@ -101,15 +101,13 @@ if (wreq) {
             headers,
             browser: BROWSER_PROFILE,
             redirect: 'manual',
-            // CRITICAL: Disable wreq-js's automatic decompression. We're acting as a
-            // proxy — the downstream pipeline (Hammerhead's `decodeContent` for
-            // processed resources, the browser itself for fonts/images/etc.)
-            // already knows how to handle Content-Encoding. If we let wreq-js
-            // decompress here, we'd forward decompressed bytes alongside the
-            // original `Content-Encoding: br|gzip|zstd` header, and the browser
-            // would try to decompress decompressed data → ERR_CONTENT_DECODING_FAILED
-            // or "Size of decompressed WOFF 2.0 is less than compressed size".
-            compress: false,
+            // Let wreq-js decompress response bodies (the default). We strip the
+            // Content-Encoding header below so downstream sees raw bytes.
+            // Hammerhead's decodeContent gracefully handles encoding='' (no-op),
+            // and our gzip middleware re-compresses text for the browser.
+            // This avoids the fragile compress:false path where the Rust layer
+            // may or may not actually skip decompression, leading to
+            // ERR_CONTENT_DECODING_FAILED / "WOFF 2.0 size" mismatches.
         };
         if (body && method !== 'GET' && method !== 'HEAD') {
             fetchOpts.body = body;
@@ -140,11 +138,11 @@ if (wreq) {
                 const resHeaders = headersObjFromWreq(wreqRes.headers);
                 let buf = Buffer.from(await wreqRes.arrayBuffer());
 
-                const ce = (resHeaders['content-encoding'] || '').toLowerCase();
-                if (ce === 'zstd' || ce.includes('zstd')) {
-                    delete resHeaders['content-encoding'];
-                    delete resHeaders['content-length'];
-                }
+                // wreq-js decompresses the body (compress defaults to true).
+                // Strip content-encoding so downstream doesn't try to decompress
+                // again. Content-length is also stale after decompression.
+                delete resHeaders['content-encoding'];
+                delete resHeaders['content-length'];
 
                 const fakeRes = new Readable({ read() {} });
                 fakeRes.statusCode = statusCode;
