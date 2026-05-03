@@ -1,7 +1,7 @@
 # Fly.io deployment configuration
 # Deploy with: fly launch (first time) or fly deploy (updates)
 
-app = "ulw"
+app = "ulw-app"
 
 [[vm]]
   size = "shared-cpu-1x"
