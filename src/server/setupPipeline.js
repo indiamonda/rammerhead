@@ -225,6 +225,45 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     const stream = require('stream');
     const StrShuffler = require('../util/StrShuffler');
 
+    // ── Cross-origin iframe embedding support ─────────────────────────────
+    // When the proxy UI is embedded in an <iframe> on another site, browsers
+    // block the frame if the response carries X-Frame-Options or restrictive
+    // CSP frame-ancestors. Wrap writeHead on EVERY response (routes + proxied)
+    // to remove blocking headers and add permissive ones. Also sets the
+    // Permissions-Policy with storage-access so browsers grant cookie/storage
+    // access inside the cross-origin frame.
+    proxyServer.addToOnRequestPipeline((req, res) => {
+        const _wh = res.writeHead;
+        res.writeHead = function (statusCode, statusMessage, headers) {
+            if (typeof statusMessage === 'object' && !headers) {
+                headers = statusMessage;
+                statusMessage = undefined;
+            }
+            if (headers && !Array.isArray(headers)) {
+                delete headers['x-frame-options'];
+                delete headers['X-Frame-Options'];
+                for (const k of Object.keys(headers)) {
+                    if (k.toLowerCase() === 'x-frame-options') delete headers[k];
+                }
+            } else if (Array.isArray(headers)) {
+                for (let i = headers.length - 2; i >= 0; i -= 2) {
+                    if (headers[i] && headers[i].toLowerCase() === 'x-frame-options') {
+                        headers.splice(i, 2);
+                    }
+                }
+            }
+            try {
+                res.removeHeader('x-frame-options');
+                res.removeHeader('X-Frame-Options');
+            } catch (_) {}
+            if (statusMessage) {
+                return _wh.call(this, statusCode, statusMessage, headers);
+            }
+            return _wh.call(this, statusCode, headers);
+        };
+        return false;
+    }, true);
+
     // ── PATH_STYLE prefix stripping ──────────────────────────────────────
     // When config.pathStyle is set (e.g. "cdn-cgi/p"), incoming requests arrive
     // as /cdn-cgi/p/<sessionId>/<dest>. Strip the prefix so Hammerhead and the

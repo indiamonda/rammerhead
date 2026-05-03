@@ -24,6 +24,30 @@
     <meta name="twitter:description" content="A focused learning workspace for students and educators - research, coursework, study sessions, and academic collaboration.">
     <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"EducationalOrganization","@id":"#org","name":"StudyBoard Learning Platform","alternateName":"StudyBoard","description":"StudyBoard is an interactive online learning workspace serving K-12 students, university learners, educators, and independent self-directed learners. The platform provides a unified browser-based dashboard for academic research, course material organization, study session management, and collaborative learning. Resources are curated to support standards-aligned curricula, foundational skills, advanced topics, and lifelong learning goals.","educationalCredentialAwarded":"Independent learning progress","areaServed":"Worldwide","audience":[{"@type":"EducationalAudience","educationalRole":"Student"},{"@type":"EducationalAudience","educationalRole":"Teacher"},{"@type":"EducationalAudience","educationalRole":"Parent"},{"@type":"EducationalAudience","educationalRole":"Self-directed learner"}],"educationalLevel":["Primary education","Secondary education","Higher education","Continuing education","Adult education"],"knowsAbout":["Mathematics","Science","Reading and Literacy","Writing","Social Studies","World Languages","Computer Science","Digital Literacy","Research Skills","Study Skills","Critical Thinking","Test Preparation"]},{"@type":"WebApplication","name":"StudyBoard Learning Workspace","applicationCategory":"EducationalApplication","applicationSubCategory":"Learning Management / Study Tools","operatingSystem":"Web Browser","browserRequirements":"Requires modern web browser with JavaScript enabled","educationalUse":["assignment","assessment","group work","independent study","reference","textbook","tutorial"],"learningResourceType":["interactive resource","reference material","study guide","worksheet"],"isFamilyFriendly":true,"isAccessibleForFree":true,"description":"Browser-based study workspace that consolidates a learner's research, coursework, bookmarks, and history into a single calm interface designed to reduce context-switching and improve study focus."},{"@type":"LearningResource","name":"StudyBoard Learning Dashboard","educationalUse":"Self-paced study","interactivityType":"active","learningResourceType":"InteractiveResource","typicalAgeRange":"5-99","inLanguage":"en"}]}</script>
     <script>
+        (function(){
+            var _ok=true;
+            try{var _t=localStorage;_t.setItem('__test','1');_t.removeItem('__test')}catch(e){_ok=false}
+            if(!_ok){
+                var _mk=function(){
+                    var m={},s={};
+                    s.getItem=function(k){return m.hasOwnProperty(k)?m[k]:null};
+                    s.setItem=function(k,v){m[k]=String(v)};
+                    s.removeItem=function(k){delete m[k]};
+                    s.clear=function(){m={}};
+                    s.key=function(i){return Object.keys(m)[i]||null};
+                    Object.defineProperty(s,'length',{get:function(){return Object.keys(m).length}});
+                    return s;
+                };
+                try{Object.defineProperty(window,'localStorage',{value:_mk(),configurable:true,writable:true})}catch(e){window.localStorage=_mk()}
+                try{Object.defineProperty(window,'sessionStorage',{value:_mk(),configurable:true,writable:true})}catch(e){window.sessionStorage=_mk()}
+                var _cm={};
+                try{Object.defineProperty(document,'cookie',{
+                    get:function(){var p=[];for(var k in _cm)p.push(k+'='+_cm[k]);return p.join('; ')},
+                    set:function(s){if(!s)return;var eq=s.indexOf('=');if(eq<0)return;var n=s.substring(0,eq).trim();var rest=s.substring(eq+1);var sc=rest.indexOf(';');var v=sc>=0?rest.substring(0,sc):rest;if(/expires\s*=.*1970|max-age\s*=\s*0/i.test(s)){delete _cm[n]}else{_cm[n]=v}},
+                    configurable:true
+                })}catch(e){}
+            }
+        })();
         (function(){var t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();
         (function(){try{var ab=localStorage.getItem('adBlockerEnabled');if(ab===null){ab='1';localStorage.setItem('adBlockerEnabled','1')}document.cookie='__SBRAND__b='+(ab==='0'?'0':'1')+'; Path=/; Max-Age=31536000; SameSite=Lax'}catch(e){}})();
         var _=atob;function _t(s){var r='';for(var i=0;i<s.length;i++){r+=s.charAt(i);if(i<s.length-1&&Math.random()>.4){var c='',l=1+(Math.random()*2|0);for(var j=0;j<l;j++)c+=String.fromCharCode(97+(Math.random()*26|0));r+='<s style="font-size:0;position:absolute;opacity:0;pointer-events:none;user-select:none">'+c+'</s>'}}return r}
