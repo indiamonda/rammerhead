@@ -25,27 +25,60 @@
     <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"EducationalOrganization","@id":"#org","name":"StudyBoard Learning Platform","alternateName":"StudyBoard","description":"StudyBoard is an interactive online learning workspace serving K-12 students, university learners, educators, and independent self-directed learners. The platform provides a unified browser-based dashboard for academic research, course material organization, study session management, and collaborative learning. Resources are curated to support standards-aligned curricula, foundational skills, advanced topics, and lifelong learning goals.","educationalCredentialAwarded":"Independent learning progress","areaServed":"Worldwide","audience":[{"@type":"EducationalAudience","educationalRole":"Student"},{"@type":"EducationalAudience","educationalRole":"Teacher"},{"@type":"EducationalAudience","educationalRole":"Parent"},{"@type":"EducationalAudience","educationalRole":"Self-directed learner"}],"educationalLevel":["Primary education","Secondary education","Higher education","Continuing education","Adult education"],"knowsAbout":["Mathematics","Science","Reading and Literacy","Writing","Social Studies","World Languages","Computer Science","Digital Literacy","Research Skills","Study Skills","Critical Thinking","Test Preparation"]},{"@type":"WebApplication","name":"StudyBoard Learning Workspace","applicationCategory":"EducationalApplication","applicationSubCategory":"Learning Management / Study Tools","operatingSystem":"Web Browser","browserRequirements":"Requires modern web browser with JavaScript enabled","educationalUse":["assignment","assessment","group work","independent study","reference","textbook","tutorial"],"learningResourceType":["interactive resource","reference material","study guide","worksheet"],"isFamilyFriendly":true,"isAccessibleForFree":true,"description":"Browser-based study workspace that consolidates a learner's research, coursework, bookmarks, and history into a single calm interface designed to reduce context-switching and improve study focus."},{"@type":"LearningResource","name":"StudyBoard Learning Dashboard","educationalUse":"Self-paced study","interactivityType":"active","learningResourceType":"InteractiveResource","typicalAgeRange":"5-99","inLanguage":"en"}]}</script>
     <script>
         (function(){
+            var _inFrame=false;
+            try{_inFrame=window!==window.top}catch(e){_inFrame=true}
+            if(_inFrame&&document.requestStorageAccess){
+                document.requestStorageAccess().then(function(){
+                    try{var _t=localStorage;_t.setItem('__test','1');_t.removeItem('__test');window.__sbStorageOK=true}catch(e){}
+                }).catch(function(){})
+            }
             var _ok=true;
             try{var _t=localStorage;_t.setItem('__test','1');_t.removeItem('__test')}catch(e){_ok=false}
             if(!_ok){
-                var _mk=function(){
+                var _parent=null;
+                if(_inFrame){try{_parent=window.parent}catch(e){}}
+                var _pending={};
+                if(_parent){
+                    window.addEventListener('message',function(e){
+                        if(!e.data||e.data.type!=='sb:storage:val')return;
+                        var k=e.data.key,cb=_pending[k];
+                        if(cb){delete _pending[k];cb(e.data.value)}
+                    })
+                }
+                var _mk=function(relay){
                     var m={},s={};
                     s.getItem=function(k){return m.hasOwnProperty(k)?m[k]:null};
-                    s.setItem=function(k,v){m[k]=String(v)};
-                    s.removeItem=function(k){delete m[k]};
+                    s.setItem=function(k,v){
+                        m[k]=String(v);
+                        if(relay&&_parent){try{_parent.postMessage({type:'sb:storage:set',key:k,value:String(v)},'*')}catch(e){}}
+                    };
+                    s.removeItem=function(k){
+                        delete m[k];
+                        if(relay&&_parent){try{_parent.postMessage({type:'sb:storage:remove',key:k},'*')}catch(e){}}
+                    };
                     s.clear=function(){m={}};
                     s.key=function(i){return Object.keys(m)[i]||null};
                     Object.defineProperty(s,'length',{get:function(){return Object.keys(m).length}});
+                    s._load=function(k,cb){
+                        if(!_parent)return cb(null);
+                        _pending[k]=cb;
+                        try{_parent.postMessage({type:'sb:storage:get',key:k},'*')}catch(e){cb(null)}
+                    };
                     return s;
                 };
-                try{Object.defineProperty(window,'localStorage',{value:_mk(),configurable:true,writable:true})}catch(e){window.localStorage=_mk()}
-                try{Object.defineProperty(window,'sessionStorage',{value:_mk(),configurable:true,writable:true})}catch(e){window.sessionStorage=_mk()}
+                var _ls=_mk(true),_ss=_mk(false);
+                try{Object.defineProperty(window,'localStorage',{value:_ls,configurable:true,writable:true})}catch(e){window.localStorage=_ls}
+                try{Object.defineProperty(window,'sessionStorage',{value:_ss,configurable:true,writable:true})}catch(e){window.sessionStorage=_ss}
                 var _cm={};
                 try{Object.defineProperty(document,'cookie',{
                     get:function(){var p=[];for(var k in _cm)p.push(k+'='+_cm[k]);return p.join('; ')},
                     set:function(s){if(!s)return;var eq=s.indexOf('=');if(eq<0)return;var n=s.substring(0,eq).trim();var rest=s.substring(eq+1);var sc=rest.indexOf(';');var v=sc>=0?rest.substring(0,sc):rest;if(/expires\s*=.*1970|max-age\s*=\s*0/i.test(s)){delete _cm[n]}else{_cm[n]=v}},
                     configurable:true
                 })}catch(e){}
+                if(_parent&&_ls._load){
+                    _ls._load('theme',function(v){if(v!==null){_ls.setItem('theme',v)}});
+                    _ls._load('adBlockerEnabled',function(v){if(v!==null){_ls.setItem('adBlockerEnabled',v)}})
+                }
             }
         })();
         (function(){var t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();

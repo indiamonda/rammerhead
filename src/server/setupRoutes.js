@@ -139,6 +139,51 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/manifest.json', serveCached('manifest.json', 'application/json'));
     proxyServer.GET('/bot-shield.js', serveCached('bot-shield.js', 'application/javascript'));
     proxyServer.GET('/unblocker.html', serveCached('launcher.html', 'text/html'));
+
+    // Embed helper: parent-page script with postMessage relay + recommended <iframe> snippet
+    let _embedHelperCache = null;
+    proxyServer.GET('/embed-helper.js', (req, res) => {
+        if (!_embedHelperCache) {
+            _embedHelperCache = [
+                '/*',
+                ' * StudyBoard Embed Helper',
+                ' *',
+                ' * RECOMMENDED IFRAME TAG for your parent page:',
+                ' *',
+                ' *   <iframe',
+                ' *     id="sb-frame"',
+                ' *     src="https://YOUR-PROXY-DOMAIN.example.com"',
+                ' *     allow="storage-access; clipboard-read; clipboard-write; fullscreen; autoplay"',
+                ' *     sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-downloads"',
+                ' *     style="width:100%;height:100%;border:none"',
+                ' *   ></iframe>',
+                ' *',
+                ' * Include this script on your PARENT page (not inside the iframe).',
+                ' * It provides a postMessage storage relay so the iframe can persist',
+                ' * localStorage data through the parent when cross-origin storage is blocked.',
+                ' */',
+                '(function(){',
+                '  window.addEventListener("message",function(e){',
+                '    if(!e.data||typeof e.data.type!=="string")return;',
+                '    if(e.data.type==="sb:storage:set"){',
+                '      try{localStorage.setItem("sb:"+e.data.key,e.data.value)}catch(x){}',
+                '    }else if(e.data.type==="sb:storage:get"){',
+                '      var v=null;try{v=localStorage.getItem("sb:"+e.data.key)}catch(x){}',
+                '      if(e.source)try{e.source.postMessage({type:"sb:storage:val",key:e.data.key,value:v},"*")}catch(x){}',
+                '    }else if(e.data.type==="sb:storage:remove"){',
+                '      try{localStorage.removeItem("sb:"+e.data.key)}catch(x){}',
+                '    }',
+                '  });',
+                '})();',
+            ].join('\n');
+        }
+        res.writeHead(200, {
+            'Content-Type': 'application/javascript; charset=utf-8',
+            'Cache-Control': 'public, max-age=86400'
+        });
+        res.end(_embedHelperCache);
+    });
+
     // Devtools script: served under a generic CDN-shaped path only.
     // Brand-substituted so __SBRAND__ tokens become the active brand prefix.
     let _devtoolsCache = null;

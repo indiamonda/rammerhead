@@ -243,15 +243,19 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
                 headers = statusMessage;
                 statusMessage = undefined;
             }
+            const STRIP_HEADERS = ['x-frame-options', 'cross-origin-embedder-policy'];
             if (headers && !Array.isArray(headers)) {
                 delete headers['x-frame-options'];
                 delete headers['X-Frame-Options'];
+                delete headers['cross-origin-embedder-policy'];
+                delete headers['Cross-Origin-Embedder-Policy'];
                 for (const k of Object.keys(headers)) {
-                    if (k.toLowerCase() === 'x-frame-options') delete headers[k];
+                    const kl = k.toLowerCase();
+                    if (STRIP_HEADERS.includes(kl)) delete headers[k];
                 }
             } else if (Array.isArray(headers)) {
                 for (let i = headers.length - 2; i >= 0; i -= 2) {
-                    if (headers[i] && headers[i].toLowerCase() === 'x-frame-options') {
+                    if (headers[i] && STRIP_HEADERS.includes(headers[i].toLowerCase())) {
                         headers.splice(i, 2);
                     }
                 }
@@ -259,6 +263,12 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             try {
                 res.removeHeader('x-frame-options');
                 res.removeHeader('X-Frame-Options');
+                res.removeHeader('cross-origin-embedder-policy');
+                res.removeHeader('cross-origin-opener-policy');
+            } catch (_) {}
+            try {
+                res.setHeader('Permissions-Policy', 'storage-access=*, interest-cohort=()');
+                res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
             } catch (_) {}
             if (statusMessage) {
                 return _wh.call(this, statusCode, statusMessage, headers);
@@ -617,7 +627,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Match all known proxy-internal paths (both renamed `/_a/...` and legacy
     // `/__rh_*` / `/hammerhead.js` etc.) so the rescue mechanism doesn't try to
     // proxy them to the destination.
-    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getresourceurl|generatelink|buildwebfiles|health|debug-status|syncLocalStorage|api\/shuffleDict|__rh_|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__rh_devtools\.js|launcher\.html|unblocker\.html|bot-shield\.js|logo\.png|[a-f0-9]{32}[\/?!])/i;
+    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getresourceurl|generatelink|buildwebfiles|health|debug-status|syncLocalStorage|api\/shuffleDict|__rh_|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__rh_devtools\.js|launcher\.html|unblocker\.html|bot-shield\.js|embed-helper\.js|logo\.png|[a-f0-9]{32}[\/?!])/i;
 
     function _extractOriginFromReferer(referer) {
         const sessionId = getSessionId(referer);
