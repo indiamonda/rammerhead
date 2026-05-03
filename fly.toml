@@ -1,8 +1,8 @@
 # Fly.io deployment configuration
 # Deploy with: fly launch (first time) or fly deploy (updates)
-# App name must match your Fly app (e.g. studyboard.fly.dev -> app = "studyboard")
+# App name must match your Fly app (e.g. rammerhead.fly.dev -> app = "rammerhead")
 
-app = "studyboard"
+app = "rammerhead"
 
 [[vm]]
   size = "shared-cpu-1x"
@@ -24,7 +24,7 @@ primary_region = "sjc"
 #
 # One-time setup (per Fly region/machine). Volumes MUST be created in the
 # same region as the machine that will mount them -- check with
-# `fly machines list -a studyboard` and use that region below:
+# `fly machines list -a rammerhead` and use that region below:
 #   fly volumes create data --region <region> --size 1
 # After the volume exists, `fly deploy` will auto-attach it on the next
 # machine boot. If you scale to multiple machines in the same region you
