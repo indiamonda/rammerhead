@@ -219,8 +219,9 @@
             // their own, but combined with the `/<32-hex>/<url>` URL
             // pattern they form a recognizable session-proxy fingerprint.
             const _E = {
-                ensure:   _('L2Vuc3VyZXNlc3Npb24='),
-                resource: _('L2dldHJlc291cmNldXJs'),
+                ensure:   _('L19hL2Vz'),
+                resource: _('L19hL3J1'),
+                genLink:  _('L19hL2ds'),
                 pmDict:   _('L19hL3Nk'),
                 sources:  _('L19hL3Ny'),
                 console:  _('L19hL2Ns'),
@@ -4142,7 +4143,7 @@
                     if (!url) return;
                     const normalized = normalizeUrl(url);
                     try {
-                        const response = await fetch(`${basePath}/generatelink?url=${encodeURIComponent(normalized)}`);
+                        const response = await fetch(`${basePath}${_E.genLink || '/_a/gl'}?url=${encodeURIComponent(normalized)}`);
                         const data = await response.json();
                         if (data.url) {
                             const linkResult = contentElement.querySelector('#newtab-link-result');

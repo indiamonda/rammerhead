@@ -225,6 +225,29 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     const stream = require('stream');
     const StrShuffler = require('../util/StrShuffler');
 
+    // ── PATH_STYLE prefix stripping ──────────────────────────────────────
+    // When config.pathStyle is set (e.g. "cdn-cgi/p"), incoming requests arrive
+    // as /cdn-cgi/p/<sessionId>/<dest>. Strip the prefix so Hammerhead and the
+    // rest of the pipeline see the canonical /<sessionId>/<dest> form.
+    const _ps = (config.pathStyle || '').replace(/^\/+|\/+$/g, '');
+    if (_ps) {
+        const _psPrefix = '/' + _ps + '/';
+        const _psPrefixLen = _psPrefix.length;
+        proxyServer.addToOnRequestPipeline((req) => {
+            if (req.url && req.url.startsWith(_psPrefix)) {
+                req.url = '/' + req.url.slice(_psPrefixLen);
+            }
+            return false;
+        }, true);
+        // Also strip on WebSocket upgrade requests
+        proxyServer.addToOnUpgradePipeline((req) => {
+            if (req.url && req.url.startsWith(_psPrefix)) {
+                req.url = '/' + req.url.slice(_psPrefixLen);
+            }
+            return false;
+        }, true);
+    }
+
     // Extract the real destination URL from a proxied request. Handles unshuffled
     // (`/<sid>/https://...`) and shuffled (`/<sid>!a!1!s*host/_rhs...`) URL forms.
     // Returns null when the URL can't be mapped to a destination.
@@ -436,7 +459,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
     // Match all known proxy-internal paths (both renamed `/_a/...` and legacy
     // `/__rh_*` / `/hammerhead.js` etc.) so the rescue mechanism doesn't try to
     // proxy them to the destination.
-    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getresourceurl|generatelink|health|debug-status|syncLocalStorage|api\/shuffleDict|__rh_|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__rh_devtools\.js|[a-f0-9]{32}[\/?!])/i;
+    const KNOWN_ROUTE_RE = /^\/(newsession|editsession|deletesession|sessionexists|mainport|needpassword|ensuresession|getresourceurl|generatelink|buildwebfiles|health|debug-status|syncLocalStorage|api\/shuffleDict|__rh_|_a\/|embedded-styles\.css|styles\.css|style\.css|favicon|manifest\.json|hammerhead\.js|rammerhead\.js|task\.js|iframe-task\.js|transport-worker\.js|worker-hammerhead\.js|messaging|__rh_devtools\.js|[a-f0-9]{32}[\/?!])/i;
 
     function _extractOriginFromReferer(referer) {
         const sessionId = getSessionId(referer);

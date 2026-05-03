@@ -748,11 +748,6 @@ function injectBrowserLikeHeaders(req, isRoute, sessionStore) {
     }
 
     _reorderHeaders(req.headers, isDoc ? CHROME_DOC_ORDER : CHROME_SUB_ORDER);
-    
-    if (req.url && (req.url.includes('chatgpt.com') || req.url.includes('openai.com'))) {
-        console.log('[UPSTREAM_REQ]', req.url);
-        console.log(req.headers);
-    }
 }
 
 module.exports = {
