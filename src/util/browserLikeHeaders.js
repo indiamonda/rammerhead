@@ -172,6 +172,9 @@ const CDN_REFERER_MAP = [
     [/\.?bytegoofy\.com$/i, 'https://www.douyin.com'],
     [/\.?tiktok\.com$/i, 'https://www.tiktok.com'],
     [/\.?tiktokcdn\.com$/i, 'https://www.tiktok.com'],
+    [/\.?tiktokcdn-us\.com$/i, 'https://www.tiktok.com'],
+    [/\.?tiktokv\.com$/i, 'https://www.tiktok.com'],
+    [/\.?byteoversea\.com$/i, 'https://www.tiktok.com'],
     [/\.?musical\.ly$/i, 'https://www.tiktok.com'],
     // Bilibili
     [/\.?bilibili\.com$/i, 'https://www.bilibili.com'],
@@ -411,7 +414,7 @@ function getRefererOriginFallback(url, referer) {
     if (/poki-cdn|poki\.com/.test(combined)) return 'https://poki.com';
     if (/googlevideo|ytimg|ggpht|youtube\.com/.test(combined)) return 'https://www.youtube.com';
     if (/douyin|byteimg|bytecdn|iesdouyin/.test(combined)) return 'https://www.douyin.com';
-    if (/tiktok|tiktokcdn|musical\.ly/.test(combined)) return 'https://www.tiktok.com';
+    if (/tiktok|tiktokcdn|tiktokv|byteoversea|musical\.ly/.test(combined)) return 'https://www.tiktok.com';
     if (/discord|discordapp/.test(combined)) return 'https://discord.com';
     if (/twitch|twitchcdn/.test(combined)) return 'https://www.twitch.tv';
     if (/reddit|redditstatic|redditmedia/.test(combined)) return 'https://www.reddit.com';

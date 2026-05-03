@@ -1,12 +1,14 @@
 const http = require('http');
 const https = require('https');
 const zlib = require('zlib');
+const WebSocket = require('ws');
 const config = require('../config');
 const getSessionId = require('../util/getSessionId');
 const { injectBrowserLikeHeaders } = require('../util/browserLikeHeaders');
 const sessionAffinity = require('../util/sessionAffinity');
 const adBlocker = require('../util/adBlocker');
 const { NEW_PATHS, OLD_PATHS, PROXY_PATHS } = require('../util/patchServiceRoutes');
+const StrShuffler = require('../util/StrShuffler');
 const fs = require('fs');
 const path = require('path');
 
@@ -25,10 +27,12 @@ const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFreeSoc
 
 const COMPRESSIBLE_RE = /text|javascript|json|xml|svg|css|html/i;
 const BINARY_RE = /font|woff|image|audio|video|octet-stream|wasm|zip|gzip|pdf|protobuf/i;
+const BINARY_URL_RE = /\.(?:woff2?|ttf|otf|eot|png|jpe?g|gif|webp|avif|ico|mp[34]|m4[asv]|webm|ogg|wav|flac|aac|opus|m3u8|ts|mpd|mkv|avi|mov|flv|f4v|wasm|zip|gz|br|bz2|tar|rar|7z|pdf|swf)(?:\?|$)/i;
 function compressAndSend(req, res, statusCode, headers, body) {
     const ae = (req.headers['accept-encoding'] || '').toLowerCase();
     const ct = headers['Content-Type'] || headers['content-type'] || '';
-    if (ae.includes('gzip') && COMPRESSIBLE_RE.test(ct) && !BINARY_RE.test(ct) && body.length > 1024) {
+    const ce = headers['Content-Encoding'] || headers['content-encoding'] || '';
+    if (!ce && ae.includes('gzip') && COMPRESSIBLE_RE.test(ct) && !BINARY_RE.test(ct) && body.length > 1024) {
         body = zlib.gzipSync(body, { level: 6 });
         headers['Content-Encoding'] = 'gzip';
         headers['Vary'] = 'Accept-Encoding';
@@ -287,6 +291,110 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         }, true);
     }
 
+    // WebSocket proxy: handle proxied WS upgrades directly using the `ws` library
+    // instead of hammerhead's raw-socket 101 approach, which breaks on Fly.io because
+    // Fly's hyper proxy rejects the hand-written HTTP/1.1 101 status line.
+    const _wsProxyServer = new WebSocket.Server({ noServer: true });
+    const _WS_DEST_RE = /^\/([a-f0-9]{32})(?:![^/]*)*\/(.+)$/i;
+
+    function _extractWsDest(url, sessionId) {
+        if (!url) return null;
+        const m = url.match(_WS_DEST_RE);
+        if (!m) return null;
+        let dest = m[2];
+        if (sessionId) {
+            const session = sessionStore.get(sessionId);
+            if (session?.shuffleDict && StrShuffler.isShuffled(dest)) {
+                try {
+                    const shuffler = new StrShuffler(session.shuffleDict);
+                    dest = shuffler.unshuffle(dest);
+                } catch (_) {}
+            }
+        }
+        if (!/^wss?:\/\//i.test(dest)) return null;
+        return dest;
+    }
+
+    proxyServer.addToOnUpgradePipeline((req, socket, head) => {
+        const sessionId = getSessionId(req.url);
+        if (!sessionId) return false;
+
+        const destUrl = _extractWsDest(req.url, sessionId);
+        if (!destUrl) return false;
+
+        if (sessionStore.has(sessionId) && !proxyServer.openSessions.get(sessionId)) {
+            try {
+                const session = sessionStore.get(sessionId);
+                if (session && typeof session.serializeSession === 'function') {
+                    proxyServer.openSessions.addSerializedSession(sessionId, session.serializeSession());
+                }
+            } catch (_) {}
+        }
+
+        const fwdHeaders = {};
+        const skipHeaders = new Set([
+            'host', 'upgrade', 'connection', 'sec-websocket-version',
+            'sec-websocket-key', 'sec-websocket-extensions',
+            'x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-host',
+            'fly-client-ip', 'fly-forwarded-port', 'fly-region',
+            'fly-request-id', 'via', 'cf-connecting-ip', 'cf-ray',
+        ]);
+        for (const [k, v] of Object.entries(req.headers)) {
+            if (!skipHeaders.has(k.toLowerCase())) fwdHeaders[k] = v;
+        }
+
+        const destWs = new WebSocket(destUrl, {
+            headers: fwdHeaders,
+            rejectUnauthorized: false,
+            followRedirects: true,
+            maxPayload: 200 * 1024 * 1024,
+        });
+
+        destWs.on('unexpected-response', (_clientReq, destRes) => {
+            const statusLine = `HTTP/1.1 ${destRes.statusCode} ${destRes.statusMessage || ''}`;
+            const lines = [statusLine];
+            const rawH = destRes.rawHeaders;
+            for (let i = 0; i < rawH.length; i += 2) lines.push(`${rawH[i]}: ${rawH[i + 1]}`);
+            lines.push('', '');
+            socket.write(lines.join('\r\n'));
+            destRes.pipe(socket);
+        });
+
+        destWs.on('error', (err) => {
+            process.stderr.write(`[WS-PROXY] dest error ${destUrl.substring(0, 80)}: ${err.message}\n`);
+            try { socket.destroy(); } catch (_) {}
+        });
+
+        destWs.on('open', () => {
+            _wsProxyServer.handleUpgrade(req, socket, head, (clientWs) => {
+                clientWs.on('message', (data, isBinary) => {
+                    if (destWs.readyState === WebSocket.OPEN) {
+                        destWs.send(data, { binary: isBinary });
+                    }
+                });
+                destWs.on('message', (data, isBinary) => {
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.send(data, { binary: isBinary });
+                    }
+                });
+                clientWs.on('close', (code, reason) => {
+                    try { destWs.close(code, reason); } catch (_) {}
+                });
+                destWs.on('close', (code, reason) => {
+                    try { clientWs.close(code, reason); } catch (_) {}
+                });
+                clientWs.on('error', () => { try { destWs.close(); } catch (_) {} });
+                destWs.on('error', () => { try { clientWs.close(); } catch (_) {} });
+                clientWs.on('ping', (data) => { try { destWs.ping(data); } catch (_) {} });
+                destWs.on('ping', (data) => { try { clientWs.ping(data); } catch (_) {} });
+                clientWs.on('pong', (data) => { try { destWs.pong(data); } catch (_) {} });
+                destWs.on('pong', (data) => { try { clientWs.pong(data); } catch (_) {} });
+            });
+        });
+
+        return true;
+    }, true);
+
     // Extract the real destination URL from a proxied request. Handles unshuffled
     // (`/<sid>/https://...`) and shuffled (`/<sid>!a!1!s*host/_rhs...`) URL forms.
     // Returns null when the URL can't be mapped to a destination.
@@ -400,6 +508,8 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         if (!ae.includes('gzip')) return false;
         const accept = (req.headers['accept'] || '').toLowerCase();
         if (accept.includes('text/event-stream')) return false;
+        const reqUrl = req.url || '';
+        if (BINARY_URL_RE.test(reqUrl)) return false;
 
         const origWriteHead = res.writeHead;
         const origWrite = res.write;
@@ -407,6 +517,15 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         let gzStream = null;
         let decided = false;
         let shouldCompress = false;
+
+        function _shouldCompressCT(ct, ce) {
+            if (ce) return false;
+            if (!ct) return false;
+            if (BINARY_RE.test(ct)) return false;
+            if (!COMPRESSIBLE_RE.test(ct)) return false;
+            if (ct.includes('event-stream')) return false;
+            return true;
+        }
 
         res.writeHead = function (code, reasonOrHeaders, maybeHeaders) {
             let headers = maybeHeaders || (typeof reasonOrHeaders === 'object' ? reasonOrHeaders : undefined);
@@ -439,7 +558,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             decided = true;
             const ce = findHeader('content-encoding');
             const ct = (findHeader('content-type') || '').toLowerCase();
-            shouldCompress = !ce && COMPRESSIBLE_RE.test(ct) && !ct.includes('event-stream') && !BINARY_RE.test(ct);
+            shouldCompress = _shouldCompressCT(ct, ce);
 
             if (shouldCompress) {
                 setHeader('Content-Encoding', 'gzip');
@@ -461,7 +580,7 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
             decided = true;
             const ct = (res.getHeader && res.getHeader('content-type') || '').toLowerCase();
             const ce = res.getHeader && res.getHeader('content-encoding');
-            if (!ce && COMPRESSIBLE_RE.test(ct) && !ct.includes('event-stream') && !BINARY_RE.test(ct)) {
+            if (_shouldCompressCT(ct, ce)) {
                 shouldCompress = true;
                 res.setHeader('content-encoding', 'gzip');
                 res.setHeader('vary', 'Accept-Encoding');

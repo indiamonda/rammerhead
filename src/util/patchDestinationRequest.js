@@ -51,6 +51,8 @@ if (wreq) {
         return `${proto}//${host}${path}`;
     }
 
+    const SAFE_ACCEPT_ENCODING = 'gzip, deflate, br';
+
     function buildWreqHeaders(opts) {
         const headers = {};
         const raw = opts.headers || (opts.prepare ? opts.prepare().headers : null) || {};
@@ -58,7 +60,14 @@ if (wreq) {
             if (v === undefined || v === null) continue;
             const lower = k.toLowerCase();
             if (lower === 'host') continue;
+            if (lower === 'accept-encoding') {
+                headers[k] = SAFE_ACCEPT_ENCODING;
+                continue;
+            }
             headers[k] = String(v);
+        }
+        if (!headers['accept-encoding'] && !headers['Accept-Encoding']) {
+            headers['accept-encoding'] = SAFE_ACCEPT_ENCODING;
         }
         return headers;
     }
@@ -129,7 +138,13 @@ if (wreq) {
 
                 const statusCode = wreqRes.status;
                 const resHeaders = headersObjFromWreq(wreqRes.headers);
-                const buf = Buffer.from(await wreqRes.arrayBuffer());
+                let buf = Buffer.from(await wreqRes.arrayBuffer());
+
+                const ce = (resHeaders['content-encoding'] || '').toLowerCase();
+                if (ce === 'zstd' || ce.includes('zstd')) {
+                    delete resHeaders['content-encoding'];
+                    delete resHeaders['content-length'];
+                }
 
                 const fakeRes = new Readable({ read() {} });
                 fakeRes.statusCode = statusCode;

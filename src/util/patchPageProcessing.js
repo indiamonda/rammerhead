@@ -618,6 +618,8 @@ const LITE_DOMAINS_EXACT = new Set([
     'deepseek.com',
     'jmail.world',
     'mk48.io',
+    'tiktok.com',
+    'www.tiktok.com',
 ]);
 const LITE_DOMAINS_SUFFIX = [
     '.chatgpt.com',
@@ -664,6 +666,11 @@ const LITE_DOMAINS_SUFFIX = [
     '.deepseek.ai',
     '.jmail.world',
     '.mk48.io',
+    '.tiktok.com',
+    '.tiktokcdn.com',
+    '.tiktokcdn-us.com',
+    '.tiktokv.com',
+    '.byteoversea.com',
 ];
 function _needsLiteProcessing(ctx) {
     if (!ctx || !ctx.dest) return false;
