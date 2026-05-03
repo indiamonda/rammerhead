@@ -86,10 +86,12 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         }
         return out;
     }
+    const _BR = config.brand + '_';
+    const _brandSub = (s) => s.replace(/__SBRAND__/g, _BR);
     function _serveSanitizedUI(res, contents) {
         if (!_kwSanitizedUI) {
-            try { _kwSanitizedUI = _sanitizeUIKeywords(contents.toString('utf8')); }
-            catch (_) { _kwSanitizedUI = contents.toString('utf8'); }
+            try { _kwSanitizedUI = _brandSub(_sanitizeUIKeywords(contents.toString('utf8'))); }
+            catch (_) { _kwSanitizedUI = _brandSub(contents.toString('utf8')); }
         }
         res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
         res.end(_kwSanitizedUI);
@@ -137,7 +139,38 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/manifest.json', serveCached('manifest.json', 'application/json'));
     proxyServer.GET('/bot-shield.js', serveCached('bot-shield.js', 'application/javascript'));
     // Devtools script: served under a generic CDN-shaped path only.
-    proxyServer.GET(PROXY_PATHS.devtoolsJs, serveCached('devtools.js', 'application/javascript'));
+    // Brand-substituted so __SBRAND__ tokens become the active brand prefix.
+    let _devtoolsCache = null;
+    proxyServer.GET(PROXY_PATHS.devtoolsJs, (req, res) => {
+        try {
+            if (!_devtoolsCache) {
+                const fp = path.join(config.publicDir, 'devtools.js');
+                _devtoolsCache = _brandSub(fs.readFileSync(fp, 'utf8'));
+            }
+            const ae = (req.headers['accept-encoding'] || '').toLowerCase();
+            const body = Buffer.from(_devtoolsCache, 'utf8');
+            if (ae.includes('gzip') && body.length > 512) {
+                const gz = zlib.gzipSync(body, { level: 6 });
+                res.writeHead(200, {
+                    'Content-Type': 'application/javascript',
+                    'Content-Encoding': 'gzip',
+                    'Content-Length': gz.length,
+                    'Cache-Control': DEV ? 'no-cache' : 'public, max-age=3600',
+                    'Vary': 'Accept-Encoding',
+                });
+                res.end(gz);
+            } else {
+                res.writeHead(200, {
+                    'Content-Type': 'application/javascript',
+                    'Content-Length': body.length,
+                    'Cache-Control': DEV ? 'no-cache' : 'public, max-age=3600',
+                });
+                res.end(body);
+            }
+        } catch (e) {
+            sendErrorPage(req, res, 500, { detail: e && e.message });
+        }
+    });
 
     // Lightweight health check for Fly.io/Render (avoids loading full index.html)
     proxyServer.GET('/health', (req, res) => {

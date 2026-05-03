@@ -25,7 +25,7 @@
     <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"EducationalOrganization","@id":"#org","name":"StudyBoard Learning Platform","alternateName":"StudyBoard","description":"StudyBoard is an interactive online learning workspace serving K-12 students, university learners, educators, and independent self-directed learners. The platform provides a unified browser-based dashboard for academic research, course material organization, study session management, and collaborative learning. Resources are curated to support standards-aligned curricula, foundational skills, advanced topics, and lifelong learning goals.","educationalCredentialAwarded":"Independent learning progress","areaServed":"Worldwide","audience":[{"@type":"EducationalAudience","educationalRole":"Student"},{"@type":"EducationalAudience","educationalRole":"Teacher"},{"@type":"EducationalAudience","educationalRole":"Parent"},{"@type":"EducationalAudience","educationalRole":"Self-directed learner"}],"educationalLevel":["Primary education","Secondary education","Higher education","Continuing education","Adult education"],"knowsAbout":["Mathematics","Science","Reading and Literacy","Writing","Social Studies","World Languages","Computer Science","Digital Literacy","Research Skills","Study Skills","Critical Thinking","Test Preparation"]},{"@type":"WebApplication","name":"StudyBoard Learning Workspace","applicationCategory":"EducationalApplication","applicationSubCategory":"Learning Management / Study Tools","operatingSystem":"Web Browser","browserRequirements":"Requires modern web browser with JavaScript enabled","educationalUse":["assignment","assessment","group work","independent study","reference","textbook","tutorial"],"learningResourceType":["interactive resource","reference material","study guide","worksheet"],"isFamilyFriendly":true,"isAccessibleForFree":true,"description":"Browser-based study workspace that consolidates a learner's research, coursework, bookmarks, and history into a single calm interface designed to reduce context-switching and improve study focus."},{"@type":"LearningResource","name":"StudyBoard Learning Dashboard","educationalUse":"Self-paced study","interactivityType":"active","learningResourceType":"InteractiveResource","typicalAgeRange":"5-99","inLanguage":"en"}]}</script>
     <script>
         (function(){var t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();
-        (function(){try{var ab=localStorage.getItem('adBlockerEnabled');if(ab===null){ab='1';localStorage.setItem('adBlockerEnabled','1')}document.cookie='_a_b='+(ab==='0'?'0':'1')+'; Path=/; Max-Age=31536000; SameSite=Lax'}catch(e){}})();
+        (function(){try{var ab=localStorage.getItem('adBlockerEnabled');if(ab===null){ab='1';localStorage.setItem('adBlockerEnabled','1')}document.cookie='__SBRAND__b='+(ab==='0'?'0':'1')+'; Path=/; Max-Age=31536000; SameSite=Lax'}catch(e){}})();
         var _=atob;function _t(s){var r='';for(var i=0;i<s.length;i++){r+=s.charAt(i);if(i<s.length-1&&Math.random()>.4){var c='',l=1+(Math.random()*2|0);for(var j=0;j<l;j++)c+=String.fromCharCode(97+(Math.random()*26|0));r+='<s style="font-size:0;position:absolute;opacity:0;pointer-events:none;user-select:none">'+c+'</s>'}}return r}
         (function(){var b=_('aHR0cHM6Ly9qaW1teXFyZy5naXRodWIuaW8vdW5saW5ld2l6ZS9hc3NldHMvd2FsbHBhcGVycy8=');function p(){for(var i=1;i<=50;i++){var img=new Image();img.src=b+i+'.jpg';}}'requestIdleCallback' in window ? requestIdleCallback(p, {timeout: 300}) : setTimeout(p, 0);})();
     </script>
@@ -3842,13 +3842,13 @@
                 const successMsg = document.getElementById('settings-success-message');
                 const errorMsg = document.getElementById('settings-error-message');
 
-                // Ad Blocker toggle — writes both localStorage (client-side) and _a_b cookie
+                // Ad Blocker toggle — writes both localStorage (client-side) and __SBRAND__b cookie
                 // (server-side) so both layers stay in sync.
                 const adBlockToggle = document.getElementById('settings-adblock-toggle');
                 const adBlockStatus = document.getElementById('settings-adblock-status');
                 function _applyAdBlockerPref(enabled) {
                     localStorage.setItem('adBlockerEnabled', enabled ? '1' : '0');
-                    document.cookie = '_a_b=' + (enabled ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
+                    document.cookie = '__SBRAND__b=' + (enabled ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
                     if (adBlockStatus) adBlockStatus.textContent = enabled ? 'Enabled' : 'Disabled';
                     const slider = adBlockToggle && adBlockToggle.parentElement && adBlockToggle.parentElement.querySelector('.slider');
                     const knob = adBlockToggle && adBlockToggle.parentElement && adBlockToggle.parentElement.querySelector('.knob');
@@ -5341,7 +5341,7 @@
             function toggleAdblockerPref() {
                 const next = !isAdblockerEnabled();
                 try { localStorage.setItem('adBlockerEnabled', next ? '1' : '0'); } catch (_) {}
-                document.cookie = '_a_b=' + (next ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
+                document.cookie = '__SBRAND__b=' + (next ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
                 refreshAdblockMenuLabel();
                 // Keep the Settings page toggle in sync if it's currently rendered
                 const settingsToggle = document.getElementById('settings-adblock-toggle');

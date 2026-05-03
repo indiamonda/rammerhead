@@ -253,13 +253,18 @@ scriptProcessor.processResource = async function patchedProcessResource(script, 
     return script;
 };
 
+const config = require('../config');
+const _BR = config.brand + '_';
+const _brandSub = (s) => s.replace(/__SBRAND__/g, _BR);
+const IFRAME_PROXY_BRANDED = _brandSub(IFRAME_PROXY);
+
 const END_HEADER = headerModule.SCRIPT_PROCESSING_END_HEADER_COMMENT;
 const originalAdd = headerModule.add;
 
 headerModule.add = function patchedAdd(code, isStrictMode, swScopeHeaderValue, nativeAutomation, workerSettings) {
     let result = originalAdd.call(this, code, isStrictMode, swScopeHeaderValue, nativeAutomation, workerSettings);
     if (result.includes(END_HEADER)) {
-        result = result.replace(END_HEADER, END_HEADER + '\n' + PROCESS_POLYFILL + '\n' + FALLBACK + '\n' + IFRAME_PROXY + '\n');
+        result = result.replace(END_HEADER, END_HEADER + '\n' + PROCESS_POLYFILL + '\n' + FALLBACK + '\n' + IFRAME_PROXY_BRANDED + '\n');
     }
     return result;
 };

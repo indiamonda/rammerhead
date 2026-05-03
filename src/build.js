@@ -197,6 +197,15 @@ fs.writeFileSync(
     .replace('proxyLocation.port.toString()', 'proxyLocation.port?.toString() || (proxyLocation.protocol === "https:" ? 443 : 80)')
 );
 
+const BRAND = (process.env.STUDYBOARD_BRAND || '_a').toLowerCase();
+const replaceBrand = (s) => s.replace(/__SBRAND__/g, BRAND + '_');
+
+// Apply brand substitution to already-written intermediate bundles
+for (const f of ['hammerhead.js', 'studyboard.js']) {
+    const fp = path.join(__dirname, './client', f);
+    fs.writeFileSync(fp, replaceBrand(fs.readFileSync(fp, 'utf8')), 'utf8');
+}
+
 const minify = (fileName, newFileName) => {
     const minified = UglifyJS.minify(fs.readFileSync(path.join(__dirname, './client', fileName), 'utf8'));
     if (minified.error) {

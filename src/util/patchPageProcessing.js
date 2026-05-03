@@ -21,7 +21,7 @@ const pageProcessor = require('testcafe-hammerhead/lib/processing/resources/page
 //     untrusted events (autoplay, timers, first scroll, etc.)
 //   • meta-refresh & auto-redirect guard: neutralises redirect-ad chains
 //   • YouTube SPA patcher: skips pre/mid/end-roll ads in the player
-// Respects an opt-out cookie (_a_b=0) just like the server-side blocker.
+// Respects an opt-out cookie (__SBRAND__b=0) just like the server-side blocker.
 // ---------------------------------------------------------------------------
 const AD_CSS_RULES = [
     // Generic ad containers by id/class (EasyList element-hiding excerpt)
@@ -90,7 +90,7 @@ const AD_BLOCKER_SCRIPT = [
     'if(typeof window==="undefined"||window.__SBRAND__abi)return;window.__SBRAND__abi=1;',
     'var _off=false;',
     'try{_off=localStorage.getItem("adBlockerEnabled")==="0"}catch(e){}',
-    'if(!_off){try{_off=document.cookie.indexOf("_a_b=0")!==-1}catch(e){}}',
+    'if(!_off){try{_off=document.cookie.indexOf("__SBRAND__b=0")!==-1}catch(e){}}',
     'if(_off){try{var cs=document.getElementById("__SBRAND__css");if(cs)cs.remove()}catch(e){}return}',
     // --- POPUP / POPUNDER GUARD ---
     // Block ad popups while still allowing legitimate cross-origin popups (Discord invite
@@ -1016,9 +1016,13 @@ if(f&&f.tagName==='FORM'){var fa=_oGA.call(f,'action');if(fa){var n=rw(fa);if(n!
     return html;
 }
 
+const config = require('../config');
+const _BR = config.brand + '_';
+const _brandSub = (s) => s.replace(/__SBRAND__/g, _BR);
+
 const _DEV = !!process.env.DEVELOPMENT;
-const INJECT_PROD = ANTIDETECT_SCRIPT + AD_BLOCKER_SCRIPT;
-const INJECT_DEV = ANTIDETECT_SCRIPT + AD_BLOCKER_SCRIPT + DEVTOOLS_SCRIPT;
+const INJECT_PROD = _brandSub(ANTIDETECT_SCRIPT + AD_BLOCKER_SCRIPT);
+const INJECT_DEV = _brandSub(ANTIDETECT_SCRIPT + AD_BLOCKER_SCRIPT + DEVTOOLS_SCRIPT);
 
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
     const inject = _DEV ? INJECT_DEV : INJECT_PROD;
