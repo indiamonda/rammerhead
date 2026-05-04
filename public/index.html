@@ -280,9 +280,49 @@
             let _scramjetReady = false;
             let _bareMuxConnection = null;
 
-            async function initScramjet() {
-                if (_scramjet) return;
+            async function _nukeStaleIDB() {
                 try {
+                    const dbs = await indexedDB.databases();
+                    for (const db of dbs) {
+                        if (db.name === '$scramjet') {
+                            await new Promise((resolve, reject) => {
+                                const req = indexedDB.deleteDatabase('$scramjet');
+                                req.onsuccess = resolve;
+                                req.onerror = () => reject(req.error);
+                                req.onblocked = resolve;
+                            });
+                            break;
+                        }
+                    }
+                } catch (_) {
+                    try { indexedDB.deleteDatabase('$scramjet'); } catch (_2) {}
+                }
+            }
+
+            async function _unregisterOldSW() {
+                try {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    for (const reg of regs) {
+                        if (reg.active && reg.active.scriptURL.includes('/sw.js')) {
+                            await reg.unregister();
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            let _initScramjetAttempts = 0;
+
+            async function initScramjet() {
+                if (_scramjetReady) return;
+                if (_initScramjetAttempts > 2) return;
+                _initScramjetAttempts++;
+                _scramjet = null;
+                try {
+                    if (_initScramjetAttempts > 1) {
+                        await _unregisterOldSW();
+                        await _nukeStaleIDB();
+                        await new Promise(r => setTimeout(r, 300));
+                    }
                     const { ScramjetController } = $scramjetLoadController();
                     _scramjet = new ScramjetController({
                         files: {
@@ -300,7 +340,10 @@
                     }
                     _scramjetReady = true;
                 } catch (e) {
-                    console.error('Scramjet init failed:', e);
+                    console.error('Scramjet init failed (attempt ' + _initScramjetAttempts + '):', e);
+                    if (_initScramjetAttempts <= 2) {
+                        return initScramjet();
+                    }
                 }
             }
 
