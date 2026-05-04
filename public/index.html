@@ -318,11 +318,10 @@
                 _initScramjetAttempts++;
                 _scramjet = null;
                 try {
-                    if (_initScramjetAttempts > 1) {
-                        await _unregisterOldSW();
-                        await _nukeStaleIDB();
-                        await new Promise(r => setTimeout(r, 300));
-                    }
+                    await _unregisterOldSW();
+                    await _nukeStaleIDB();
+                    await new Promise(r => setTimeout(r, 200));
+
                     const { ScramjetController } = $scramjetLoadController();
                     _scramjet = new ScramjetController({
                         files: {
