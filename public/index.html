@@ -170,6 +170,7 @@
                     placeholder="Search or type a URL"
                     autocomplete="off"
                 />
+                <div class="url-display-overlay" id="url-display-overlay"></div>
                 <button class="page-action" id="clear-button" style="display: none;" title="Clear">
                     <span class="material-icons">close</span>
                 </button>
@@ -2086,6 +2087,39 @@
             const backButton = document.getElementById('back-button');
             const forwardButton = document.getElementById('forward-button');
             const refreshButton = document.getElementById('refresh-button');
+            const urlDisplayOverlay = document.getElementById('url-display-overlay');
+
+            /**
+             * Update the styled URL overlay. When the input is blurred, the overlay
+             * shows a cleaner URL: "https://www." is hidden; the path portion is
+             * rendered in a muted color. The real value stays in the input for
+             * editing when focused.
+             */
+            function updateUrlDisplay(url) {
+                if (!url || url.startsWith('jq://') || url.startsWith('raw!')) {
+                    urlDisplayOverlay.innerHTML = '';
+                    urlInput.classList.remove('has-url');
+                    return;
+                }
+                try {
+                    const parsed = new URL(url.startsWith('http') ? url : 'https://' + url);
+                    const domain = parsed.hostname.replace(/^www\./, '');
+                    const rest = parsed.pathname + parsed.search + parsed.hash;
+                    const pathPart = rest === '/' ? '' : rest;
+
+                    urlDisplayOverlay.innerHTML =
+                        '<span class="url-part-domain">' + _escHtml(domain) + '</span>' +
+                        (pathPart ? '<span class="url-part-path">' + _escHtml(pathPart) + '</span>' : '');
+                    urlInput.classList.add('has-url');
+                } catch (_) {
+                    urlDisplayOverlay.innerHTML = '';
+                    urlInput.classList.remove('has-url');
+                }
+            }
+
+            function _escHtml(s) {
+                return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
 
             // URL normalization function
             function normalizeUrl(url) {
@@ -2246,6 +2280,7 @@
                 const tab = tabs.find(t => t.id === tabId);
                 if (tab) {
                     urlInput.value = tab.url;
+                    updateUrlDisplay(tab.url);
                     updateNavigationButtons(tab);
                 } else {
                     updateNavigationButtons(null);
@@ -2335,6 +2370,7 @@
                 tab.url = rawMode ? 'raw!' + normalizedUrl : normalizedUrl;
                 if (tabId === activeTabId) {
                     urlInput.value = tab.url;
+                    updateUrlDisplay(tab.url);
                 }
                 _saveTabs();
 
@@ -2366,6 +2402,7 @@
                             if (destUrl && destUrl !== tab.url && tabId === activeTabId) {
                                 tab.url = destUrl;
                                 urlInput.value = destUrl;
+                                updateUrlDisplay(destUrl);
                                 if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
                                     tab.history = tab.history.slice(0, tab.historyIndex + 1);
                                     tab.history.push(destUrl);
@@ -4069,6 +4106,7 @@
                 const url = tab.history[tab.historyIndex];
                 tab.url = url;
                 urlInput.value = url;
+                updateUrlDisplay(url);
                 loadTabContent(activeTabId, url, false); // false = don't add to history
                 updateNavigationButtons(tab);
             }
@@ -4082,6 +4120,7 @@
                 const url = tab.history[tab.historyIndex];
                 tab.url = url;
                 urlInput.value = url;
+                updateUrlDisplay(url);
                 loadTabContent(activeTabId, url, false); // false = don't add to history
                 updateNavigationButtons(tab);
             }
@@ -4100,6 +4139,7 @@
                 }
                 tab.url = finalUrl;
                 urlInput.value = finalUrl;
+                updateUrlDisplay(finalUrl);
                 
                 // Add to history if this is a new navigation (not back/forward)
                 if (addToHistory) {
@@ -5073,6 +5113,7 @@
             });
             clearButton.addEventListener('click', () => {
                 urlInput.value = '';
+                updateUrlDisplay('');
                 clearButton.style.display = 'none';
                 _suggestionEngine.hide(_urlSuggestionsEl);
             });
@@ -5083,6 +5124,7 @@
             });
             urlInput.addEventListener('blur', () => {
                 setTimeout(() => _suggestionEngine.hide(_urlSuggestionsEl), 150);
+                updateUrlDisplay(urlInput.value);
             });
 
             // --- Microphone / Voice Search with live level display ---
@@ -5162,6 +5204,7 @@
                             transcript += e.results[i][0].transcript;
                         }
                         urlInput.value = transcript;
+                        updateUrlDisplay(transcript);
                         clearButton.style.display = transcript ? 'block' : 'none';
                         if (e.results[e.results.length - 1].isFinal) {
                             stopListening();

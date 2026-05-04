@@ -703,7 +703,7 @@ function _isChallengeResponse(html, ctx) {
     // Generic fallback: short HTML with known challenge SDK markers
     if (typeof html === 'string' && html.length < 60000) {
         if (/AwsWafIntegration|aws-waf-token|awswaf\.com/i.test(html)) return true;
-        if (/challenge-platform.*?turnstile|turnstile.*?challenge-platform/i.test(html)) return true;
+        if (/challenge-platform|turnstile/i.test(html)) return true;
         if (/DataDome.*?captcha|dd\.js/i.test(html)) return true;
         if (/px-captcha|human-challenge|PerimeterX/i.test(html)) return true;
         if (/Kasada.*?challenge|ips\.js/i.test(html)) return true;

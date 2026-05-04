@@ -21,8 +21,10 @@ const TASK_SCRIPT_PATHS = new Set([
 
 const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-// Use gzip, deflate only to avoid ERR_CONTENT_DECODING_FAILED when pipeline decompresses/rewrites then re-encodes (br/zstd often mis-handled)
-const ACCEPT_ENCODING_SAFE = 'gzip, deflate';
+// Include br (Brotli) to match real Chrome. wreq-js handles decompression and
+// we strip content-encoding before Hammerhead, so br is safe. Omitting it is a
+// fingerprinting signal that triggers Cloudflare challenges on datacenter IPs.
+const ACCEPT_ENCODING_SAFE = 'gzip, deflate, br';
 
 // Chrome HTTP/1.1 header wire order (fingerprinted by anti-bot services)
 const CHROME_DOC_ORDER = [

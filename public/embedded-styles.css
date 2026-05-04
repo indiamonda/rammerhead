@@ -481,6 +481,52 @@ body {
     color: var(--color-text-placeholder);
 }
 
+/* URL display overlay: shows styled URL when input is not focused.
+   Positioned absolutely over the input element. */
+.url-display-overlay {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 40px;
+    right: 80px;
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    line-height: 20px;
+    font-family: var(--font-family);
+    pointer-events: none;
+    overflow: hidden;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.url-display-overlay:empty,
+.url-bar-wrapper:focus-within .url-display-overlay {
+    display: none;
+}
+
+.url-display-overlay .url-part-domain {
+    color: var(--color-text-primary);
+    flex-shrink: 0;
+}
+
+.url-display-overlay .url-part-path {
+    color: var(--color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Hide input text when overlay is visible (not focused) */
+.url-input.has-url:not(:focus) {
+    color: transparent;
+    caret-color: transparent;
+}
+
+.url-input.has-url:not(:focus)::selection {
+    color: transparent;
+    background: transparent;
+}
+
 /* ============================================
    Suggestion Dropdown (shared by nav bar & newtab)
    ============================================ */
