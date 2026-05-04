@@ -15,7 +15,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node src/server.js"
+    "dev": "node src/server.js",
+    "postinstall": "node scripts/patch-scramjet.js"
   },
   "engines": {
     "node": ">=18.0.0"

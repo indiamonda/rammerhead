@@ -33,6 +33,9 @@
   if (window.__JqrgBotShield) return;
   window.__JqrgBotShield = true;
 
+  var h = location.hostname;
+  if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.local')) return;
+
   var score = 0;
   var hits = [];
 

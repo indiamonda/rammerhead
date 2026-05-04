@@ -4021,12 +4021,11 @@
                 updateNavigationButtons(tab);
             }
 
-            function navigateToUrl(url, addToHistory = true) {
+            async function navigateToUrl(url, addToHistory = true) {
                 if (!activeTabId) return;
                 const tab = tabs.find(t => t.id === activeTabId);
                 if (!tab) return;
 
-                // Normalize URL - add trailing slash for jq:// URLs, normalize others
                 let finalUrl;
                 if (url.startsWith('jq://')) {
                     finalUrl = url.endsWith('/') ? url : url + '/';
@@ -4044,7 +4043,11 @@
                     recordUrlVisit(finalUrl);
                 }
                 
-                loadTabContent(activeTabId, finalUrl, addToHistory);
+                try {
+                    await loadTabContent(activeTabId, finalUrl, addToHistory);
+                } catch (e) {
+                    console.error('navigateToUrl failed:', e);
+                }
                 updateNavigationButtons(tab);
             }
 
@@ -4883,6 +4886,11 @@
                 setupKeyboard(input, dropdown, onSelect) {
                     let activeIdx = -1;
 
+                    function clearActive() {
+                        activeIdx = -1;
+                        dropdown.querySelectorAll('.suggestion-item.active').forEach(el => el.classList.remove('active'));
+                    }
+
                     function updateActive() {
                         const items = dropdown.querySelectorAll('.suggestion-item');
                         items.forEach((el, i) => {
@@ -4892,6 +4900,8 @@
                             items[activeIdx].scrollIntoView({ block: 'nearest' });
                         }
                     }
+
+                    input.addEventListener('input', clearActive);
 
                     input.addEventListener('keydown', (e) => {
                         const items = dropdown.querySelectorAll('.suggestion-item');
@@ -4924,10 +4934,10 @@
                         }
                     });
 
-                    const observer = new MutationObserver(() => { activeIdx = -1; });
+                    const observer = new MutationObserver(clearActive);
                     observer.observe(dropdown, { childList: true });
 
-                    return { resetIndex() { activeIdx = -1; } };
+                    return { resetIndex() { clearActive(); } };
                 }
             };
 
@@ -5667,15 +5677,14 @@
             
             // Track history when pages load
             const originalLoadTabContent = loadTabContent;
-            loadTabContent = async function(tabId, url) {
-                await originalLoadTabContent(tabId, url);
+            loadTabContent = async function(tabId, url, addHist) {
+                await originalLoadTabContent(tabId, url, addHist);
                 const tab = tabs.find(t => t.id === tabId);
                 if (tab && !url.startsWith('jq://')) {
                     addToHistory(url, tab.title);
                     updateUrlTitle(url, tab.title);
                     updateStats(url);
                 }
-                // Update downloads badge
                 if (typeof window.updateDownloadsBadge === 'function') {
                     window.updateDownloadsBadge();
                 }
