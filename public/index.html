@@ -21,6 +21,30 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
     <link rel="stylesheet" href="embedded-styles.css" id="embedded-styles" />
+    <script src="https://www.google.com/recaptcha/api.js?render=6Lfb2tcsAAAAADXWF2wNSFaE5EBhEe6TunMBsxEW" async defer></script>
+    <script>
+    var __rcKey1='6Lfb2tcsAAAAADXWF2wNSFaE5EBhEe6TunMBsxEW';
+    var __rcKey2='6LeM3tcsAAAAAEuYCv4frQSvbiISZarJHxI8V7nx';
+    function __execRC(key,action){
+        return new Promise(function(resolve){
+            if(!window.grecaptcha||!window.grecaptcha.execute){resolve('');return}
+            try{
+                window.grecaptcha.ready(function(){
+                    window.grecaptcha.execute(key,{action:action||'session'}).then(resolve).catch(function(){resolve('')});
+                });
+            }catch(_){resolve('')}
+        });
+    }
+    function __getBothTokens(action){
+        return Promise.all([__execRC(__rcKey1,action),__execRC(__rcKey2,action)]);
+    }
+    function __appendTokens(url,tokens){
+        var t1=tokens[0],t2=tokens[1],sep=url.indexOf('?')!==-1?'&':'?';
+        if(t1)url+=sep+'recaptcha_token='+encodeURIComponent(t1),sep='&';
+        if(t2)url+=sep+'recaptcha_token_l2='+encodeURIComponent(t2);
+        return url;
+    }
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-css.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.min.js" defer></script>
@@ -2132,20 +2156,21 @@
                 const sessionId = getDeviceSessionId();
                 
                 // Ensure session exists and get proxied URL with proper shuffling
+                const __rct = await __getBothTokens('navigate');
                 let proxiedUrl;
                 if (rawMode) {
-                    try { await fetch(`${basePath}/ensuresession?id=${encodeURIComponent(sessionId)}`); } catch (_) {}
+                    try { await fetch(__appendTokens(`${basePath}/ensuresession?id=${encodeURIComponent(sessionId)}`,__rct)); } catch (_) {}
                     proxiedUrl = `${basePath}/${sessionId}!raw/${normalizedUrl}`;
                 } else {
                 try {
-                    const response = await fetch(`${basePath}/getproxiedurl?id=${encodeURIComponent(sessionId)}&url=${encodeURIComponent(normalizedUrl)}`);
+                    const response = await fetch(__appendTokens(`${basePath}/getproxiedurl?id=${encodeURIComponent(sessionId)}&url=${encodeURIComponent(normalizedUrl)}`,__rct));
                     if (!response.ok) {
                         throw new Error(`Server error: ${response.status}`);
                     }
                     const data = await response.json();
                     proxiedUrl = data.proxiedUrl || `${basePath}/${sessionId}/${normalizedUrl}`;
                 } catch (_) {
-                    try { await fetch(`${basePath}/ensuresession?id=${encodeURIComponent(sessionId)}`); } catch (_) {}
+                    try { await fetch(__appendTokens(`${basePath}/ensuresession?id=${encodeURIComponent(sessionId)}`,__rct)); } catch (_) {}
                     proxiedUrl = `${basePath}/${sessionId}/${normalizedUrl}`;
                     }
                 }
@@ -3820,7 +3845,8 @@
                     if (!url) return;
                     const normalized = normalizeUrl(url);
                     try {
-                        const response = await fetch(`${basePath}/generatelink?url=${encodeURIComponent(normalized)}`);
+                        const __glRct = await __getBothTokens('generatelink');
+                        const response = await fetch(__appendTokens(`${basePath}/generatelink?url=${encodeURIComponent(normalized)}`,__glRct));
                         const data = await response.json();
                         if (data.url) {
                             const linkResult = contentElement.querySelector('#newtab-link-result');

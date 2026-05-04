@@ -17,6 +17,25 @@ const zlib = require('zlib');
  * @param {import('../classes/RammerheadSessionAbstractStore')} sessionStore
  * @param {import('../classes/RammerheadLogging')} logger
  */
+async function _verifyOneRecaptcha(secret, token) {
+    if (!secret) return { ok: true, skipped: true };
+    if (!token) return { ok: false, reason: 'missing_token' };
+    try {
+        const q = new URLSearchParams({ secret, response: token });
+        const res = await fetch(`https://www.google.com/recaptcha/api/siteverify?${q}`, { method: 'POST' });
+        const data = await res.json();
+        return data.success ? { ok: true } : { ok: false, reason: data['error-codes'] || 'failed' };
+    } catch (_) {
+        return { ok: true, skipped: true };
+    }
+}
+async function verifyRecaptcha(token) {
+    return _verifyOneRecaptcha(process.env.RECAPTCHA_SECRET_KEY, token);
+}
+async function verifyRecaptchaL2(token) {
+    return _verifyOneRecaptcha(process.env.RECAPTCHA_SECRET_KEY_L2, token);
+}
+
 module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     const CORS_HEADERS = {
         'Access-Control-Allow-Origin': '*',
@@ -206,9 +225,27 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
         }
     };
     
+    // reCAPTCHA gate — verifies both layers
+    async function requireCaptcha(req, res) {
+        const { recaptcha_token, recaptcha_token_l2 } = new URLPath(req.url).getParams();
+        const r1 = await verifyRecaptcha(recaptcha_token);
+        if (!r1.ok) { jsonResponse(res, 403, { error: 'captcha_failed' }); return false; }
+        const r2 = await verifyRecaptchaL2(recaptcha_token_l2);
+        if (!r2.ok) { jsonResponse(res, 403, { error: 'captcha_failed' }); return false; }
+        return true;
+    }
+
+    proxyServer.GET('/api/config', (req, res) => {
+        jsonResponse(res, 200, {
+            recaptchaSiteKey:   process.env.RECAPTCHA_SITE_KEY || '',
+            recaptchaSiteKeyL2: process.env.RECAPTCHA_SITE_KEY_L2 || '',
+        });
+    });
+
     // Route to ensure/create a session (called by client when needed)
-    const handleEnsureSession = (req, res) => {
+    const handleEnsureSession = async (req, res) => {
         try {
+            if (!await requireCaptcha(req, res)) return;
             const { id } = new URLPath(req.url).getParams();
             
             if (!id) {
@@ -252,8 +289,9 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     };
 
     // Route to get proxied URL with proper shuffling
-    const handleGetProxiedUrl = (req, res) => {
+    const handleGetProxiedUrl = async (req, res) => {
         try {
+            if (!await requireCaptcha(req, res)) return;
             const { id, url: targetUrl } = new URLPath(req.url).getParams();
             const basePath = getBasePath(req);
             const normalizedTarget = normalizeTargetUrl(targetUrl);
@@ -304,8 +342,9 @@ module.exports = function setupRoutes(proxyServer, sessionStore, logger) {
     proxyServer.GET('/rammerhead/getproxiedurl', handleGetProxiedUrl);
     
     // Generate never-expire link route - handle both /generatelink and /rammerhead/generatelink
-    const handleGenerateLink = (req, res) => {
+    const handleGenerateLink = async (req, res) => {
         try {
+            if (!await requireCaptcha(req, res)) return;
             const { url: targetUrl } = new URLPath(req.url).getParams();
             const normalizedTarget = normalizeTargetUrl(targetUrl);
             
