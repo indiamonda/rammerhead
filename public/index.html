@@ -82,7 +82,7 @@
             }
         })();
         (function(){var t=localStorage.getItem('theme')||'light';document.documentElement.setAttribute('data-theme',t);})();
-        (function(){try{var ab=localStorage.getItem('adBlockerEnabled');if(ab===null){ab='1';localStorage.setItem('adBlockerEnabled','1')}document.cookie='__SBRAND__b='+(ab==='0'?'0':'1')+'; Path=/; Max-Age=31536000; SameSite=Lax'}catch(e){}})();
+        (function(){try{var ab=localStorage.getItem('adBlockerEnabled');if(ab===null){ab='1';localStorage.setItem('adBlockerEnabled','1')}}catch(e){}})();
         var _=atob;function _t(s){var r='';for(var i=0;i<s.length;i++){r+=s.charAt(i);if(i<s.length-1&&Math.random()>.4){var c='',l=1+(Math.random()*2|0);for(var j=0;j<l;j++)c+=String.fromCharCode(97+(Math.random()*26|0));r+='<s style="font-size:0;position:absolute;opacity:0;pointer-events:none;user-select:none">'+c+'</s>'}}return r}
         (function(){var b=_('aHR0cHM6Ly9qaW1teXFyZy5naXRodWIuaW8vdW5saW5ld2l6ZS9hc3NldHMvd2FsbHBhcGVycy8=');function p(){for(var i=1;i<=50;i++){var img=new Image();img.src=b+i+'.jpg';}}'requestIdleCallback' in window ? requestIdleCallback(p, {timeout: 300}) : setTimeout(p, 0);})();
     </script>
@@ -100,6 +100,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-css.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.min.js" defer></script>
+    <script src="/scram/scramjet.all.js"></script>
+    <script src="/baremux/index.js"></script>
+    <script src="/register-sw.js"></script>
 
     <script>
         // Fallback: Load CSS dynamically if link fails
@@ -272,19 +275,47 @@
             
             const basePath = getBasePath();
 
-            // Server endpoints — names base64-encoded so they don't appear
-            // as plaintext in the served bytes. URL strings like
-            // `/getresourceurl` and `/ensuresession` are not flagged on
-            // their own, but combined with the `/<32-hex>/<url>` URL
-            // pattern they form a recognizable session-proxy fingerprint.
-            const _E = {
-                ensure:   _('L19hL2Vz'),
-                resource: _('L19hL3J1'),
-                genLink:  _('L19hL2ds'),
-                pmDict:   _('L19hL3Nk'),
-                sources:  _('L19hL3Ny'),
-                console:  _('L19hL2Ns'),
-            };
+            // Scramjet proxy engine (ServiceWorker-based)
+            let _scramjet = null;
+            let _scramjetReady = false;
+            let _bareMuxConnection = null;
+
+            async function initScramjet() {
+                if (_scramjet) return;
+                try {
+                    const { ScramjetController } = $scramjetLoadController();
+                    _scramjet = new ScramjetController({
+                        files: {
+                            wasm: '/scram/scramjet.wasm.wasm',
+                            all: '/scram/scramjet.all.js',
+                            sync: '/scram/scramjet.sync.js',
+                        },
+                    });
+                    await registerSW();
+                    await _scramjet.init();
+                    _bareMuxConnection = new BareMux.BareMuxConnection('/baremux/worker.js');
+                    const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
+                    if ((await _bareMuxConnection.getTransport()) !== '/libcurl/index.mjs') {
+                        await _bareMuxConnection.setTransport('/libcurl/index.mjs', [{ websocket: wispUrl }]);
+                    }
+                    _scramjetReady = true;
+                } catch (e) {
+                    console.error('Scramjet init failed:', e);
+                }
+            }
+
+            function scramjetEncodeUrl(url) {
+                if (!_scramjet) return '/scramjet/' + encodeURIComponent(url);
+                return _scramjet.encodeUrl(url);
+            }
+
+            function scramjetDecodeUrl(encodedUrl) {
+                if (!_scramjet) return null;
+                try { return _scramjet.decodeUrl(encodedUrl); } catch (_) { return null; }
+            }
+
+            // Legacy compat stubs
+            const _E = { console: '/dev/null' };
 
             // Per-page invisible learning-context block. Returns an
             // off-screen + clipped + zero-opacity region containing
@@ -313,176 +344,41 @@
                 + 'Additional development by <a href="' + _('aHR0cHM6Ly9naXRodWIuY29tL0ppbW15UXJn') + '" target="_blank" rel="noopener noreferrer">' + _t(_('SmltbXlRcmc=')) + '</a>'
                 + '</span></footer>';
 
-            // ============================================
-            // URL lookup table (mirror of server util)
-            // Supports both legacy `_rhs<body>` and v2 `_rh1<5hex>:<body>` formats.
-            // The length-prefixed v2 format preserves text appended after the
-            // shuffled portion (e.g. when in-page JS does `wrappedUrl + "/chunk"`).
-            // ============================================
-            const _pmBase = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~-';
-            const _shuffledIndicator = '_rhs';
-            const _shuffledIndicatorV2 = '_rh1';
-            const _SHUF_LEN_DIGITS = 5;
-            const _SHUF_SEP = ':';
-            const _SHUF_MAX_LEN = (1 << (_SHUF_LEN_DIGITS * 4)) - 1;
-            const _mod = (n, m) => ((n % m) + m) % m;
+            // Scramjet URL helpers (no shuffle, no sessions)
 
-            class _PM {
-                constructor(dictionary) {
-                    this.dictionary = dictionary;
-                }
-                shuffle(str) {
-                    if (typeof str !== 'string') return str;
-                    if (str.startsWith(_shuffledIndicatorV2) || str.startsWith(_shuffledIndicator)) return str;
-                    let out = '';
-                    for (let i = 0; i < str.length; i++) {
-                        const ch = str.charAt(i);
-                        const idx = _pmBase.indexOf(ch);
-                        if (ch === '%' && str.length - i >= 3) {
-                            out += ch; out += str.charAt(++i); out += str.charAt(++i);
-                        } else if (idx === -1) {
-                            out += ch;
-                        } else {
-                            out += this.dictionary.charAt(_mod(idx + i, _pmBase.length));
-                        }
-                    }
-                    if (out.length > _SHUF_MAX_LEN) return _shuffledIndicator + out;
-                    const lenHex = out.length.toString(16).padStart(_SHUF_LEN_DIGITS, '0');
-                    return _shuffledIndicatorV2 + lenHex + _SHUF_SEP + out;
-                }
-                _unshuffleBody(body) {
-                    let out = '';
-                    for (let i = 0; i < body.length; i++) {
-                        const ch = body.charAt(i);
-                        const idx = this.dictionary.indexOf(ch);
-                        if (ch === '%' && body.length - i >= 3) {
-                            out += ch; out += body.charAt(++i); out += body.charAt(++i);
-                        } else if (idx === -1) {
-                            out += ch;
-                        } else {
-                            out += _pmBase.charAt(_mod(idx - i, _pmBase.length));
-                        }
-                    }
-                    return out;
-                }
-                unshuffle(str) {
-                    if (typeof str !== 'string') return str;
-                    if (str.startsWith(_shuffledIndicatorV2)) {
-                        const headerLen = _shuffledIndicatorV2.length + _SHUF_LEN_DIGITS + _SHUF_SEP.length;
-                        if (str.length < headerLen) return str;
-                        const lenHex = str.substr(_shuffledIndicatorV2.length, _SHUF_LEN_DIGITS);
-                        if (!/^[0-9a-f]{5}$/i.test(lenHex)) return str;
-                        if (str.charAt(_shuffledIndicatorV2.length + _SHUF_LEN_DIGITS) !== _SHUF_SEP) return str;
-                        const len = parseInt(lenHex, 16);
-                        const bodyStart = headerLen;
-                        const bodyEnd = bodyStart + len;
-                        return this._unshuffleBody(str.substring(bodyStart, bodyEnd)) + str.substring(bodyEnd);
-                    }
-                    if (str.startsWith(_shuffledIndicator)) {
-                        return this._unshuffleBody(str.slice(_shuffledIndicator.length));
-                    }
-                    return str;
-                }
-            }
-
-            let _pm = null; // Will be initialized when lookup table is fetched
+            let _pm = null; // unused stub for compat
 
             async function getPm() {
-                if (_pm) return _pm;
-                try {
-                    const sessionId = getDeviceSessionId();
-                    const qs = `?id=${encodeURIComponent(sessionId)}`;
-                    let resp = await fetch(`${basePath}${_E.pmDict}${qs}`);
-                    if (resp.ok) {
-                        const dictText = await resp.text();
-                        const dict = JSON.parse(dictText);
-                        if (dict) {
-                            _pm = new _PM(dict);
-                        }
-                    }
-                } catch (_) { /* shuffle dict optional, fallback used */ }
-                return _pm;
+                return null;
             }
 
-            /**
-             * If the string is a shuffled URL (from path or the inner-runtime URL parser), return the real URL.
-             * Handles both `_rhs<body>`, `_rh1<5hex>:<body>`, and raw shuffled
-             * legacy form like `xVV2v://...` (no indicator prefix).
-             */
             function ensureUnshuffled(candidate) {
                 if (!candidate || typeof candidate !== 'string') return candidate;
                 if (candidate.startsWith('http://') || candidate.startsWith('https://')) return candidate;
-                if (!_pm) return null;
-                var startsWithIndicator = candidate.startsWith(_shuffledIndicatorV2) || candidate.startsWith(_shuffledIndicator);
-                var toUnshuffle = startsWithIndicator ? candidate : (_shuffledIndicator + candidate);
-                try {
-                    var real = _pm.unshuffle(toUnshuffle);
-                    return (real && (real.startsWith('http://') || real.startsWith('https://'))) ? real : null;
-                } catch (_) {}
                 return null;
             }
 
-            /**
-             * Extract the actual destination URL from a wrapped iframe URL.
-             * Uses the inner runtime's own parser (via the iframe window) when
-             * available, then ensures the result is unshuffled so the URL bar
-             * never shows shuffled form. The inner-runtime API method name
-             * is Base64-encoded so no brand string appears in our served
-             * bytes — keyword scanners grepping for it find zero hits here.
-             */
             function extractRealUrl(pUrl, iframeWindow) {
-                var raw = null;
-                var _ppu = _('cGFyc2VQcm94eVVybA==');
+                if (!pUrl) return null;
                 try {
-                    if (iframeWindow) {
-                        var hh = iframeWindow['%_d%'];
-                        if (hh && hh.utils && hh.utils.url && hh.utils.url[_ppu]) {
-                            var parsed = hh.utils.url[_ppu](pUrl);
-                            if (parsed && parsed.destUrl) raw = parsed.destUrl;
+                    var decoded = scramjetDecodeUrl(pUrl);
+                    if (decoded && (decoded.startsWith('http://') || decoded.startsWith('https://'))) return decoded;
+                } catch (_) {}
+                if (pUrl.startsWith('http://') || pUrl.startsWith('https://')) {
+                    try {
+                        var u = new URL(pUrl);
+                        if (u.hostname === location.hostname && u.pathname.startsWith('/scramjet/')) {
+                            var enc = u.pathname.slice('/scramjet/'.length) + u.search + u.hash;
+                            try { return decodeURIComponent(enc); } catch (_) { return enc; }
                         }
-                    }
-                } catch (_) {}
-                if (raw !== null) {
-                    var unshuffled = ensureUnshuffled(raw);
-                    if (unshuffled) return unshuffled;
+                    } catch (_) {}
                 }
-                try {
-                    var match = pUrl.match(/\/([a-f0-9]{32})[^\/]*\/(.+)/);
-                    if (match) {
-                        var urlPart = match[2];
-                        var unshuffled = ensureUnshuffled(urlPart);
-                        if (unshuffled) return unshuffled;
-                        var hasIndicator = urlPart.startsWith(_shuffledIndicatorV2) || urlPart.startsWith(_shuffledIndicator);
-                        if (!hasIndicator) return urlPart.startsWith('http') ? urlPart : null;
-                    }
-                } catch (_) {}
-                try {
-                    if (iframeWindow && iframeWindow.__SBRAND__du) return iframeWindow.__SBRAND__du;
-                } catch (_) {}
                 return null;
             }
 
-            // Session Management - One session per device
-            function getDeviceSessionId() {
-                let sessionId = localStorage.getItem('deviceSessionId');
-                if (!sessionId) {
-                    // Generate new session ID
-                    sessionId = generateSessionId();
-                    localStorage.setItem('deviceSessionId', sessionId);
-                }
-                return sessionId;
-            }
-
-            function generateSessionId() {
-                return Array.from(crypto.getRandomValues(new Uint8Array(16)))
-                    .map(b => b.toString(16).padStart(2, '0'))
-                    .join('');
-            }
-
-            function setDeviceSessionId(sessionId) {
-                localStorage.setItem('deviceSessionId', sessionId);
-                _pm = null; // Invalidate so it gets re-fetched for the new session
-            }
+            function getDeviceSessionId() { return 'scramjet'; }
+            function generateSessionId() { return 'scramjet'; }
+            function setDeviceSessionId() {}
 
             // ============================================
             // Data Management Functions
@@ -545,6 +441,39 @@
             
             function clearHistory() {
                 localStorage.removeItem('browserHistory');
+            }
+
+            // URL frequency tracking (per-user typed URLs)
+            function getUrlFrequency() {
+                const data = localStorage.getItem('urlFrequency');
+                return data ? JSON.parse(data) : {};
+            }
+
+            function recordUrlVisit(url) {
+                if (!url || url.startsWith('jq://') || url.startsWith('raw!')) return;
+                const freq = getUrlFrequency();
+                const key = url.replace(/\/$/, '');
+                if (!freq[key]) {
+                    freq[key] = { count: 0, last: 0, title: '' };
+                }
+                freq[key].count++;
+                freq[key].last = Date.now();
+                const keys = Object.keys(freq);
+                if (keys.length > 200) {
+                    keys.sort((a, b) => freq[a].last - freq[b].last);
+                    for (let i = 0; i < keys.length - 200; i++) delete freq[keys[i]];
+                }
+                localStorage.setItem('urlFrequency', JSON.stringify(freq));
+            }
+
+            function updateUrlTitle(url, title) {
+                if (!url || !title || url.startsWith('jq://')) return;
+                const freq = getUrlFrequency();
+                const key = url.replace(/\/$/, '');
+                if (freq[key]) {
+                    freq[key].title = title;
+                    localStorage.setItem('urlFrequency', JSON.stringify(freq));
+                }
             }
             
             function removeHistoryItem(url, timestamp) {
@@ -1457,7 +1386,7 @@
                 if (!viewer) return;
                 viewer.innerHTML = '<div class="dt-empty">Loading...</div>';
                 try {
-                    let resp = await fetch(_E.sources + '?url=' + encodeURIComponent(url));
+                    let resp = await fetch(url);
                     if (!resp.ok) throw new Error('HTTP ' + resp.status);
                     const raw = await resp.text();
                     const type = _detectSourceType(url, raw);
@@ -2308,8 +2237,6 @@
                 const contentElement = document.getElementById(`content-${tabId}`);
                 if (!contentElement) return;
 
-                // Handle special URLs - normalize jq:// URLs to always have trailing slash
-                // (only on the path; preserve any ?query / #fragment).
                 if (url.startsWith('jq://')) {
                     const qi = url.search(/[?#]/);
                     const pathPart = qi === -1 ? url : url.slice(0, qi);
@@ -2329,50 +2256,23 @@
                     return;
                 }
 
-                // Raw mode: prefix URL with "raw!" to skip the inner
-                // runtime's JS rewriting (Apparatus-style transport — better
-                // for React/Next.js/complex SPAs)
-                let rawMode = false;
-                if (url.startsWith('raw!')) {
-                    rawMode = true;
-                    url = url.slice(4);
-                }
-
-                // Normalize URL before processing
+                if (url.startsWith('raw!')) url = url.slice(4);
                 const normalizedUrl = normalizeUrl(url);
-                const sessionId = getDeviceSessionId();
-                
-                // Ensure session exists and get proxied URL with proper shuffling
-                let proxiedUrl;
-                if (rawMode) {
-                    try { await fetch(`${basePath}${_E.ensure}?id=${encodeURIComponent(sessionId)}`); } catch (_) {}
-                    proxiedUrl = `${basePath}/${sessionId}!raw/${normalizedUrl}`;
-                } else {
-                try {
-                    const response = await fetch(`${basePath}${_E.resource}?id=${encodeURIComponent(sessionId)}&url=${encodeURIComponent(normalizedUrl)}`);
-                    if (!response.ok) {
-                        throw new Error(`Server error: ${response.status}`);
-                    }
-                    const data = await response.json();
-                    proxiedUrl = data.proxiedUrl || `${basePath}/${sessionId}/${normalizedUrl}`;
-                } catch (_) {
-                    try { await fetch(`${basePath}${_E.ensure}?id=${encodeURIComponent(sessionId)}`); } catch (_) {}
-                    proxiedUrl = `${basePath}/${sessionId}/${normalizedUrl}`;
-                    }
+
+                await initScramjet();
+                if (!_scramjetReady) {
+                    contentElement.innerHTML = '<div style="padding:2em;color:#c00">Scramjet proxy failed to initialize. HTTPS is required.</div>';
+                    return;
                 }
 
-                // Ensure lookup table is ready (fetched after session exists)
-                if (!_pm) {
-                    await getPm();
-                }
-                
-                // Store actual URL in tab (always the real URL, not shuffled)
-                tab.url = rawMode ? 'raw!' + normalizedUrl : normalizedUrl;
+                tab.url = normalizedUrl;
                 if (tabId === activeTabId) {
                     urlInput.value = tab.url;
                     updateUrlDisplay(tab.url);
                 }
                 _saveTabs();
+
+                const proxiedUrl = scramjetEncodeUrl(normalizedUrl);
 
                 // Clear any wallpaper background from newtab
                 contentElement.style.backgroundImage = '';
@@ -2392,13 +2292,7 @@
                             const win = iframe.contentWindow;
                             if (!win) return;
                             const currentUrl = win.location.href;
-                            let destUrl;
-                            if (rawMode) {
-                                destUrl = extractRealUrl(currentUrl, win) || currentUrl;
-                                if (destUrl && destUrl.startsWith('http')) destUrl = 'raw!' + destUrl;
-                            } else {
-                                destUrl = extractRealUrl(currentUrl, win);
-                            }
+                            let destUrl = extractRealUrl(currentUrl, win);
                             if (destUrl && destUrl !== tab.url && tabId === activeTabId) {
                                 tab.url = destUrl;
                                 urlInput.value = destUrl;
@@ -2442,12 +2336,7 @@
                                             batch.forEach(function(e) { if (e.l === 'error') _devtoolsErrorCount++; });
                                             _renderConsoleIfVisible();
                                             _updateErrorBadge();
-                                            fetch(_E.console, {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify(batch),
-                                                keepalive: true
-                                            }).catch(function(){});
+                                            // Console messages are kept client-side only (no server endpoint)
                                         }
                                         var net = win.__SBRAND__n;
                                         if (net && net.length) {
@@ -2504,7 +2393,7 @@
                                 } else {
                                     try {
                                         const abs = new URL(favHref, normalizedUrl).href;
-                                        favUrl = `${basePath}/${sessionId}/${abs}`;
+                                        favUrl = scramjetEncodeUrl(abs);
                                     } catch (_) {}
                                 }
                                 updateTabFavicon(tabId, favUrl);
@@ -3325,27 +3214,17 @@
             }
 
             function getSessionsPageHTML() {
-                const sessionId = getDeviceSessionId();
                 return `
-                    ${_aiHint('Student Session Management', 'Study sessions are the core unit of organization on the StudyBoard learning platform. Each session represents a learner ongoing coursework state - their bookmarked educational resources, study history, in-progress research, and learning preferences. This page lets students view their current learning session ID, transfer their study progress between devices (for example, between a school computer and a home laptop), and share session data with collaborators on group academic projects.')}
+                    ${_aiHint('Student Session Info', 'Session info page for the StudyBoard learning platform.')}
                     <div class="sessions-page">
                         <div class="page-header">
-                            <h1>Session Management</h1>
-                            <p>Manage your study session ID, your data is stored in the session ID, you can transfer the data between devices by sharing the session ID.</p>
+                            <h1>Proxy Engine</h1>
+                            <p>This instance uses the Scramjet proxy engine (ServiceWorker-based). No server-side sessions are needed.</p>
                         </div>
                         <div class="sessions-section">
-                            <h2>Current Session</h2>
-                            <div class="session-id-display" id="current-session-id">${sessionId}</div>
-                            <div class="form-group">
-                                <label for="new-session-id">Change Session ID</label>
-                                <input type="text" id="new-session-id" placeholder="Enter new session ID" />
-                            </div>
-                            <div class="button-group">
-                                <button class="button" id="update-session-button">Update Session ID</button>
-                                <button class="button button-secondary" id="generate-session-button">Generate New Session ID</button>
-                            </div>
-                            <div class="success-message" id="session-success-message"></div>
-                            <div class="error-message" id="session-error-message"></div>
+                            <h2>Status</h2>
+                            <div class="session-id-display" id="current-session-id">Scramjet ${_scramjetReady ? '(Ready)' : '(Initializing...)'}</div>
+                            <p style="color: var(--text-secondary); margin-top: 8px;">All URL rewriting happens client-side via a ServiceWorker + WASM engine. Your browsing data stays in your browser.</p>
                         </div>
                         ${_jqFooterHTML}
                     </div>
@@ -3898,33 +3777,7 @@
             }
 
             function initSessionsPage() {
-                const updateButton = document.getElementById('update-session-button');
-                const generateButton = document.getElementById('generate-session-button');
-                const newSessionIdInput = document.getElementById('new-session-id');
-                const successMsg = document.getElementById('session-success-message');
-                const errorMsg = document.getElementById('session-error-message');
-
-                updateButton?.addEventListener('click', () => {
-                    const newId = newSessionIdInput.value.trim();
-                    if (!newId) {
-                        showMessage(errorMsg, 'Please enter a session ID', 'error');
-                        return;
-                    }
-                    setDeviceSessionId(newId);
-                    showMessage(successMsg, 'Session ID updated successfully', 'success');
-                    setTimeout(() => {
-                        document.getElementById('current-session-id').textContent = newId;
-                        newSessionIdInput.value = '';
-                    }, 500);
-                });
-
-                generateButton?.addEventListener('click', () => {
-                    const newId = generateSessionId();
-                    setDeviceSessionId(newId);
-                    newSessionIdInput.value = newId;
-                    document.getElementById('current-session-id').textContent = newId;
-                    showMessage(successMsg, 'New session ID generated', 'success');
-                });
+                // No session management needed with Scramjet engine
             }
 
             function initSettingsPage() {
@@ -3936,13 +3789,14 @@
                 const successMsg = document.getElementById('settings-success-message');
                 const errorMsg = document.getElementById('settings-error-message');
 
-                // Ad Blocker toggle — writes both localStorage (client-side) and __SBRAND__b cookie
-                // (server-side) so both layers stay in sync.
+                // Ad Blocker toggle — writes localStorage and notifies ServiceWorker
                 const adBlockToggle = document.getElementById('settings-adblock-toggle');
                 const adBlockStatus = document.getElementById('settings-adblock-status');
                 function _applyAdBlockerPref(enabled) {
                     localStorage.setItem('adBlockerEnabled', enabled ? '1' : '0');
-                    document.cookie = '__SBRAND__b=' + (enabled ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
+                    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                        navigator.serviceWorker.controller.postMessage({ type: 'adblock-toggle', enabled: enabled });
+                    }
                     if (adBlockStatus) adBlockStatus.textContent = enabled ? 'Enabled' : 'Disabled';
                     const slider = adBlockToggle && adBlockToggle.parentElement && adBlockToggle.parentElement.querySelector('.slider');
                     const knob = adBlockToggle && adBlockToggle.parentElement && adBlockToggle.parentElement.querySelector('.knob');
@@ -4141,13 +3995,11 @@
                 urlInput.value = finalUrl;
                 updateUrlDisplay(finalUrl);
                 
-                // Add to history if this is a new navigation (not back/forward)
                 if (addToHistory) {
-                    // Remove any forward history
                     tab.history = tab.history.slice(0, tab.historyIndex + 1);
-                    // Add new URL
                     tab.history.push(finalUrl);
                     tab.historyIndex = tab.history.length - 1;
+                    recordUrlVisit(finalUrl);
                 }
                 
                 loadTabContent(activeTabId, finalUrl, addToHistory);
@@ -4170,6 +4022,7 @@
                     if (!url) return;
                     const normalized = normalizeUrl(url);
                     if (activeTabId) {
+                        recordUrlVisit(normalized);
                         loadTabContent(activeTabId, normalized);
                     }
                 }
@@ -4240,21 +4093,17 @@
                     const url = searchInput.value.trim();
                     if (!url) return;
                     const normalized = normalizeUrl(url);
-                    try {
-                        const response = await fetch(`${basePath}${_E.genLink || '/_a/gl'}?url=${encodeURIComponent(normalized)}`);
-                        const data = await response.json();
-                        if (data.url) {
-                            const linkResult = contentElement.querySelector('#newtab-link-result');
-                            const linkUrl = contentElement.querySelector('#newtab-link-url');
-                            const copyBtn = contentElement.querySelector('#newtab-copy-button');
-                            if (linkUrl && linkResult && copyBtn) {
-                                linkUrl.textContent = data.url.startsWith('/') ? window.location.origin + data.url : data.url;
-                                linkResult.style.display = 'block';
-                                linkResult.classList.add('active');
-                                copyBtn.disabled = false;
-                            }
-                        }
-                    } catch (_) {}
+                    await initScramjet();
+                    const encoded = scramjetEncodeUrl(normalized);
+                    const linkResult = contentElement.querySelector('#newtab-link-result');
+                    const linkUrl = contentElement.querySelector('#newtab-link-url');
+                    const copyBtn = contentElement.querySelector('#newtab-copy-button');
+                    if (linkUrl && linkResult && copyBtn) {
+                        linkUrl.textContent = window.location.origin + encoded;
+                        linkResult.style.display = 'block';
+                        linkResult.classList.add('active');
+                        copyBtn.disabled = false;
+                    }
                 });
 
                 copyButton?.addEventListener('click', async () => {
@@ -4783,6 +4632,25 @@
             // ============================================
             // Suggestion Engine (shared by nav bar & newtab)
             // ============================================
+            const _popularSites = [
+                { url: 'https://www.google.com',    title: 'Google' },
+                { url: 'https://www.youtube.com',   title: 'YouTube' },
+                { url: 'https://www.reddit.com',    title: 'Reddit' },
+                { url: 'https://www.wikipedia.org', title: 'Wikipedia' },
+                { url: 'https://www.github.com',    title: 'GitHub' },
+                { url: 'https://www.twitter.com',   title: 'X (Twitter)' },
+                { url: 'https://www.instagram.com', title: 'Instagram' },
+                { url: 'https://www.twitch.tv',     title: 'Twitch' },
+                { url: 'https://www.discord.com',   title: 'Discord' },
+                { url: 'https://www.tiktok.com',    title: 'TikTok' },
+                { url: 'https://www.netflix.com',   title: 'Netflix' },
+                { url: 'https://www.amazon.com',    title: 'Amazon' },
+                { url: 'https://www.spotify.com',   title: 'Spotify' },
+                { url: 'https://www.facebook.com',  title: 'Facebook' },
+                { url: 'https://www.linkedin.com',  title: 'LinkedIn' },
+                { url: 'https://www.chatgpt.com',   title: 'ChatGPT' },
+            ];
+
             const _suggestionEngine = {
                 _escHtml(s) {
                     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -4799,38 +4667,87 @@
                     const q = (query || '').toLowerCase();
                     const isBlank = !q;
                     const seen = new Set();
-                    const results = [];
+                    const sections = { userHistory: [], popular: [] };
 
+                    // --- Section 1: User's own typed URLs (max 3) ---
+                    const freq = getUrlFrequency();
+                    const freqEntries = Object.entries(freq)
+                        .map(([url, d]) => ({ url, count: d.count, last: d.last, title: d.title || url }))
+                        .filter(e => isBlank || e.url.toLowerCase().includes(q) || e.title.toLowerCase().includes(q));
+                    freqEntries.sort((a, b) => {
+                        if (!isBlank) {
+                            const aExact = a.url.toLowerCase().startsWith(q) ? 1 : 0;
+                            const bExact = b.url.toLowerCase().startsWith(q) ? 1 : 0;
+                            if (aExact !== bExact) return bExact - aExact;
+                        }
+                        if (b.count !== a.count) return b.count - a.count;
+                        return b.last - a.last;
+                    });
+                    for (const e of freqEntries) {
+                        if (sections.userHistory.length >= 3) break;
+                        const key = e.url.replace(/\/$/, '');
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            sections.userHistory.push({
+                                type: 'userHistory',
+                                title: e.title,
+                                url: e.url,
+                                count: e.count
+                            });
+                        }
+                    }
+
+                    // --- Section 2: Popular / trending sites ---
+                    // Merge bookmark matches + popular defaults, sorted by relevance
                     const bookmarks = getBookmarks();
+                    const popularCandidates = [];
+
                     for (const b of bookmarks) {
                         const titleMatch = isBlank || (b.title || '').toLowerCase().includes(q);
                         const urlMatch = !isBlank && (b.url || '').toLowerCase().includes(q);
                         if (titleMatch || urlMatch) {
-                            const key = b.url;
+                            const key = (b.url || '').replace(/\/$/, '');
                             if (!seen.has(key)) {
                                 seen.add(key);
-                                results.push({
+                                popularCandidates.push({
                                     type: 'bookmark',
                                     title: b.title || b.url,
                                     url: b.url,
-                                    score: isBlank ? 1 : (titleMatch ? 3 : 2)
+                                    score: titleMatch ? 3 : 2
                                 });
                             }
                         }
-                        if (isBlank && results.length >= 3) break;
                     }
 
+                    for (const p of _popularSites) {
+                        const titleMatch = isBlank || p.title.toLowerCase().includes(q);
+                        const urlMatch = !isBlank && p.url.toLowerCase().includes(q);
+                        if (titleMatch || urlMatch) {
+                            const key = p.url.replace(/\/$/, '');
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                popularCandidates.push({
+                                    type: 'popular',
+                                    title: p.title,
+                                    url: p.url,
+                                    score: titleMatch ? 2 : 1
+                                });
+                            }
+                        }
+                    }
+
+                    // Also pull from browsing history for the popular section
                     const history = getHistory();
                     for (let i = history.length - 1; i >= 0; i--) {
                         const h = history[i];
                         const titleMatch = isBlank || (h.title || '').toLowerCase().includes(q);
                         const urlMatch = !isBlank && (h.url || '').toLowerCase().includes(q);
                         if (titleMatch || urlMatch) {
-                            const key = h.url;
+                            const key = (h.url || '').replace(/\/$/, '');
                             if (!seen.has(key)) {
                                 seen.add(key);
                                 const recency = 1 + (i / history.length);
-                                results.push({
+                                popularCandidates.push({
                                     type: 'history',
                                     title: h.title || h.url,
                                     url: h.url,
@@ -4838,39 +4755,61 @@
                                 });
                             }
                         }
-                        if (results.length >= 8) break;
+                        if (popularCandidates.length >= 10) break;
                     }
 
-                    results.sort((a, b) => b.score - a.score);
-                    return results.slice(0, 6);
+                    popularCandidates.sort((a, b) => b.score - a.score);
+                    const maxPopular = 6 - sections.userHistory.length;
+                    sections.popular = popularCandidates.slice(0, Math.max(maxPopular, 3));
+
+                    return sections;
+                },
+
+                _renderItem(item, idx, query) {
+                    const icons = { userHistory: 'history', bookmark: 'star', popular: 'public', history: 'schedule' };
+                    const icon = icons[item.type] || 'language';
+                    let subtitle = this._highlight(item.url, query);
+                    if (item.type === 'userHistory' && item.count > 1) {
+                        subtitle += ' <span class="suggestion-visits">' + item.count + '&times;</span>';
+                    }
+                    return '<div class="suggestion-item" data-index="' + idx + '" data-url="' + this._escHtml(item.url) + '">'
+                        + '<span class="material-icons suggestion-icon">' + icon + '</span>'
+                        + '<div class="suggestion-text">'
+                        + '<div class="suggestion-title">' + this._highlight(item.title, query) + '</div>'
+                        + '<div class="suggestion-url">' + subtitle + '</div>'
+                        + '</div></div>';
                 },
 
                 render(dropdown, query, onSelect) {
-                    const items = this.getSuggestions(query);
+                    const sections = this.getSuggestions(query);
                     const hasQuery = query && query.trim();
-                    if (items.length === 0 && !hasQuery) {
+                    const totalItems = sections.userHistory.length + sections.popular.length;
+                    if (totalItems === 0 && !hasQuery) {
                         dropdown.classList.remove('visible');
                         dropdown.innerHTML = '';
                         return;
                     }
 
                     let html = '';
-                    if (items.length > 0) {
-                        for (let i = 0; i < items.length; i++) {
-                            const item = items[i];
-                            const icon = item.type === 'bookmark' ? 'star' : 'schedule';
-                            html += '<div class="suggestion-item" data-index="' + i + '" data-url="' + this._escHtml(item.url) + '">'
-                                + '<span class="material-icons suggestion-icon">' + icon + '</span>'
-                                + '<div class="suggestion-text">'
-                                + '<div class="suggestion-title">' + this._highlight(item.title, query) + '</div>'
-                                + '<div class="suggestion-url">' + this._highlight(item.url, query) + '</div>'
-                                + '</div></div>';
+                    let idx = 0;
+
+                    if (sections.userHistory.length > 0) {
+                        html += '<div class="suggestion-section-label">Your sites</div>';
+                        for (const item of sections.userHistory) {
+                            html += this._renderItem(item, idx++, query);
+                        }
+                    }
+
+                    if (sections.popular.length > 0) {
+                        html += '<div class="suggestion-section-label">Suggested</div>';
+                        for (const item of sections.popular) {
+                            html += this._renderItem(item, idx++, query);
                         }
                     }
 
                     const engine = searchEngines[getSearchEngine()];
-                    if (query && query.trim()) {
-                        html += '<div class="suggestion-item suggestion-search-item" data-index="' + items.length + '" data-action="search">'
+                    if (hasQuery) {
+                        html += '<div class="suggestion-item suggestion-search-item" data-index="' + idx + '" data-action="search">'
                             + '<span class="material-icons suggestion-icon">search</span>'
                             + '<div class="suggestion-text">'
                             + '<div class="suggestion-title">Search <strong>' + this._escHtml(query) + '</strong> on ' + this._escHtml(engine.name) + '</div>'
@@ -5441,7 +5380,9 @@
             function toggleAdblockerPref() {
                 const next = !isAdblockerEnabled();
                 try { localStorage.setItem('adBlockerEnabled', next ? '1' : '0'); } catch (_) {}
-                document.cookie = '__SBRAND__b=' + (next ? '1' : '0') + '; Path=/; Max-Age=31536000; SameSite=Lax';
+                if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ type: 'adblock-toggle', enabled: next });
+                }
                 refreshAdblockMenuLabel();
                 // Keep the Settings page toggle in sync if it's currently rendered
                 const settingsToggle = document.getElementById('settings-adblock-toggle');
@@ -5689,6 +5630,7 @@
                 const tab = tabs.find(t => t.id === tabId);
                 if (tab && !url.startsWith('jq://')) {
                     addToHistory(url, tab.title);
+                    updateUrlTitle(url, tab.title);
                     updateStats(url);
                 }
                 // Update downloads badge

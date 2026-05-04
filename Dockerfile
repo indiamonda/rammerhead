@@ -1,19 +1,13 @@
-# Dockerfile for Fly.io (and other container deployments)
-# Node 18+ required (see package.json engines)
 FROM node:18-slim
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-COPY scripts/ scripts/
-RUN npm ci
+RUN npm ci --omit=dev
 
-# Pass --build-arg CACHEBUST=$(date +%s) to force rebuild of app code (avoids stale EADDRINUSE fix)
-ARG CACHEBUST
 COPY . .
-RUN npm run build
 
 ENV NODE_ENV=production
 EXPOSE 8080
 
-CMD ["node", "--max-old-space-size=896", "src/server.js"]
+CMD ["node", "src/server.js"]
