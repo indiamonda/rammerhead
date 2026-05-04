@@ -201,6 +201,7 @@ scriptProcessor.shouldProcessResource = function (ctx) {
 //   /images/...         Generic images folders
 // ---------------------------------------------------------------------------
 const LITE_PATH_LITERAL_RE = /(["'])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"'`\n\r\s<>]+)(["'])/g;
+const LITE_PATH_PREFIX_LITERAL_RE = /(["'])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/)(["'])/g;
 const LITE_IMPORT_DYNAMIC_RE = /(import\(\s*["'])(\/[^"'`\n\r]+)(["']\s*[,)])/g;
 
 function _liteRewriteJs(script, ctx) {
@@ -225,6 +226,11 @@ function _liteRewriteJs(script, ctx) {
     let result = script;
     result = result.replace(LITE_PATH_LITERAL_RE, (_m, q1, p, q2) => {
         // Skip already-proxied paths
+        if (p.indexOf('/' + sid + '/') === 0) return _m;
+        return q1 + proxyPrefix + origin + p + q2;
+    });
+    result = result.replace(LITE_PATH_PREFIX_LITERAL_RE, (_m, q1, p, q2) => {
+        // Webpack worker runtimes often build importScripts("/assets/" + chunk).
         if (p.indexOf('/' + sid + '/') === 0) return _m;
         return q1 + proxyPrefix + origin + p + q2;
     });

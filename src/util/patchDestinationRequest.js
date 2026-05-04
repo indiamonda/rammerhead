@@ -26,6 +26,7 @@ if (wreq) {
 
     const BROWSER_PROFILE = 'chrome_131';
     const WREQ_TIMEOUT_MS = 30000;
+    const BINARY_DEST_RE = /\.(?:woff2?|ttf|otf|eot|png|jpe?g|gif|webp|avif|ico|mp[34]|m4[asv]|webm|ogg|wav|flac|aac|opus|m3u8|ts|mpd|mkv|avi|mov|flv|f4v|wasm|zip|gz|br|bz2|tar|rar|7z|pdf|swf)(?:[?#]|$)/i;
 
     function headersObjFromWreq(wreqHeaders) {
         const out = Object.create(null);
@@ -49,6 +50,15 @@ if (wreq) {
         const host = opts.host || opts.hostname;
         const path = opts.path || '/';
         return `${proto}//${host}${path}`;
+    }
+
+    function isBinaryDestination(opts) {
+        const headers = opts.headers || (opts.prepare ? opts.prepare().headers : null) || {};
+        const fetchDest = String(headers['sec-fetch-dest'] || headers['Sec-Fetch-Dest'] || '').toLowerCase();
+        if (fetchDest && /^(font|image|audio|video)$/.test(fetchDest)) return true;
+        const accept = String(headers.accept || headers.Accept || '').toLowerCase();
+        if (accept.includes('font/')) return true;
+        return BINARY_DEST_RE.test(buildUrl(opts));
     }
 
     const SAFE_ACCEPT_ENCODING = 'gzip, deflate, br';
@@ -80,6 +90,13 @@ if (wreq) {
         }
 
         if (this.opts.isWebSocket) {
+            return _origSend.call(this, waitForData);
+        }
+
+        // Keep font/media bytes on Hammerhead's stock Node path. Some curl-backed
+        // fetch layers normalize compressed binary responses in ways that can leave
+        // WOFF2 files byte-shifted, which Chrome reports as OTS decompression errors.
+        if (isBinaryDestination(this.opts)) {
             return _origSend.call(this, waitForData);
         }
 

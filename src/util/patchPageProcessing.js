@@ -765,6 +765,8 @@ function _liteProcess(html, ctx, inject) {
                 // framework routers use (can't be intercepted by the bridge script)
                 body = body.replace(/(["'])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/[^"']+)(["'])/g,
                     (_m2, q1, path, q2) => q1 + proxyPrefix + origin + path + q2);
+                body = body.replace(/(["'])(\/(?:cdn(?:-cgi)?|assets|static|_next|build|dist|chunks|bundles|js|css|media|fonts|images)\/)(["'])/g,
+                    (_m2, q1, path, q2) => q1 + proxyPrefix + origin + path + q2);
                 // Rewrite import()/from/import statements in ALL scripts
                 body = body.replace(/(import\(\s*["'])(\/[^"']+)(["']\s*\))/g,
                     (_m2, pre, path, post) => pre + proxyPrefix + origin + path + post);
@@ -823,6 +825,7 @@ return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
 function isProto(u){return typeof u==='string'&&u.length>2&&u.charCodeAt(0)===47&&u.charCodeAt(1)===47&&u.charCodeAt(2)!==47}
 // Is this a proxy-internal route (e.g. /_a/cl, /__rh_console, /<sid>/...)? Don't rewrite those.
 function _isProxyInternal(p){return p==='/'||p.indexOf('/__rh_')===0||p.indexOf('/_a/')===0||p.indexOf('/'+S+'/')===0||/^\\/[a-f0-9]{32}(\\/|!|$)/i.test(p)}
+function isBareRel(u){return typeof u==='string'&&!/^(?:[a-z][a-z0-9+.-]*:|#|[/?])/i.test(u)}
 function rw(u){if(!u||typeof u!=='string')return u;u=u.trim();
 if(u.indexOf(_SP)===0)return u;
 if(u.indexOf(_OP)===0){
@@ -831,7 +834,9 @@ if(u.indexOf(_OP)===0){
   if(_isProxyInternal(rest))return u;
   return pxRel(rest);
 }
-if(isProto(u))return px('https:'+u);if(isExt(u))return px(u);if(isRel(u))return pxRel(u);return u}
+if(isProto(u))return px('https:'+u);if(isExt(u))return px(u);if(isRel(u))return pxRel(u);
+if(isBareRel(u)){try{return px(new URL(u,du.href).href)}catch(e){}}
+return u}
 try{var du=new URL(D);var DO=du.origin;
 window.__rhDestUrl=du.href;
 function isRel(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/'&&u.indexOf('/'+S+'/')!==0}
@@ -907,9 +912,9 @@ var oSW=window.SharedWorker;if(oSW){window.SharedWorker=function(u,o){
 if(typeof u==='string')u=rw(u);return new oSW(u,o)};
 window.SharedWorker.prototype=oSW.prototype}
 try{var oPS=history.pushState.bind(history);history.pushState=function(s,t,u){
-if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;u=pxRel(u)}}return oPS(s,t,u)};
+if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;u=pxRel(u)}else if(isBareRel(u)){try{du=new URL(u,du.href)}catch(e){}window.__rhDestUrl=du.href;u=px(du.href)}}return oPS(s,t,u)};
 var oRS=history.replaceState.bind(history);history.replaceState=function(s,t,u){
-if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;u=pxRel(u)}}return oRS(s,t,u)}}catch(e){}
+if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;u=pxRel(u)}else if(isBareRel(u)){try{du=new URL(u,du.href)}catch(e){}window.__rhDestUrl=du.href;u=px(du.href)}}return oRS(s,t,u)}}catch(e){}
 window.addEventListener('popstate',function(){try{
 var r=_destFromPath(_rl.pathname);
 if(r){du=new URL(r+(_rl.search||'')+(_rl.hash||''));window.__rhDestUrl=du.href}
