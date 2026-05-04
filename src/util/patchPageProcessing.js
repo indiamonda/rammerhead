@@ -825,7 +825,6 @@ return/^https?:\\/\\//i.test(u)&&u.indexOf(O)!==0}
 function isProto(u){return typeof u==='string'&&u.length>2&&u.charCodeAt(0)===47&&u.charCodeAt(1)===47&&u.charCodeAt(2)!==47}
 // Is this a proxy-internal route (e.g. /_a/cl, /__rh_console, /<sid>/...)? Don't rewrite those.
 function _isProxyInternal(p){return p==='/'||p.indexOf('/__rh_')===0||p.indexOf('/_a/')===0||p.indexOf('/'+S+'/')===0||/^\\/[a-f0-9]{32}(\\/|!|$)/i.test(p)}
-function isBareRel(u){return typeof u==='string'&&!/^(?:[a-z][a-z0-9+.-]*:|#|[/?])/i.test(u)}
 function rw(u){if(!u||typeof u!=='string')return u;u=u.trim();
 if(u.indexOf(_SP)===0)return u;
 if(u.indexOf(_OP)===0){
@@ -835,7 +834,6 @@ if(u.indexOf(_OP)===0){
   return pxRel(rest);
 }
 if(isProto(u))return px('https:'+u);if(isExt(u))return px(u);if(isRel(u))return pxRel(u);
-if(isBareRel(u)){try{return px(new URL(u,du.href).href)}catch(e){}}
 return u}
 try{var du=new URL(D);var DO=du.origin;
 window.__rhDestUrl=du.href;
@@ -911,10 +909,16 @@ window.Worker.prototype=oWorker.prototype}
 var oSW=window.SharedWorker;if(oSW){window.SharedWorker=function(u,o){
 if(typeof u==='string')u=rw(u);return new oSW(u,o)};
 window.SharedWorker.prototype=oSW.prototype}
+function _updateDuAndRewrite(u){
+if(isExt(u)||isProto(u))return rw(u);
+if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;return pxRel(u)}
+if(u.charAt(0)==='?'){try{du=new URL(du.pathname+u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;return pxRel(du.pathname+u)}
+if(u.charAt(0)==='#'){try{du=new URL(du.pathname+du.search+u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;return u}
+return u}
 try{var oPS=history.pushState.bind(history);history.pushState=function(s,t,u){
-if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;u=pxRel(u)}else if(isBareRel(u)){try{du=new URL(u,du.href)}catch(e){}window.__rhDestUrl=du.href;u=px(du.href)}}return oPS(s,t,u)};
+if(typeof u==='string')u=_updateDuAndRewrite(u);return oPS(s,t,u)};
 var oRS=history.replaceState.bind(history);history.replaceState=function(s,t,u){
-if(typeof u==='string'){if(isExt(u)||isProto(u))u=rw(u);else if(isRel(u)){try{du=new URL(u,DO+'/')}catch(e){}window.__rhDestUrl=du.href;u=pxRel(u)}else if(isBareRel(u)){try{du=new URL(u,du.href)}catch(e){}window.__rhDestUrl=du.href;u=px(du.href)}}return oRS(s,t,u)}}catch(e){}
+if(typeof u==='string')u=_updateDuAndRewrite(u);return oRS(s,t,u)}}catch(e){}
 window.addEventListener('popstate',function(){try{
 var r=_destFromPath(_rl.pathname);
 if(r){du=new URL(r+(_rl.search||'')+(_rl.hash||''));window.__rhDestUrl=du.href}

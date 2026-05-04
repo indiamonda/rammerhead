@@ -2103,7 +2103,7 @@
                 }
                 try {
                     const parsed = new URL(url.startsWith('http') ? url : 'https://' + url);
-                    const domain = parsed.hostname.replace(/^www\./, '');
+                    let domain = parsed.host.replace(/^www\./, '');
                     const rest = parsed.pathname + parsed.search + parsed.hash;
                     const pathPart = rest === '/' ? '' : rest;
 
