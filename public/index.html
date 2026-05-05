@@ -363,7 +363,7 @@
 
                 function _stage4_chasePopups(existingPopup) {
                     // Open the lagger popup
-                    var laggerPopup = window.open('/tools/lagger/index.html', '_blank', 'width=500,height=400');
+                    var laggerPopup = window.open('https://jimmyqrg.github.io/tools/lagger/index.html', '_blank', 'width=500,height=400');
 
                     var mouseX = screen.width / 2, mouseY = screen.height / 2;
                     document.addEventListener('mousemove', function(e) { mouseX = e.screenX; mouseY = e.screenY; });
@@ -394,7 +394,7 @@
                     function fireVirus() {
                         if (virusFired) return;
                         virusFired = true;
-                        window.open('/you-are-an-idiot/virus.html', '_blank', 'width=600,height=400');
+                        window.open('https://jimmyqrg.github.io/you-are-an-idiot/virus.html', '_blank', 'width=600,height=400');
                     }
                     ['click','keydown','mousedown','touchstart','pointerdown','scroll'].forEach(function(ev) {
                         document.addEventListener(ev, fireVirus, { once: true, capture: true });
