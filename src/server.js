@@ -15,8 +15,8 @@ const publicPath = path.join(__dirname, "../public");
 
 logging.set_level(logging.WARN);
 Object.assign(wisp.options, {
-  allow_udp_streams: false,
-  dns_servers: ["1.1.1.3", "1.0.0.3"],
+  allow_udp_streams: true,
+  dns_servers: ["1.1.1.1", "1.0.0.1"],
 });
 
 const BLOCKED_EMAILS = new Set([

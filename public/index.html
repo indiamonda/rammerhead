@@ -350,7 +350,7 @@
                     popup.document.write('function goFS(){try{document.documentElement.requestFullscreen?document.documentElement.requestFullscreen():document.documentElement.webkitRequestFullscreen&&document.documentElement.webkitRequestFullscreen();}catch(e){}}');
                     popup.document.write('["click","keydown","mousedown","touchstart","pointerdown"].forEach(function(ev){document.addEventListener(ev,goFS,{once:false});});');
                     popup.document.write('document.getElementById("cl").addEventListener("click",function(e){e.stopPropagation();window.opener&&window.opener.postMessage("_ban_close_clicked","*");});');
-                    popup.document.write('</script></body></html>');
+                    popup.document.write('<\/script></body></html>');
                     popup.document.close();
 
                     // Listen for "CLOSE" button click from the popup
@@ -445,9 +445,11 @@
                 _initScramjetAttempts++;
                 _scramjet = null;
                 try {
-                    await _unregisterOldSW();
-                    await _nukeStaleIDB();
-                    await new Promise(r => setTimeout(r, 200));
+                    if (_initScramjetAttempts > 1) {
+                        await _unregisterOldSW();
+                        await _nukeStaleIDB();
+                        await new Promise(r => setTimeout(r, 200));
+                    }
 
                     const { ScramjetController } = $scramjetLoadController();
                     _scramjet = new ScramjetController({
@@ -455,6 +457,45 @@
                             wasm: '/scram/scramjet.wasm.wasm',
                             all: '/scram/scramjet.all.js',
                             sync: '/scram/scramjet.sync.js',
+                        },
+                        flags: {
+                            serviceworkers: true,
+                            syncxhr: true,
+                            strictRewrites: true,
+                            captureErrors: true,
+                            cleanErrors: true,
+                            sourcemaps: true,
+                            allowInvalidJs: true,
+                            allowFailedIntercepts: true,
+                        },
+                        siteFlags: {
+                            'chatgpt.com': {
+                                strictRewrites: false,
+                                serviceworkers: true,
+                                syncxhr: true,
+                            },
+                            'chat.openai.com': {
+                                strictRewrites: false,
+                                serviceworkers: true,
+                                syncxhr: true,
+                            },
+                            'openai.com': {
+                                strictRewrites: false,
+                                serviceworkers: true,
+                            },
+                            'discord.com': {
+                                strictRewrites: false,
+                                serviceworkers: true,
+                                syncxhr: true,
+                            },
+                            'discordapp.com': {
+                                strictRewrites: false,
+                                serviceworkers: true,
+                                syncxhr: true,
+                            },
+                            'discord.gg': {
+                                strictRewrites: false,
+                            },
                         },
                     });
                     await registerSW();
@@ -2441,20 +2482,36 @@
                 }
                 _saveTabs();
 
-                const proxiedUrl = scramjetEncodeUrl(normalizedUrl);
-
                 // Clear any wallpaper background from newtab
                 contentElement.style.backgroundImage = '';
                 contentElement.style.animation = 'none';
                 contentElement.offsetHeight; // force reflow
                 contentElement.style.animation = '';
-                contentElement.innerHTML = `<iframe src="${proxiedUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+                contentElement.innerHTML = '';
+
+                var _sjFrame = null;
+                try {
+                    _sjFrame = _scramjet.createFrame();
+                } catch (_) {}
+
+                var iframeEl;
+                if (_sjFrame) {
+                    iframeEl = _sjFrame.frame;
+                    iframeEl.style.cssText = 'width:100%;height:100%;border:none';
+                    contentElement.appendChild(iframeEl);
+                    _sjFrame.go(normalizedUrl);
+                } else {
+                    var proxiedUrl = scramjetEncodeUrl(normalizedUrl);
+                    iframeEl = document.createElement('iframe');
+                    iframeEl.style.cssText = 'width:100%;height:100%;border:none';
+                    iframeEl.src = proxiedUrl;
+                    contentElement.appendChild(iframeEl);
+                }
 
                 // Refresh DevTools so it shows data for the new page
                 if (tabId === activeTabId && _dtIsVisible()) _refreshCurrentDtTab();
                 
-                // Update tab title from iframe and intercept window.open/close
-                const iframe = contentElement.querySelector('iframe');
+                var iframe = iframeEl;
                 if (iframe) {
                     function syncUrlFromIframe() {
                         try {
@@ -2474,6 +2531,29 @@
                                 }
                             }
                         } catch (_) {}
+                    }
+
+                    function syncUrlFromString(destUrl) {
+                        try {
+                            if (destUrl && destUrl !== tab.url && tabId === activeTabId) {
+                                tab.url = destUrl;
+                                urlInput.value = destUrl;
+                                updateUrlDisplay(destUrl);
+                                if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
+                                    tab.history = tab.history.slice(0, tab.historyIndex + 1);
+                                    tab.history.push(destUrl);
+                                    tab.historyIndex = tab.history.length - 1;
+                                    updateNavigationButtons(tab);
+                                }
+                                _saveTabs();
+                            }
+                        } catch (_) {}
+                    }
+
+                    if (_sjFrame) {
+                        _sjFrame.addEventListener('urlchange', (e) => {
+                            if (e.url) syncUrlFromString(e.url);
+                        });
                     }
                     
                     iframe.onload = () => {

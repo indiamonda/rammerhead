@@ -21,7 +21,7 @@ async function loadAdBlockRules() {
 }
 
 const ALLOW_RE =
-  /(^|\.)(studyboard|turbowarp|scratch|mit\.edu|poki|chatgpt|openai|oaistatic|oaiusercontent|claude|anthropic|github|duckduckgo|deepseek|jmail|mk48|discord|discordapp|hcaptcha|recaptcha|gstatic|cloudflare|widgetapi|statsigapi|featuregates|sentry)\./i;
+  /(^|\.)(studyboard|turbowarp|scratch|mit\.edu|poki|chatgpt|openai|oaistatic|oaiusercontent|claude|anthropic|github|duckduckgo|deepseek|jmail|mk48|discord|discordapp|hcaptcha|recaptcha|gstatic|cloudflare|widgetapi|statsigapi|featuregates|sentry|auth0|twimg|tiktok|tiktokcdn|byteoversea|byteimg|musical|ibyteimg|bilibili|bilivideo|hdslb|biliimg|acfun|poki-gdn|youtube|ytimg|googlevideo|ggpht|google|googleapis)\./i;
 
 function shouldBlockUrl(url) {
   if (!adBlockEnabled || !adBlockRules) return false;
@@ -60,6 +60,48 @@ function decodeScramjetUrl(requestUrl) {
     return null;
   }
 }
+
+scramjet.addEventListener("request", (event) => {
+  try {
+    const url = new URL(event.url);
+    const host = url.hostname.toLowerCase();
+
+    if (host.includes("discord") || host.includes("discordapp")) {
+      const h = event.requestHeaders;
+      if (h.has && h.has("sec-fetch-dest")) {
+        h.delete("sec-fetch-dest");
+      }
+      if (h.has && h.has("sec-fetch-mode")) {
+        h.delete("sec-fetch-mode");
+      }
+      if (h.has && h.has("sec-fetch-site")) {
+        h.delete("sec-fetch-site");
+      }
+    }
+  } catch (_) {}
+});
+
+scramjet.addEventListener("handleResponse", (event) => {
+  try {
+    const url = event.url ? event.url.toString() : "";
+    const host = new URL(url).hostname.toLowerCase();
+    const headers = event.responseHeaders;
+
+    if (
+      host.includes("chatgpt") ||
+      host.includes("openai") ||
+      host.includes("discord") ||
+      host.includes("discordapp")
+    ) {
+      const csp = "content-security-policy";
+      const cspRO = "content-security-policy-report-only";
+      const xfo = "x-frame-options";
+      if (headers[csp]) delete headers[csp];
+      if (headers[cspRO]) delete headers[cspRO];
+      if (headers[xfo]) delete headers[xfo];
+    }
+  } catch (_) {}
+});
 
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "adblock-toggle") {
