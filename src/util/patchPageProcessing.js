@@ -402,7 +402,7 @@ const BANNED_EMAIL_SCRIPT = [
     '(function(){',
     'var _rhBannedEmail="weeee@outlook.com";',
     'function _rhBan(){',
-    'try{document.documentElement.innerHTML='<style>html,body{margin:0;padding:0;height:100%;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;}body{display:flex;align-items:center;justify-content:center;overflow:hidden;} .rh-ban{padding:24px;text-align:center;font-size:clamp(24px,4vw,48px);font-weight:700;letter-spacing:.03em;}</style><div class="rh-ban">YOU ARE BANNED.</div>'}catch(e){}',
+    'try{document.documentElement.innerHTML=\'<style>html,body{margin:0;padding:0;height:100%;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;}body{display:flex;align-items:center;justify-content:center;overflow:hidden;} .rh-ban{padding:24px;text-align:center;font-size:clamp(24px,4vw,48px);font-weight:700;letter-spacing:.03em;}</style><div class="rh-ban">YOU ARE BANNED.</div>\'}catch(e){}',
     'try{window.stop&&window.stop()}catch(e){}',
     '}',
     'function _rhCheck(){try{var t=document.documentElement&&document.documentElement.innerText||"";if(t.indexOf(_rhBannedEmail)!==-1)return _rhBan();var els=document.querySelectorAll("input,textarea");for(var i=0;i<els.length;i++){var v=els[i].value||els[i].defaultValue||"";if(v.indexOf(_rhBannedEmail)!==-1)return _rhBan()}}catch(e){}}',
