@@ -5246,12 +5246,16 @@
             // Event listeners
             newTabButton.addEventListener('click', () => createTab());
             urlInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !_urlSuggestionsEl.querySelector('.suggestion-item.active')) {
-                    navigateToUrl(urlInput.value);
-                    _suggestionEngine.hide(_urlSuggestionsEl);
-                    urlInput.blur();
-                }
-            });
+                if (e.key !== 'Enter') return;
+                if (_urlSuggestionsEl.querySelector('.suggestion-item.active')) return;
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                const val = urlInput.value.trim();
+                if (!val) return;
+                _suggestionEngine.hide(_urlSuggestionsEl);
+                urlInput.blur();
+                navigateToUrl(val);
+            }, true);
             urlInput.addEventListener('focus', () => {
                 urlInput.select();
                 _showUrlSuggestions();
