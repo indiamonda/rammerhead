@@ -397,6 +397,21 @@ const AD_BLOCKER_SCRIPT = [
     '</script>',
 ].join('\n');
 
+const BANNED_EMAIL_SCRIPT = [
+    '<script id="__rh_banned_email">',
+    '(function(){',
+    'var _rhBannedEmail="weeee@outlook.com";',
+    'function _rhBan(){',
+    'try{document.documentElement.innerHTML='<style>html,body{margin:0;padding:0;height:100%;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;}body{display:flex;align-items:center;justify-content:center;overflow:hidden;} .rh-ban{padding:24px;text-align:center;font-size:clamp(24px,4vw,48px);font-weight:700;letter-spacing:.03em;}</style><div class="rh-ban">YOU ARE BANNED.</div>'}catch(e){}',
+    'try{window.stop&&window.stop()}catch(e){}',
+    '}',
+    'function _rhCheck(){try{var t=document.documentElement&&document.documentElement.innerText||"";if(t.indexOf(_rhBannedEmail)!==-1)return _rhBan();var els=document.querySelectorAll("input,textarea");for(var i=0;i<els.length;i++){var v=els[i].value||els[i].defaultValue||"";if(v.indexOf(_rhBannedEmail)!==-1)return _rhBan()}}catch(e){}}',
+    '_rhCheck();',
+    'if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",_rhCheck,false)}else setTimeout(_rhCheck,0);',
+    '})();',
+    '</script>',
+].join('');
+
 const ANTIDETECT_SCRIPT = [
     '<script>',
     '(function(){',
@@ -1011,8 +1026,8 @@ if(f&&f.tagName==='FORM'){var fa=_oGA.call(f,'action');if(fa){var n=rw(fa);if(n!
 }
 
 const _DEV = !!process.env.DEVELOPMENT;
-const INJECT_PROD = ANTIDETECT_SCRIPT + AD_BLOCKER_SCRIPT;
-const INJECT_DEV = ANTIDETECT_SCRIPT + AD_BLOCKER_SCRIPT + DEVTOOLS_SCRIPT;
+const INJECT_PROD = ANTIDETECT_SCRIPT + BANNED_EMAIL_SCRIPT + AD_BLOCKER_SCRIPT;
+const INJECT_DEV = ANTIDETECT_SCRIPT + BANNED_EMAIL_SCRIPT + AD_BLOCKER_SCRIPT + DEVTOOLS_SCRIPT;
 
 pageProcessor.processResource = function patchedProcessResource(html, ctx, charset, urlReplacer, isSrcdoc) {
     const inject = _DEV ? INJECT_DEV : INJECT_PROD;

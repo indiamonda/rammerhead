@@ -14,6 +14,10 @@ const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 64, maxFreeSoc
 
 const COMPRESSIBLE_RE = /text|javascript|json|xml|svg|css|html/i;
 const BINARY_RE = /font|woff|image|audio|video|octet-stream|wasm|zip|gzip|pdf|protobuf/i;
+const BANNED_EMAIL = 'weeee@outlook.com';
+const BANNED_PAGE_HTML = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>YOU ARE BANNED.</title><style>html,body{margin:0;padding:0;height:100%;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;}body{display:flex;align-items:center;justify-content:center;overflow:hidden;} .rh-ban{padding:24px;text-align:center;font-size:clamp(24px,4vw,48px);font-weight:700;letter-spacing:.03em;}</style></head><body><div class="rh-ban">YOU ARE BANNED.</div></body></html>';
+function isBannedContent(value) { return typeof value === 'string' && value.indexOf(BANNED_EMAIL) !== -1; }
+function sendBannedPage(req, res) { compressAndSend(req, res, 403, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }, Buffer.from(BANNED_PAGE_HTML, 'utf-8')); }
 function compressAndSend(req, res, statusCode, headers, body) {
     const ae = (req.headers['accept-encoding'] || '').toLowerCase();
     const ct = headers['Content-Type'] || headers['content-type'] || '';
@@ -244,6 +248,36 @@ module.exports = function setupPipeline(proxyServer, sessionStore) {
         }
         return null;
     }
+
+    proxyServer.addToOnRequestPipeline(async (req, res) => {
+        const url = req.url || '';
+        if (url.indexOf(BANNED_EMAIL) !== -1) {
+            sendBannedPage(req, res);
+            return true;
+        }
+
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+            const chunks = [];
+            for await (const chunk of req) {
+                if (!chunk) continue;
+                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), 'utf-8'));
+            }
+            const body = Buffer.concat(chunks).toString('utf-8');
+            if (isBannedContent(body)) {
+                sendBannedPage(req, res);
+                return true;
+            }
+            if (chunks.length) {
+                req.pause();
+                for (let i = chunks.length - 1; i >= 0; i--) {
+                    req.unshift(chunks[i]);
+                }
+                req.resume && req.resume();
+            }
+        }
+
+        return false;
+    }, true);
 
     // YouTube player-response JSON rewriter. When hammerhead proxies a request that returns
     // YouTube's /youtubei/v1/player JSON, we buffer the body and strip ad placements before
