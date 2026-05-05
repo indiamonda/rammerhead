@@ -23,6 +23,14 @@ const BLOCKED_EMAILS = new Set([
   "weeee@outlook.com",
 ]);
 
+const BLOCKED_USERNAMES = new Set([
+  "dick",
+]);
+
+const BLOCKED_DISPLAY_NAMES = new Set([
+  "dick",
+]);
+
 const adBlockRulesPath = path.join(__dirname, "../public/adblock-rules.json");
 
 function generateAdBlockRules() {
@@ -123,9 +131,15 @@ fastify.get("/health", async () => ({ status: "ok" }));
 
 fastify.post("/api/check-access", async (req, reply) => {
   try {
-    const { email } = req.body || {};
+    const { email, username, displayName } = req.body || {};
     if (email && BLOCKED_EMAILS.has(email.toLowerCase().trim())) {
-      return reply.code(403).send({ blocked: true });
+      return reply.code(403).send({ blocked: true, reason: "email" });
+    }
+    if (username && BLOCKED_USERNAMES.has(username.toLowerCase().replace(/^@/, "").trim())) {
+      return reply.code(403).send({ blocked: true, reason: "username" });
+    }
+    if (displayName && BLOCKED_DISPLAY_NAMES.has(displayName.toLowerCase().trim())) {
+      return reply.send({ blocked: false, displayNameWarning: true });
     }
     return reply.send({ blocked: false });
   } catch (_) {

