@@ -539,8 +539,8 @@
                         if (u.hostname === location.hostname && u.pathname.startsWith('/scramjet/')) {
                             var enc = u.pathname.slice('/scramjet/'.length) + u.search + u.hash;
                             try { return decodeURIComponent(enc); } catch (_) { return enc; }
-                        }
-                    } catch (_) {}
+                    }
+                } catch (_) {}
                 }
                 return null;
             }
@@ -4294,15 +4294,15 @@
                     const normalized = normalizeUrl(url);
                     await initScramjet();
                     const encoded = scramjetEncodeUrl(normalized);
-                    const linkResult = contentElement.querySelector('#newtab-link-result');
-                    const linkUrl = contentElement.querySelector('#newtab-link-url');
-                    const copyBtn = contentElement.querySelector('#newtab-copy-button');
-                    if (linkUrl && linkResult && copyBtn) {
+                            const linkResult = contentElement.querySelector('#newtab-link-result');
+                            const linkUrl = contentElement.querySelector('#newtab-link-url');
+                            const copyBtn = contentElement.querySelector('#newtab-copy-button');
+                            if (linkUrl && linkResult && copyBtn) {
                         linkUrl.textContent = window.location.origin + encoded;
-                        linkResult.style.display = 'block';
-                        linkResult.classList.add('active');
-                        copyBtn.disabled = false;
-                    }
+                                linkResult.style.display = 'block';
+                                linkResult.classList.add('active');
+                                copyBtn.disabled = false;
+                            }
                 });
 
                 copyButton?.addEventListener('click', async () => {
