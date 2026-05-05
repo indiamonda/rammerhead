@@ -94,9 +94,12 @@ const fastify = Fastify({
     return createServer()
       .on("request", (req, res) => {
         const u = req.url || "";
-        if (!u.startsWith("/scramjet/")) {
+        // Only set COOP on static assets and the shell page — NOT on
+        // scramjet-proxied routes. Do NOT set COEP "credentialless" because
+        // it prevents cross-origin cookie/credential flows inside proxied
+        // iframes (breaks Scratch sign-in, TurboWarp API calls, etc.).
+        if (!u.startsWith("/scramjet/") && !u.startsWith("/scram/")) {
           res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-          res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
         }
         handler(req, res);
       })
