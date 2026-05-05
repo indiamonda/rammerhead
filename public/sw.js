@@ -83,23 +83,14 @@ scramjet.addEventListener("request", (event) => {
 
 scramjet.addEventListener("handleResponse", (event) => {
   try {
-    const url = event.url ? event.url.toString() : "";
-    const host = new URL(url).hostname.toLowerCase();
     const headers = event.responseHeaders;
 
-    if (
-      host.includes("chatgpt") ||
-      host.includes("openai") ||
-      host.includes("discord") ||
-      host.includes("discordapp")
-    ) {
-      const csp = "content-security-policy";
-      const cspRO = "content-security-policy-report-only";
-      const xfo = "x-frame-options";
-      if (headers[csp]) delete headers[csp];
-      if (headers[cspRO]) delete headers[cspRO];
-      if (headers[xfo]) delete headers[xfo];
-    }
+    delete headers["content-security-policy"];
+    delete headers["content-security-policy-report-only"];
+    delete headers["x-frame-options"];
+    delete headers["cross-origin-opener-policy"];
+    delete headers["cross-origin-embedder-policy"];
+    delete headers["cross-origin-resource-policy"];
   } catch (_) {}
 });
 
