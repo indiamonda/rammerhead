@@ -93,8 +93,11 @@ const fastify = Fastify({
   serverFactory: (handler) => {
     return createServer()
       .on("request", (req, res) => {
-        res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-        res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+        const u = req.url || "";
+        if (!u.startsWith("/scramjet/")) {
+          res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+          res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+        }
         handler(req, res);
       })
       .on("upgrade", (req, socket, head) => {

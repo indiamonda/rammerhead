@@ -63,20 +63,14 @@ function decodeScramjetUrl(requestUrl) {
 
 scramjet.addEventListener("request", (event) => {
   try {
-    const url = new URL(event.url);
-    const host = url.hostname.toLowerCase();
-
-    if (host.includes("discord") || host.includes("discordapp")) {
-      const h = event.requestHeaders;
-      if (h.has && h.has("sec-fetch-dest")) {
-        h.delete("sec-fetch-dest");
-      }
-      if (h.has && h.has("sec-fetch-mode")) {
-        h.delete("sec-fetch-mode");
-      }
-      if (h.has && h.has("sec-fetch-site")) {
-        h.delete("sec-fetch-site");
-      }
+    const h = event.requestHeaders;
+    if (!h || !h.has) return;
+    const dest = event.destination;
+    if (dest === "document" || dest === "iframe") {
+      if (h.has("sec-fetch-site")) h.set("sec-fetch-site", "none");
+      if (h.has("sec-fetch-user")) h.set("sec-fetch-user", "?1");
+    } else {
+      if (h.has("sec-fetch-site")) h.set("sec-fetch-site", "same-origin");
     }
   } catch (_) {}
 });

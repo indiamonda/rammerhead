@@ -467,9 +467,9 @@
                 _initScramjetAttempts++;
                 _scramjet = null;
                 try {
-                    await _nukeStaleIDB();
-                    await new Promise(r => setTimeout(r, 100));
                     if (_initScramjetAttempts > 1) {
+                        await _nukeStaleIDB();
+                        await new Promise(r => setTimeout(r, 100));
                         await _unregisterOldSW();
                         await new Promise(r => setTimeout(r, 300));
                     }
@@ -525,7 +525,16 @@
                     await _scramjet.init();
                     _bareMuxConnection = new BareMux.BareMuxConnection('/baremux/worker.js');
                     const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
-                    if ((await _bareMuxConnection.getTransport()) !== '/libcurl/index.mjs') {
+                    try {
+                        var _transportCheck = await Promise.race([
+                            _bareMuxConnection.getTransport(),
+                            new Promise(r => setTimeout(() => r('__timeout__'), 3000))
+                        ]);
+                        if (_transportCheck !== '/libcurl/index.mjs') {
+                            await _bareMuxConnection.setTransport('/libcurl/index.mjs', [{ websocket: wispUrl }]);
+                        }
+                    } catch (_bmErr) {
+                        console.warn('BareMux transport setup issue:', _bmErr);
                         await _bareMuxConnection.setTransport('/libcurl/index.mjs', [{ websocket: wispUrl }]);
                     }
                     _scramjetReady = true;
@@ -2508,399 +2517,74 @@
                 // Clear any wallpaper background from newtab
                 contentElement.style.backgroundImage = '';
                 contentElement.style.animation = 'none';
-                contentElement.offsetHeight; // force reflow
+                contentElement.offsetHeight;
                 contentElement.style.animation = '';
                 contentElement.innerHTML = '';
 
-                var _sjFrame = null;
-                try {
-                    _sjFrame = _scramjet.createFrame();
-                } catch (_) {}
+                var proxiedUrl = scramjetEncodeUrl(normalizedUrl);
+                var iframeEl = document.createElement('iframe');
+                iframeEl.style.cssText = 'width:100%;height:100%;border:none';
+                iframeEl.src = proxiedUrl;
+                contentElement.appendChild(iframeEl);
 
-                var iframeEl;
-                if (_sjFrame) {
-                    iframeEl = _sjFrame.frame;
-                    iframeEl.style.cssText = 'width:100%;height:100%;border:none';
-                    contentElement.appendChild(iframeEl);
-                    _sjFrame.go(normalizedUrl);
-                } else {
-                    var proxiedUrl = scramjetEncodeUrl(normalizedUrl);
-                    iframeEl = document.createElement('iframe');
-                    iframeEl.style.cssText = 'width:100%;height:100%;border:none';
-                    iframeEl.src = proxiedUrl;
-                    contentElement.appendChild(iframeEl);
-                }
-
-                // Refresh DevTools so it shows data for the new page
-                if (tabId === activeTabId && _dtIsVisible()) _refreshCurrentDtTab();
-                
                 var iframe = iframeEl;
-                if (iframe) {
-                    function syncUrlFromIframe() {
-                        try {
-                            const win = iframe.contentWindow;
-                            if (!win) return;
-                            const currentUrl = win.location.href;
-                            let destUrl = extractRealUrl(currentUrl, win);
-                            if (destUrl && destUrl !== tab.url && tabId === activeTabId) {
-                                tab.url = destUrl;
-                                urlInput.value = destUrl;
-                                updateUrlDisplay(destUrl);
-                                if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
-                                    tab.history = tab.history.slice(0, tab.historyIndex + 1);
-                                    tab.history.push(destUrl);
-                                    tab.historyIndex = tab.history.length - 1;
-                                    updateNavigationButtons(tab);
-                                }
-                            }
-                        } catch (_) {}
-                    }
 
-                    function syncUrlFromString(destUrl) {
-                        try {
-                            if (destUrl && destUrl !== tab.url && tabId === activeTabId) {
-                                tab.url = destUrl;
-                                urlInput.value = destUrl;
-                                updateUrlDisplay(destUrl);
-                                if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
-                                    tab.history = tab.history.slice(0, tab.historyIndex + 1);
-                                    tab.history.push(destUrl);
-                                    tab.historyIndex = tab.history.length - 1;
-                                    updateNavigationButtons(tab);
-                                }
-                                _saveTabs();
-                            }
-                        } catch (_) {}
-                    }
-
-                    if (_sjFrame) {
-                        _sjFrame.addEventListener('urlchange', (e) => {
-                            if (e.url) syncUrlFromString(e.url);
-                        });
-                    }
-                    
-                    iframe.onload = () => {
-                        try {
-                            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                            const iframeWindow = iframe.contentWindow;
-                            
-                            syncUrlFromIframe();
-                            _saveTabs();
-
-                            if (tabId === activeTabId) {
-                                const iframeColor = _adaptiveChrome.extractIframeBodyColor(iframe);
-                                _adaptiveChrome.apply(iframeColor);
-                            }
-                            iframeWindow.addEventListener('hashchange', () => { syncUrlFromIframe(); _saveTabs(); });
-                            iframeWindow.addEventListener('popstate', () => { syncUrlFromIframe(); _saveTabs(); });
-
-                            // Poll injected DevTools data from iframe
-                            (function pollDevTools(win) {
-                                if (!win || win.__SBRAND__poll) return;
-                                win.__SBRAND__poll = 1;
-                                var iv = setInterval(function() {
-                                    try {
-                                        var q = win.__SBRAND__q;
-                                        if (q && q.length) {
-                                            var batch = q.splice(0, 50);
-                                            batch.forEach(function(e) { consoleMessages.push(e); });
-                                            if (consoleMessages.length > 1000) consoleMessages = consoleMessages.slice(-1000);
-                                            batch.forEach(function(e) { if (e.l === 'error') _devtoolsErrorCount++; });
-                                            _renderConsoleIfVisible();
-                                            _updateErrorBadge();
-                                            // Console messages are kept client-side only (no server endpoint)
-                                        }
-                                        var net = win.__SBRAND__n;
-                                        if (net && net.length) {
-                                            var nb = net.splice(0, 100);
-                                            nb.forEach(function(e) {
-                                                networkRequests.push({
-                                                    method: e.m, url: e.u, status: e.s, type: e.tp,
-                                                    contentType: e.ct || '', size: e.sz || 0,
-                                                    startTime: e.t0, endTime: e.t1, timestamp: e.t0
-                                                });
-                                            });
-                                            if (networkRequests.length > 500) networkRequests = networkRequests.slice(-500);
-                                            _renderNetworkIfVisible();
-                                        }
-                                        var src = win.__SBRAND__src;
-                                        if (src && src.length) {
-                                            var sb = src.splice(0, 200);
-                                            var seen = {};
-                                            var added = false;
-                                            sourceFiles.forEach(function(f) { seen[f.url] = 1; });
-                                            sb.forEach(function(e) {
-                                                if (!seen[e.u]) { seen[e.u] = 1; sourceFiles.push({ url: e.u, type: e.tp }); added = true; }
-                                            });
-                                            if (added) _renderSourceIfVisible();
-                                        }
-                                    } catch(e) {
-                                        clearInterval(iv);
-                                    }
-                                }, 1000);
-                            })(iframeWindow);
-
-                            // Refresh DevTools after page load so all tabs show fresh data
-                            if (tabId === activeTabId && _dtIsVisible()) {
-                                setTimeout(_refreshCurrentDtTab, 200);
-                            }
-                            
-                            const title = iframeDoc.title || new URL(normalizedUrl).hostname;
-                            updateTabTitle(tabId, title);
-                            const favLink = iframeDoc.querySelector('link[rel="icon"]') || iframeDoc.querySelector('link[rel="shortcut icon"]');
-                            const favHref = favLink?.getAttribute('href');
-                            if (favHref) {
-                                // Resolve the favicon URL against the *destination* URL
-                                // (normalizedUrl), NOT the iframe's location.href. The iframe's
-                                // URL is the wrapped form (https://this-host/<sid>/<dest>),
-                                // so resolving an absolute path like "/assets/icons/favicon-128.png"
-                                // against it produced "https://this-host/assets/icons/
-                                // favicon-128.png" — a 404 against this host's static dir. We
-                                // then rewrite to the wrapped form so the browser fetches it via
-                                // this host (right Referer, no CORB / mixed-content issues, no
-                                // hotlink-rejection from the destination).
-                                let favUrl = favHref;
-                                if (favHref.startsWith('data:')) {
-                                    favUrl = favHref;
-                                } else {
-                                    try {
-                                        const abs = new URL(favHref, normalizedUrl).href;
-                                        favUrl = scramjetEncodeUrl(abs);
-                                    } catch (_) {}
-                                }
-                                updateTabFavicon(tabId, favUrl);
-                            }
-                            
-                            // === Tab-aware interception of all navigation inside proxied iframes ===
-                            // (URL resolution + destination URL unwrapping happens
-                            // inside `_absToDestUrl` below, where it's actually used.)
-
-                            // Build a lightweight mock Window returned by window.open() so callers
-                            // that do `var w = window.open(...); w.focus(); w.close();` don't crash.
-                            function makeMockWindow(openedTabId) {
-                                return {
-                                    closed: false,
-                                    focus() {},
-                                    blur() {},
-                                    close() {
-                                        this.closed = true;
-                                        if (openedTabId) closeTab(openedTabId);
-                                    },
-                                    postMessage() {},
-                                    location: { href: '', replace() {}, assign() {} },
-                                    document: { write() {}, writeln() {}, close() {} },
-                                    opener: iframeWindow
-                                };
-                            }
-
-                            // Named-window registry so `window.open('url','name')` reuses same tab
-                            if (!window._namedWindows) window._namedWindows = {};
-
-                            // --- window.open() ---
-                            try {
-                                iframeWindow.open = function(url, target, features) {
-                                    // Pages call window.open with three flavors of URL:
-                                    //   (a) plain destination ("https://chat.deepseek.com")
-                                    //   (b) gateway-relative ("/<sid>/<shuffled>")
-                                    //   (c) relative path    ("/login", "../foo")
-                                    // Resolve against the iframe's actual location to make
-                                    // it absolute first, then unwrap any gateway form so we
-                                    // hand `loadTabContent`/`createTab` a real destination
-                                    // URL (its job is to re-wrap into a gateway URL).
-                                    var norm = null;
-                                    if (url) {
-                                        var abs = url;
-                                        try { abs = new URL(url, iframeWindow.location.href).href; } catch (_) {}
-                                        var dest = extractRealUrl(abs, iframeWindow);
-                                        if (!dest && (abs.startsWith('http://') || abs.startsWith('https://'))) {
-                                            dest = abs;
-                                        }
-                                        if (dest) norm = normalizeUrl(dest);
-                                    }
-                                    var t = (target || '').toLowerCase();
-
-                                    if (t === '_self' || t === '') {
-                                        // Navigate current tab
-                                        if (norm) loadTabContent(tabId, norm);
-                                        return makeMockWindow(tabId);
-                                    }
-                                    if (t === '_top' || t === '_parent') {
-                                        // Navigate current tab (iframe IS the tab)
-                                        if (norm) loadTabContent(tabId, norm);
-                                        return makeMockWindow(tabId);
-                                    }
-                                    if (t === '_blank' || !target) {
-                                        // New wrapped tab
-                                        var newId = norm ? createTab(norm) : createTab();
-                                        return makeMockWindow(newId);
-                                    }
-                                    // Named window — reuse tab if already open
-                                    if (window._namedWindows[target] && tabs.find(tb => tb.id === window._namedWindows[target])) {
-                                        var existingId = window._namedWindows[target];
-                                        if (norm) loadTabContent(existingId, norm);
-                                        switchToTab(existingId);
-                                        return makeMockWindow(existingId);
-                                    }
-                                    var namedId = norm ? createTab(norm) : createTab();
-                                    window._namedWindows[target] = namedId;
-                                    return makeMockWindow(namedId);
-                                };
-                            } catch (_) {}
-
-                            // --- window.close() ---
-                            try {
-                                iframeWindow.close = function() {
-                                    if (tabs.length > 1) {
-                                        closeTab(tabId);
-                                    } else {
-                                        loadTabContent(tabId, 'jq://newtab/');
-                                    }
-                                };
-                            } catch (_) {}
-
-                            // --- window.opener (mock so pages can call opener.focus/close) ---
-                            try {
-                                Object.defineProperty(iframeWindow, 'opener', {
-                                    get() { return makeMockWindow(tabId); },
-                                    configurable: true
-                                });
-                            } catch (_) {}
-
-                            // --- Intercept <a> clicks & <form> submits that would escape the iframe ---
-                            try {
-                                // Resolve a link/form action to a destination URL.
-                                function _absToDestUrl(absHref) {
-                                    if (!absHref) return null;
-                                    var dest = extractRealUrl(absHref, iframeWindow);
-                                    if (dest) return dest;
-                                    if (absHref.startsWith('http://') || absHref.startsWith('https://')) return absHref;
-                                    return null;
-                                }
-                                // Read both the live target attribute and the saved one.
-                                function _resolvedTarget(el) {
-                                    var raw = (el.getAttribute('target') || '').toLowerCase();
-                                    var _ssvAttr = atob('dGFyZ2V0LWhhbW1lcmhlYWQtc3RvcmVkLXZhbHVl');
-                                    var saved = (el.getAttribute('target-_d-sv') ||
-                                                 el.getAttribute(_ssvAttr) || '').toLowerCase();
-                                    // Saved wins when it's a "new tab" intent that the
-                                    // walker downgraded. Otherwise prefer the live value.
-                                    if (saved === '_blank' || saved === '_new') return saved;
-                                    return raw || saved;
-                                }
-                                function _shouldOpenInNewView(e, a) {
-                                    var tgt = _resolvedTarget(a);
-                                    if (tgt === '_blank' || tgt === '_new') return true;
-                                    // Modifier-driven new tab requests (Ctrl/Cmd-click, Shift-click)
-                                    if (e && (e.ctrlKey || e.metaKey || e.shiftKey)) return true;
-                                    // Middle-click (auxclick with button === 1)
-                                    if (e && e.button === 1) return true;
-                                    return false;
-                                }
-                                function handleLinkClick(e) {
-                                    var a = e.target.closest ? e.target.closest('a[href]') : null;
-                                    if (!a) return;
-                                    // `a.href` is the browser-resolved absolute URL, which
-                                    // for an in-iframe link is already the gateway form
-                                    // (http://localhost:8080/<sid>/<shuffled-or-plain>).
-                                    var absHref = a.href;
-                                    if (!absHref) return;
-                                    if (absHref.startsWith('javascript:') || absHref.startsWith('mailto:') ||
-                                        absHref.startsWith('tel:')        || absHref.startsWith('blob:')   ||
-                                        absHref.startsWith('data:')) return;
-                                    var dest = _absToDestUrl(absHref);
-                                    if (!dest) return;
-                                    var tgt = _resolvedTarget(a);
-
-                                    if (_shouldOpenInNewView(e, a)) {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        if (typeof e.stopImmediatePropagation === 'function') {
-                                            try { e.stopImmediatePropagation(); } catch(_) {}
-                                        }
-                                        createTab(normalizeUrl(dest));
-                                    } else if (tgt === '_top' || tgt === '_parent') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        if (typeof e.stopImmediatePropagation === 'function') {
-                                            try { e.stopImmediatePropagation(); } catch(_) {}
-                                        }
-                                        loadTabContent(tabId, normalizeUrl(dest));
-                                    }
-                                    // _self or no target — let the iframe handle it normally (stays inside iframe)
-                                }
-                                // auxclick fires for middle-click (button===1) and right-click (button===2);
-                                // we only act on middle-click because right-click is the context menu.
-                                function handleAuxClick(e) {
-                                    if (e.button !== 1) return;
-                                    var a = e.target.closest ? e.target.closest('a[href]') : null;
-                                    if (!a) return;
-                                    var absHref = a.href;
-                                    if (!absHref) return;
-                                    if (absHref.startsWith('javascript:') || absHref.startsWith('mailto:') ||
-                                        absHref.startsWith('tel:')        || absHref.startsWith('blob:')   ||
-                                        absHref.startsWith('data:')) return;
-                                    var dest = _absToDestUrl(absHref);
-                                    if (!dest) return;
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (typeof e.stopImmediatePropagation === 'function') {
-                                        try { e.stopImmediatePropagation(); } catch(_) {}
-                                    }
-                                    createTab(normalizeUrl(dest));
-                                }
-
-                                function handleFormSubmit(e) {
-                                    var form = e.target;
-                                    if (!form || form.tagName !== 'FORM') return;
-                                    var tgt = _resolvedTarget(form);
-                                    if (tgt !== '_blank' && tgt !== '_new' && tgt !== '_top' && tgt !== '_parent') return;
-                                    var absAction = form.action;
-                                    if (!absAction) return;
-                                    var dest = _absToDestUrl(absAction);
-                                    if (!dest) return;
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    if (form.method && form.method.toLowerCase() === 'get') {
-                                        var fd = new FormData(form);
-                                        var qs = new URLSearchParams(fd).toString();
-                                        var sep = dest.includes('?') ? '&' : '?';
-                                        dest = qs ? (dest + sep + qs) : dest;
-                                    }
-                                    if (tgt === '_blank' || tgt === '_new') {
-                                        createTab(normalizeUrl(dest));
-                                    } else {
-                                        loadTabContent(tabId, normalizeUrl(dest));
-                                    }
-                                }
-
-                                iframeDoc.addEventListener('click', handleLinkClick, true);
-                                iframeDoc.addEventListener('auxclick', handleAuxClick, true);
-                                iframeDoc.addEventListener('submit', handleFormSubmit, true);
-
-                                // Watch for dynamically-added elements too
-                                var tabObserver = new MutationObserver(function() {
-                                    // Re-attach isn't needed — we use document-level capture listeners
-                                });
-                                tabObserver.observe(iframeDoc.body || iframeDoc.documentElement, {
-                                    childList: true,
-                                    subtree: true
-                                });
-                            } catch (_) {}
-                            
-                            // Run any user scripts configured to auto-inject on page load
-                            try { _runAutoInjectScripts(iframe, tab.url || normalizedUrl); } catch (_) {}
-                            
-                        } catch (e) {
-                            // Cross-origin or other error, use URL hostname
-                            try {
-                                const urlObj = new URL(normalizedUrl);
-                                updateTabTitle(tabId, urlObj.hostname);
-                            } catch (e2) {
-                                updateTabTitle(tabId, 'Page');
+                function syncUrlFromIframe() {
+                    try {
+                        const win = iframe.contentWindow;
+                        if (!win) return;
+                        const currentUrl = win.location.href;
+                        let destUrl = extractRealUrl(currentUrl, win);
+                        if (destUrl && destUrl !== tab.url && tabId === activeTabId) {
+                            tab.url = destUrl;
+                            urlInput.value = destUrl;
+                            updateUrlDisplay(destUrl);
+                            if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
+                                tab.history = tab.history.slice(0, tab.historyIndex + 1);
+                                tab.history.push(destUrl);
+                                tab.historyIndex = tab.history.length - 1;
+                                updateNavigationButtons(tab);
                             }
                         }
-                    };
+                    } catch (_) {}
                 }
+
+                iframe.onload = () => {
+                    try {
+                        syncUrlFromIframe();
+                        _saveTabs();
+                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        const iframeWindow = iframe.contentWindow;
+
+                        if (tabId === activeTabId) {
+                            const iframeColor = _adaptiveChrome.extractIframeBodyColor(iframe);
+                            _adaptiveChrome.apply(iframeColor);
+                        }
+                        iframeWindow.addEventListener('hashchange', () => { syncUrlFromIframe(); _saveTabs(); });
+                        iframeWindow.addEventListener('popstate', () => { syncUrlFromIframe(); _saveTabs(); });
+
+                        const title = iframeDoc.title || new URL(normalizedUrl).hostname;
+                        updateTabTitle(tabId, title);
+                        const favLink = iframeDoc.querySelector('link[rel="icon"]') || iframeDoc.querySelector('link[rel="shortcut icon"]');
+                        const favHref = favLink?.getAttribute('href');
+                        if (favHref) {
+                            let favUrl = favHref;
+                            if (!favHref.startsWith('data:')) {
+                                try { favUrl = scramjetEncodeUrl(new URL(favHref, normalizedUrl).href); } catch (_) {}
+                            }
+                            updateTabFavicon(tabId, favUrl);
+                        }
+
+                        _runAutoInjectScripts(iframe, normalizedUrl);
+                    } catch (_) {}
+                };
+
+                if (addToHistory && tab.history[tab.history.length - 1] !== normalizedUrl) {
+                    tab.history = tab.history.slice(0, tab.historyIndex + 1);
+                    tab.history.push(normalizedUrl);
+                    tab.historyIndex = tab.history.length - 1;
+                }
+                updateNavigationButtons(tab);
             }
 
             function handleSpecialUrl(tabId, url) {
@@ -5355,8 +5039,8 @@
                 e.stopImmediatePropagation();
                 const val = urlInput.value.trim();
                 if (!val) return;
-                _suggestionEngine.hide(_urlSuggestionsEl);
-                urlInput.blur();
+                    _suggestionEngine.hide(_urlSuggestionsEl);
+                    urlInput.blur();
                 navigateToUrl(val);
             }, true);
             urlInput.addEventListener('focus', () => {
@@ -5832,7 +5516,7 @@
                 document.getElementById('downloads-button')?.addEventListener('click', () => {
                     createTab('jq://downloads/');
                 });
-                
+
                 // Update downloads badge - make it global
                 window.updateDownloadsBadge = function() {
                     const badge = document.getElementById('download-badge');
