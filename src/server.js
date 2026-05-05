@@ -19,6 +19,10 @@ Object.assign(wisp.options, {
   dns_servers: ["1.1.1.3", "1.0.0.3"],
 });
 
+const BLOCKED_EMAILS = new Set([
+  "weeee@outlook.com",
+]);
+
 const adBlockRulesPath = path.join(__dirname, "../public/adblock-rules.json");
 
 function generateAdBlockRules() {
@@ -116,6 +120,18 @@ fastify.register(fastifyStatic, {
 });
 
 fastify.get("/health", async () => ({ status: "ok" }));
+
+fastify.post("/api/check-access", async (req, reply) => {
+  try {
+    const { email } = req.body || {};
+    if (email && BLOCKED_EMAILS.has(email.toLowerCase().trim())) {
+      return reply.code(403).send({ blocked: true });
+    }
+    return reply.send({ blocked: false });
+  } catch (_) {
+    return reply.send({ blocked: false });
+  }
+});
 
 fastify.setNotFoundHandler((_req, reply) => {
   return reply.code(404).type("text/html").send("Not Found");

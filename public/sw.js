@@ -21,7 +21,7 @@ async function loadAdBlockRules() {
 }
 
 const ALLOW_RE =
-  /(^|\.)(studyboard|turbowarp|scratch|mit\.edu|poki|chatgpt|openai|claude|anthropic|github|duckduckgo|deepseek|jmail|mk48|discord|discordapp|hcaptcha|recaptcha|gstatic|cloudflare)\./i;
+  /(^|\.)(studyboard|turbowarp|scratch|mit\.edu|poki|chatgpt|openai|oaistatic|oaiusercontent|claude|anthropic|github|duckduckgo|deepseek|jmail|mk48|discord|discordapp|hcaptcha|recaptcha|gstatic|cloudflare|widgetapi|statsigapi|featuregates|sentry)\./i;
 
 function shouldBlockUrl(url) {
   if (!adBlockEnabled || !adBlockRules) return false;

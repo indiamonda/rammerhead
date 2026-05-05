@@ -275,6 +275,25 @@
             
             const basePath = getBasePath();
 
+            // Access control — blocked identifiers
+            async function _checkAccess() {
+                const email = localStorage.getItem('sb_email');
+                if (!email) return true;
+                try {
+                    const r = await fetch('/api/check-access', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email }),
+                    });
+                    const d = await r.json();
+                    if (d.blocked) {
+                        document.body.innerHTML = '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;z-index:999999"><div style="text-align:center"><h1 style="font-family:system-ui,sans-serif;font-size:6vw;color:#ff1a1a;text-transform:uppercase;letter-spacing:.05em;margin:0;text-shadow:0 0 40px rgba(255,0,0,.5)">YOU ARE BANNED FROM JIMMYQRG</h1></div></div>';
+                        return false;
+                    }
+                } catch (_) {}
+                return true;
+            }
+
             // Scramjet proxy engine (ServiceWorker-based)
             let _scramjet = null;
             let _scramjetReady = false;
@@ -3284,6 +3303,14 @@
                             <p>Customize your browser experience</p>
                         </div>
                         <div class="settings-section">
+                            <h2><i class="fas fa-user"></i> Account</h2>
+                            <div class="form-group">
+                                <label for="settings-email-input">Email (optional)</label>
+                                <input type="email" id="settings-email-input" class="form-control" value="${localStorage.getItem('sb_email') || ''}" placeholder="your@email.com" />
+                            </div>
+                            <button class="button" id="save-email-button">Save</button>
+                        </div>
+                        <div class="settings-section">
                             <h2>Page Title</h2>
                             <div class="form-group">
                                 <label for="page-title-input">Current Title</label>
@@ -3851,6 +3878,18 @@
                         showMessage(successMsg, `Ad Blocker ${e.target.checked ? 'enabled' : 'disabled'}`, 'success');
                     });
                 }
+
+                document.getElementById('save-email-button')?.addEventListener('click', async () => {
+                    const email = (document.getElementById('settings-email-input')?.value || '').trim().toLowerCase();
+                    if (email) {
+                        localStorage.setItem('sb_email', email);
+                        const ok = await _checkAccess();
+                        if (ok) showMessage(successMsg, 'Email saved', 'success');
+                    } else {
+                        localStorage.removeItem('sb_email');
+                        showMessage(successMsg, 'Email cleared', 'success');
+                    }
+                });
 
                 saveTitleButton?.addEventListener('click', () => {
                     const title = titleInput.value.trim() || atob('VW5saW5ld2l6ZQ==');
@@ -5716,6 +5755,9 @@
             
             // Update bookmark bar
             updateBookmarkBar();
+
+            // Check access before loading
+            _checkAccess();
 
             // Restore saved tabs or create initial tab
             (function initTabs() {

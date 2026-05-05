@@ -309,7 +309,7 @@ const AD_PATH_RE = new RegExp([
 const YOUTUBE_PLAYER_RE = /youtube(?:-nocookie)?\.com\/youtubei\/v\d+\/player(?:\?|$)/i;
 const YOUTUBE_AD_PATH_RE = /youtube(?:-nocookie)?\.com\/(api\/stats\/ads|pagead|get_midroll_info|api\/stats\/atr|ptracking|generate_204_simple|api\/stats\/qoe)/i;
 
-const ALLOWLIST_HOST_RE = /(^|\.)(studyboard|turbowarp|scratch|mit\.edu|poki|chatgpt|openai|claude|anthropic|github|duckduckgo|deepseek|jmail|mk48)\./i;
+const ALLOWLIST_HOST_RE = /(^|\.)(studyboard|turbowarp|scratch|mit\.edu|poki|chatgpt|openai|oaistatic|oaiusercontent|claude|anthropic|github|duckduckgo|deepseek|jmail|mk48|widgetapi|statsigapi|featuregates|sentry)\./i;
 
 /** Returns true when the host is an allowlisted first-party we never block. */
 function _isAllowlisted(host) {
