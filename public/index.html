@@ -100,8 +100,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-css.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.min.js" defer></script>
-    <script src="/scram/scramjet.all.js"></script>
-    <script src="/baremux/index.js"></script>
+    <script src="/scramjet/scramjet.js"></script>
+    <script src="/controller/controller.api.js"></script>
     <script src="/register-sw.js"></script>
 
     <script>
@@ -424,40 +424,10 @@
                 }
             }
 
-            // Scramjet proxy engine (ServiceWorker-based)
+            // Scramjet v2 proxy engine (ServiceWorker-based)
             let _scramjet = null;
             let _scramjetReady = false;
-            let _bareMuxConnection = null;
-
-            async function _nukeStaleIDB() {
-                try {
-                    const dbs = await indexedDB.databases();
-                    for (const db of dbs) {
-                        if (db.name === '$scramjet') {
-                            await new Promise((resolve, reject) => {
-                                const req = indexedDB.deleteDatabase('$scramjet');
-                                req.onsuccess = resolve;
-                                req.onerror = () => reject(req.error);
-                                req.onblocked = resolve;
-                            });
-                            break;
-                        }
-                    }
-                } catch (_) {
-                    try { indexedDB.deleteDatabase('$scramjet'); } catch (_2) {}
-                }
-            }
-
-            async function _unregisterOldSW() {
-                try {
-                    const regs = await navigator.serviceWorker.getRegistrations();
-                    for (const reg of regs) {
-                        if (reg.active && reg.active.scriptURL.includes('/sw.js')) {
-                            await reg.unregister();
-                        }
-                    }
-                } catch (_) {}
-            }
+            let _scramjetFrame = null;
 
             let _initScramjetAttempts = 0;
 
@@ -467,88 +437,76 @@
                 _initScramjetAttempts++;
                 _scramjet = null;
                 try {
-                    // Always nuke stale IDB on first attempt too — prevents
-                    // "object store not found" errors from a DB left by an
-                    // older Scramjet version or a corrupted state.
-                    await _nukeStaleIDB();
-                    if (_initScramjetAttempts > 1) {
-                        await new Promise(r => setTimeout(r, 100));
-                        await _unregisterOldSW();
-                        await new Promise(r => setTimeout(r, 300));
-                    }
+                    const sw = await registerSW();
+                    if (!sw) throw new Error('Service worker not active');
 
-                    const { ScramjetController } = $scramjetLoadController();
-                    _scramjet = new ScramjetController({
-                        files: {
-                            wasm: '/scram/scramjet.wasm.wasm',
-                            all: '/scram/scramjet.all.js',
-                            sync: '/scram/scramjet.sync.js',
+                    const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
+                    const { default: LibcurlClient } = await import('/libcurl-transport/index.mjs');
+                    const transport = new LibcurlClient({ wisp: wispUrl });
+                    await transport.init();
+
+                    _scramjet = new $scramjetController.Controller({
+                        serviceworker: sw,
+                        transport: transport,
+                        config: {
+                            prefix: '/~/sj/',
+                            scramjetPath: '/scramjet/scramjet.js',
+                            injectPath: '/controller/controller.inject.js',
+                            wasmPath: '/scramjet/scramjet.wasm',
+                            virtualWasmPath: 'scramjet.wasm.js',
                         },
-                        flags: {
-                            serviceworkers: true,
-                            syncxhr: true,
-                            strictRewrites: true,
-                            captureErrors: true,
-                            cleanErrors: true,
-                            sourcemaps: true,
-                            allowInvalidJs: true,
-                            allowFailedIntercepts: true,
-                        },
-                        siteFlags: {
-                            'scratch.mit.edu': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'turbowarp.org': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'www.turbowarp.org': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'turbowarp.xyz': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'chatgpt.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'www.chatgpt.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'chat.openai.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'openai.com': { strictRewrites: false, serviceworkers: true },
-                            'deepseek.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'chat.deepseek.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'www.deepseek.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'discord.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'discordapp.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'discord.gg': { strictRewrites: false },
-                            'reddit.com': { strictRewrites: false, serviceworkers: true },
-                            'www.reddit.com': { strictRewrites: false, serviceworkers: true },
-                            'medium.com': { strictRewrites: false },
-                            'quora.com': { strictRewrites: false, serviceworkers: true },
-                            'www.quora.com': { strictRewrites: false, serviceworkers: true },
-                            'pinterest.com': { strictRewrites: false, serviceworkers: true },
-                            'www.pinterest.com': { strictRewrites: false, serviceworkers: true },
-                            'soundcloud.com': { strictRewrites: false, serviceworkers: true },
-                            'open.spotify.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'spotify.com': { strictRewrites: false, serviceworkers: true },
-                            'notion.so': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'www.notion.so': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'trello.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'figma.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'www.figma.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'docs.google.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'replit.com': { strictRewrites: false, serviceworkers: true, syncxhr: true },
-                            'glitch.com': { strictRewrites: false, serviceworkers: true },
-                            'codepen.io': { strictRewrites: false, serviceworkers: true },
-                            'imgur.com': { strictRewrites: false },
-                            'deviantart.com': { strictRewrites: false, serviceworkers: true },
-                            'www.deviantart.com': { strictRewrites: false, serviceworkers: true },
+                        scramjetConfig: {
+                            flags: {
+                                syncxhr: true,
+                                strictRewrites: true,
+                                captureErrors: true,
+                                cleanErrors: true,
+                                sourcemaps: true,
+                                allowInvalidJs: true,
+                                allowFailedIntercepts: true,
+                            },
+                            siteFlags: {
+                                'scratch.mit.edu': { strictRewrites: false, syncxhr: true },
+                                'turbowarp.org': { strictRewrites: false, syncxhr: true },
+                                'www.turbowarp.org': { strictRewrites: false, syncxhr: true },
+                                'turbowarp.xyz': { strictRewrites: false, syncxhr: true },
+                                'chatgpt.com': { strictRewrites: false, syncxhr: true },
+                                'www.chatgpt.com': { strictRewrites: false, syncxhr: true },
+                                'chat.openai.com': { strictRewrites: false, syncxhr: true },
+                                'openai.com': { strictRewrites: false },
+                                'deepseek.com': { strictRewrites: false, syncxhr: true },
+                                'chat.deepseek.com': { strictRewrites: false, syncxhr: true },
+                                'www.deepseek.com': { strictRewrites: false, syncxhr: true },
+                                'discord.com': { strictRewrites: false, syncxhr: true },
+                                'discordapp.com': { strictRewrites: false, syncxhr: true },
+                                'discord.gg': { strictRewrites: false },
+                                'reddit.com': { strictRewrites: false },
+                                'www.reddit.com': { strictRewrites: false },
+                                'medium.com': { strictRewrites: false },
+                                'quora.com': { strictRewrites: false },
+                                'www.quora.com': { strictRewrites: false },
+                                'pinterest.com': { strictRewrites: false },
+                                'www.pinterest.com': { strictRewrites: false },
+                                'soundcloud.com': { strictRewrites: false },
+                                'open.spotify.com': { strictRewrites: false, syncxhr: true },
+                                'spotify.com': { strictRewrites: false },
+                                'notion.so': { strictRewrites: false, syncxhr: true },
+                                'www.notion.so': { strictRewrites: false, syncxhr: true },
+                                'trello.com': { strictRewrites: false, syncxhr: true },
+                                'figma.com': { strictRewrites: false, syncxhr: true },
+                                'www.figma.com': { strictRewrites: false, syncxhr: true },
+                                'docs.google.com': { strictRewrites: false, syncxhr: true },
+                                'replit.com': { strictRewrites: false, syncxhr: true },
+                                'glitch.com': { strictRewrites: false },
+                                'codepen.io': { strictRewrites: false },
+                                'imgur.com': { strictRewrites: false },
+                                'deviantart.com': { strictRewrites: false },
+                                'www.deviantart.com': { strictRewrites: false },
+                            },
                         },
                     });
-                    await registerSW();
-                    await _scramjet.init();
-                    _bareMuxConnection = new BareMux.BareMuxConnection('/baremux/worker.js');
-                    const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
-                    try {
-                        var _transportCheck = await Promise.race([
-                            _bareMuxConnection.getTransport(),
-                            new Promise(r => setTimeout(() => r('__timeout__'), 3000))
-                        ]);
-                        if (_transportCheck !== '/libcurl/index.mjs') {
-                            await _bareMuxConnection.setTransport('/libcurl/index.mjs', [{ websocket: wispUrl }]);
-                        }
-                    } catch (_bmErr) {
-                        console.warn('BareMux transport setup issue:', _bmErr);
-                        await _bareMuxConnection.setTransport('/libcurl/index.mjs', [{ websocket: wispUrl }]);
-                    }
+
+                    await _scramjet.wait();
                     _scramjetReady = true;
                 } catch (e) {
                     console.error('Scramjet init failed (attempt ' + _initScramjetAttempts + '):', e);
@@ -558,14 +516,29 @@
                 }
             }
 
+            function scramjetCreateFrame(iframeEl) {
+                if (!_scramjet) return null;
+                return _scramjet.createFrame(iframeEl);
+            }
+
             function scramjetEncodeUrl(url) {
-                if (!_scramjet) return '/scramjet/' + encodeURIComponent(url);
-                return _scramjet.encodeUrl(url);
+                if (!_scramjet) return '/~/sj/fallback/' + encodeURIComponent(url);
+                const tmpFrame = _scramjet.createFrame();
+                tmpFrame.go(url);
+                const src = tmpFrame.element.src;
+                return src;
             }
 
             function scramjetDecodeUrl(encodedUrl) {
-                if (!_scramjet) return null;
-                try { return _scramjet.decodeUrl(encodedUrl); } catch (_) { return null; }
+                try {
+                    const u = new URL(encodedUrl, location.origin);
+                    const prefix = '/~/sj/';
+                    if (!u.pathname.startsWith(prefix)) return null;
+                    const rest = u.pathname.slice(prefix.length);
+                    const slashIdx = rest.indexOf('/');
+                    if (slashIdx < 1) return null;
+                    return decodeURIComponent(rest.slice(slashIdx + 1));
+                } catch (_) { return null; }
             }
 
             // Legacy compat stubs
@@ -621,11 +594,15 @@
                 if (pUrl.startsWith('http://') || pUrl.startsWith('https://')) {
                     try {
                         var u = new URL(pUrl);
-                        if (u.hostname === location.hostname && u.pathname.startsWith('/scramjet/')) {
-                            var enc = u.pathname.slice('/scramjet/'.length) + u.search + u.hash;
-                            try { return decodeURIComponent(enc); } catch (_) { return enc; }
-                    }
-                } catch (_) {}
+                        if (u.hostname === location.hostname && u.pathname.startsWith('/~/sj/')) {
+                            var rest = u.pathname.slice('/~/sj/'.length);
+                            var slashIdx = rest.indexOf('/');
+                            if (slashIdx > 0) {
+                                var enc = rest.slice(slashIdx + 1) + u.search + u.hash;
+                                try { return decodeURIComponent(enc); } catch (_) { return enc; }
+                            }
+                        }
+                    } catch (_) {}
                 }
                 return null;
             }
@@ -2533,11 +2510,15 @@
                 contentElement.style.animation = '';
                 contentElement.innerHTML = '';
 
-                var proxiedUrl = scramjetEncodeUrl(normalizedUrl);
                 var iframeEl = document.createElement('iframe');
                 iframeEl.style.cssText = 'width:100%;height:100%;border:none';
-                iframeEl.src = proxiedUrl;
                 contentElement.appendChild(iframeEl);
+                var sjFrame = scramjetCreateFrame(iframeEl);
+                if (sjFrame) {
+                    sjFrame.go(normalizedUrl);
+                } else {
+                    iframeEl.src = '/~/sj/fallback/' + encodeURIComponent(normalizedUrl);
+                }
 
                 var iframe = iframeEl;
 
@@ -2733,7 +2714,7 @@
                 
                 // Generate wallpaper gallery HTML with refined design
                 const wallpaperBaseUrl = _('aHR0cHM6Ly9qaW1teXFyZy5naXRodWIuaW8vdW5saW5ld2l6ZS9hc3NldHMvd2FsbHBhcGVycw==');
-                const wallpaperNumbers = Array.from({length: 50}, (_, i) => i + 1);
+                const wallpaperNumbers = Array.from({length: 200}, (_, i) => i + 1);
                 const isBlankSelected = !currentBackground && !uploadedBackground;
                 const blankThumb = `
                     <div class="wallpaper-thumb" data-wallpaper="none" style="

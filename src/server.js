@@ -7,11 +7,18 @@ import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { scramjetPath } from "@mercuryworkshop/scramjet/path";
-import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
-import { libcurlPath } from "@mercuryworkshop/libcurl-transport";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicPath = path.join(__dirname, "../public");
+
+function findPackageDist(pkgName) {
+  const parts = pkgName.split("/");
+  const pkgDir = path.join(__dirname, "..", "node_modules", ...parts);
+  return path.join(pkgDir, "dist");
+}
+
+const controllerDistPath = findPackageDist("@mercuryworkshop/scramjet-controller");
+const libcurlTransportPath = findPackageDist("@mercuryworkshop/libcurl-transport");
 
 logging.set_level(logging.WARN);
 Object.assign(wisp.options, {
@@ -98,7 +105,7 @@ const fastify = Fastify({
         // scramjet-proxied routes. Do NOT set COEP "credentialless" because
         // it prevents cross-origin cookie/credential flows inside proxied
         // iframes (breaks Scratch sign-in, TurboWarp API calls, etc.).
-        if (!u.startsWith("/scramjet/") && !u.startsWith("/scram/")) {
+        if (!u.startsWith("/~/sj/")) {
           res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
         }
         handler(req, res);
@@ -117,19 +124,19 @@ fastify.register(fastifyStatic, {
 
 fastify.register(fastifyStatic, {
   root: scramjetPath,
-  prefix: "/scram/",
+  prefix: "/scramjet/",
   decorateReply: false,
 });
 
 fastify.register(fastifyStatic, {
-  root: libcurlPath,
-  prefix: "/libcurl/",
+  root: controllerDistPath,
+  prefix: "/controller/",
   decorateReply: false,
 });
 
 fastify.register(fastifyStatic, {
-  root: baremuxPath,
-  prefix: "/baremux/",
+  root: libcurlTransportPath,
+  prefix: "/libcurl-transport/",
   decorateReply: false,
 });
 
