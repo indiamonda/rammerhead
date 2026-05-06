@@ -8,7 +8,29 @@ self.addEventListener("install", () => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      // Nuke stale $scramjet IDB on activate to prevent "object store not
+      // found" errors when a previous version left an incompatible schema.
+      try {
+        const dbs = await indexedDB.databases();
+        for (const db of dbs) {
+          if (db.name === "$scramjet") {
+            await new Promise((resolve) => {
+              const req = indexedDB.deleteDatabase("$scramjet");
+              req.onsuccess = resolve;
+              req.onerror = resolve;
+              req.onblocked = resolve;
+            });
+            break;
+          }
+        }
+      } catch (_) {
+        try { indexedDB.deleteDatabase("$scramjet"); } catch (_2) {}
+      }
+      await self.clients.claim();
+    })()
+  );
 });
 
 let adBlockEnabled = true;

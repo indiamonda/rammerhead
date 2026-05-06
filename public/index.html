@@ -467,8 +467,11 @@
                 _initScramjetAttempts++;
                 _scramjet = null;
                 try {
+                    // Always nuke stale IDB on first attempt too — prevents
+                    // "object store not found" errors from a DB left by an
+                    // older Scramjet version or a corrupted state.
+                    await _nukeStaleIDB();
                     if (_initScramjetAttempts > 1) {
-                        await _nukeStaleIDB();
                         await new Promise(r => setTimeout(r, 100));
                         await _unregisterOldSW();
                         await new Promise(r => setTimeout(r, 300));
