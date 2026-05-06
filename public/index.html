@@ -466,6 +466,9 @@
                                 allowFailedIntercepts: true,
                             },
                             siteFlags: {
+                                'jimmyqrg.github.io': { strictRewrites: false, syncxhr: true },
+                                'jimmyq-r-g.github.io': { strictRewrites: false, syncxhr: true },
+                                'jmail.world': { strictRewrites: false, syncxhr: true },
                                 'scratch.mit.edu': { strictRewrites: false, syncxhr: true },
                                 'turbowarp.org': { strictRewrites: false, syncxhr: true },
                                 'www.turbowarp.org': { strictRewrites: false, syncxhr: true },
@@ -2497,87 +2500,17 @@
                 }
 
                 tab.url = normalizedUrl;
-                if (tabId === activeTabId) {
-                    urlInput.value = tab.url;
-                    updateUrlDisplay(tab.url);
-                }
-                _saveTabs();
-
-                // Clear any wallpaper background from newtab
-                contentElement.style.backgroundImage = '';
-                contentElement.style.animation = 'none';
-                contentElement.offsetHeight;
-                contentElement.style.animation = '';
-                contentElement.innerHTML = '';
-
-                var iframeEl = document.createElement('iframe');
-                iframeEl.style.cssText = 'width:100%;height:100%;border:none';
-                contentElement.appendChild(iframeEl);
-                var sjFrame = scramjetCreateFrame(iframeEl);
-                if (sjFrame) {
-                    sjFrame.go(normalizedUrl);
-                } else {
-                    iframeEl.src = '/~/sj/fallback/' + encodeURIComponent(normalizedUrl);
-                }
-
-                var iframe = iframeEl;
-
-                function syncUrlFromIframe() {
-                    try {
-                        const win = iframe.contentWindow;
-                        if (!win) return;
-                        const currentUrl = win.location.href;
-                        let destUrl = extractRealUrl(currentUrl, win);
-                        if (destUrl && destUrl !== tab.url && tabId === activeTabId) {
-                            tab.url = destUrl;
-                            urlInput.value = destUrl;
-                            updateUrlDisplay(destUrl);
-                            if (addToHistory && tab.history[tab.history.length - 1] !== destUrl) {
-                                tab.history = tab.history.slice(0, tab.historyIndex + 1);
-                                tab.history.push(destUrl);
-                                tab.historyIndex = tab.history.length - 1;
-                                updateNavigationButtons(tab);
-                            }
-                        }
-                    } catch (_) {}
-                }
-
-                iframe.onload = () => {
-                    try {
-                        syncUrlFromIframe();
-                        _saveTabs();
-                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                        const iframeWindow = iframe.contentWindow;
-
-                        if (tabId === activeTabId) {
-                            const iframeColor = _adaptiveChrome.extractIframeBodyColor(iframe);
-                            _adaptiveChrome.apply(iframeColor);
-                        }
-                        iframeWindow.addEventListener('hashchange', () => { syncUrlFromIframe(); _saveTabs(); });
-                        iframeWindow.addEventListener('popstate', () => { syncUrlFromIframe(); _saveTabs(); });
-
-                        const title = iframeDoc.title || new URL(normalizedUrl).hostname;
-                        updateTabTitle(tabId, title);
-                        const favLink = iframeDoc.querySelector('link[rel="icon"]') || iframeDoc.querySelector('link[rel="shortcut icon"]');
-                        const favHref = favLink?.getAttribute('href');
-                        if (favHref) {
-                            let favUrl = favHref;
-                            if (!favHref.startsWith('data:')) {
-                                try { favUrl = scramjetEncodeUrl(new URL(favHref, normalizedUrl).href); } catch (_) {}
-                            }
-                            updateTabFavicon(tabId, favUrl);
-                        }
-
-                        _runAutoInjectScripts(iframe, normalizedUrl);
-                    } catch (_) {}
-                };
-
                 if (addToHistory && tab.history[tab.history.length - 1] !== normalizedUrl) {
                     tab.history = tab.history.slice(0, tab.historyIndex + 1);
                     tab.history.push(normalizedUrl);
                     tab.historyIndex = tab.history.length - 1;
                 }
-                updateNavigationButtons(tab);
+                _saveTabs();
+
+                // Navigate top-level window to the proxied URL (frameless architecture)
+                const proxyUrl = scramjetEncodeUrl(normalizedUrl);
+                window.location.href = proxyUrl;
+                return;
             }
 
             function handleSpecialUrl(tabId, url) {
@@ -5659,14 +5592,63 @@
             _checkAccess();
 
             // Restore saved tabs or create initial tab
-            (function initTabs() {
+            (async function initTabs() {
+                // Check if we were redirected here with a navigation target
+                const params = new URLSearchParams(location.search);
+                const navTarget = params.get('__rh_nav');
+                const isExplicitHome = params.has('__rh_home');
+                if (navTarget || isExplicitHome) {
+                    history.replaceState(null, '', '/');
+                }
+
+                if (navTarget) {
+                    await initScramjet();
+                    if (_scramjetReady) {
+                        // Update tab state before navigating
+                        const saved = _restoreTabs();
+                        if (saved && saved.tabs.length > 0) {
+                            const idx = typeof saved.active === 'number' ? saved.active : 0;
+                            const tab = saved.tabs[idx];
+                            if (tab) {
+                                tab.url = navTarget;
+                                tab.title = navTarget;
+                                var h = tab.history || [];
+                                if (h[h.length - 1] !== navTarget) {
+                                    h.push(navTarget);
+                                    tab.history = h.slice(-20);
+                                    tab.historyIndex = tab.history.length - 1;
+                                }
+                                localStorage.setItem('rh_tabs', JSON.stringify(saved));
+                            }
+                        }
+                        const proxyUrl = scramjetEncodeUrl(navTarget);
+                        window.location.href = proxyUrl;
+                        return;
+                    }
+                }
+
                 const saved = _restoreTabs();
                 if (saved) {
                     const activeIdx = typeof saved.active === 'number' ? saved.active : 0;
+                    const activeTabData = saved.tabs[activeIdx] || saved.tabs[0];
+
+                    // If the active tab is a proxy URL and not explicit home, navigate directly
+                    if (!isExplicitHome && activeTabData && !activeTabData.url.startsWith('jq://')) {
+                        await initScramjet();
+                        if (_scramjetReady) {
+                            const proxyUrl = scramjetEncodeUrl(activeTabData.url);
+                            window.location.href = proxyUrl;
+                            return;
+                        }
+                    }
+
+                    // Restore all tabs (only jq:// pages render in shell)
                     saved.tabs.forEach((t, i) => {
-                        const id = createTab(t.url, t.title || 'New Tab');
+                        const tabUrl = t.url.startsWith('jq://') ? t.url : 'jq://newtab/';
+                        const id = createTab(tabUrl, t.title || 'New Tab');
                         const tab = tabs.find(tb => tb.id === id);
                         if (tab) {
+                            tab.url = t.url;
                             tab.favicon = t.favicon || '';
                             tab.history = t.history || [t.url];
                             tab.historyIndex = typeof t.historyIndex === 'number' ? t.historyIndex : tab.history.length - 1;
@@ -5678,7 +5660,7 @@
                     const targetTab = tabs[activeIdx] || tabs[0];
                     if (targetTab) switchToTab(targetTab.id);
                 } else {
-            createTab('jq://home/');
+                    createTab('jq://home/');
                 }
             })();
 
