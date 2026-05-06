@@ -2505,9 +2505,19 @@
                     tab.history.push(normalizedUrl);
                     tab.historyIndex = tab.history.length - 1;
                 }
+                if (tabId === activeTabId) {
+                    urlInput.value = normalizedUrl;
+                    updateUrlDisplay(normalizedUrl);
+                }
+                updateNavigationButtons(tab);
                 _saveTabs();
 
                 // Navigate top-level window to the proxied URL (frameless architecture)
+                // Verify SW is controlling this page before navigating
+                if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
+                    contentElement.innerHTML = '<div style="padding:2em;color:#c00">Service worker not ready. Please refresh the page.</div>';
+                    return;
+                }
                 const proxyUrl = scramjetEncodeUrl(normalizedUrl);
                 window.location.href = proxyUrl;
                 return;
@@ -5605,10 +5615,10 @@
                     await initScramjet();
                     if (_scramjetReady) {
                         // Update tab state before navigating
-                        const saved = _restoreTabs();
-                        if (saved && saved.tabs.length > 0) {
-                            const idx = typeof saved.active === 'number' ? saved.active : 0;
-                            const tab = saved.tabs[idx];
+                        const prevSaved = _restoreTabs();
+                        if (prevSaved && prevSaved.tabs.length > 0) {
+                            const idx = typeof prevSaved.active === 'number' ? prevSaved.active : 0;
+                            const tab = prevSaved.tabs[idx];
                             if (tab) {
                                 tab.url = navTarget;
                                 tab.title = navTarget;
@@ -5618,31 +5628,20 @@
                                     tab.history = h.slice(-20);
                                     tab.historyIndex = tab.history.length - 1;
                                 }
-                                localStorage.setItem('rh_tabs', JSON.stringify(saved));
+                                localStorage.setItem('rh_tabs', JSON.stringify(prevSaved));
                             }
                         }
                         const proxyUrl = scramjetEncodeUrl(navTarget);
                         window.location.href = proxyUrl;
                         return;
                     }
+                    // Scramjet failed — fall through to show shell normally
                 }
 
                 const saved = _restoreTabs();
                 if (saved) {
+                    // Restore all tabs in the shell (proxy tabs show as newtab placeholders)
                     const activeIdx = typeof saved.active === 'number' ? saved.active : 0;
-                    const activeTabData = saved.tabs[activeIdx] || saved.tabs[0];
-
-                    // If the active tab is a proxy URL and not explicit home, navigate directly
-                    if (!isExplicitHome && activeTabData && !activeTabData.url.startsWith('jq://')) {
-                        await initScramjet();
-                        if (_scramjetReady) {
-                            const proxyUrl = scramjetEncodeUrl(activeTabData.url);
-                            window.location.href = proxyUrl;
-                            return;
-                        }
-                    }
-
-                    // Restore all tabs (only jq:// pages render in shell)
                     saved.tabs.forEach((t, i) => {
                         const tabUrl = t.url.startsWith('jq://') ? t.url : 'jq://newtab/';
                         const id = createTab(tabUrl, t.title || 'New Tab');
