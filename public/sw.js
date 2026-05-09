@@ -76,6 +76,48 @@ self.addEventListener("message", (event) => {
 
 loadAdBlockRules();
 
+function isHtmlResponse(response) {
+  const ct = (response.headers.get("content-type") || "").toLowerCase();
+  return ct.includes("text/html");
+}
+
+function isJimmyqrgDest(destUrl) {
+  try {
+    const h = new URL(destUrl).hostname.toLowerCase();
+    return h === "jimmyqrg.github.io" || h === "jimmyq-r-g.github.io";
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Injected before bot-shield.js so proxy checks see the real GitHub Pages origin. */
+function makeJimmyBypassTag(destUrl) {
+  const json = JSON.stringify(destUrl || "");
+  return `<script>window.__rhJimmyPage=${json};<\\/script><script src="/jimmyqrg-shield-bypass.js"><\\/script>`;
+}
+
+async function injectJimmyBypassIntoHtml(response, destUrl) {
+  if (!isHtmlResponse(response)) return response;
+  let text = await response.text();
+  const tag = makeJimmyBypassTag(destUrl);
+  const headMatch = text.match(/<head[^>]*>/i);
+  if (headMatch) {
+    const idx = text.indexOf(headMatch[0]) + headMatch[0].length;
+    text = text.slice(0, idx) + tag + text.slice(idx);
+  } else {
+    text = tag + text;
+  }
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  headers.delete("content-security-policy");
+  headers.delete("x-frame-options");
+  return new Response(text, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   if ($scramjetController.shouldRoute(event)) {
     event.respondWith(
@@ -88,7 +130,19 @@ self.addEventListener("fetch", (event) => {
             }
           } catch (_) {}
         }
-        return $scramjetController.route(event);
+        const response = await $scramjetController.route(event);
+        try {
+          const destUrl = decodeProxiedUrl(event.request.url);
+          if (
+            destUrl &&
+            isJimmyqrgDest(destUrl) &&
+            isHtmlResponse(response) &&
+            event.request.mode === "navigate"
+          ) {
+            return injectJimmyBypassIntoHtml(response, destUrl);
+          }
+        } catch (_) {}
+        return response;
       })()
     );
   }

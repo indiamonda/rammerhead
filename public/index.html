@@ -509,6 +509,7 @@
                         'chatgpt.com': { strictRewrites: false, syncxhr: true },
                         'www.chatgpt.com': { strictRewrites: false, syncxhr: true },
                         'chat.openai.com': { strictRewrites: false, syncxhr: true },
+                        'gemini.google.com': { strictRewrites: false, syncxhr: true },
                         'deepseek.com': { strictRewrites: false, syncxhr: true },
                         'chat.deepseek.com': { strictRewrites: false, syncxhr: true },
                         'discord.com': { strictRewrites: false, syncxhr: true },
@@ -552,9 +553,37 @@
         return url;
     }
 
+    /** Prefer guest / no-login entry points for ChatGPT and Gemini. */
+    function rewriteGuestAiUrl(url) {
+        try {
+            const u = new URL(url);
+            const h = u.hostname.toLowerCase();
+            const path = u.pathname || '/';
+            if (h === 'chat.openai.com') {
+                return 'https://chatgpt.com/incognito' + (u.hash || '');
+            }
+            if (h === 'chatgpt.com' || h === 'www.chatgpt.com') {
+                if (path.startsWith('/incognito')) return url;
+                if (path === '/' || path === '' || path.startsWith('/auth') || path === '/login' || path === '/chat') {
+                    return 'https://chatgpt.com/incognito' + (u.hash || '');
+                }
+            }
+            if (h === 'openai.com' && (path === '/' || path === '' || path.startsWith('/chatgpt'))) {
+                return 'https://chatgpt.com/incognito' + (u.hash || '');
+            }
+            if (h === 'gemini.google.com') {
+                if (path === '/' || path === '') {
+                    return 'https://gemini.google.com/app' + (u.search || '') + (u.hash || '');
+                }
+            }
+        } catch (_) {}
+        return url;
+    }
+
     // ========== Navigate (open in new tab) ==========
     async function navigate(input) {
-        const url = normalizeUrl(input);
+        let url = normalizeUrl(input);
+        url = rewriteGuestAiUrl(url);
         await initScramjet();
         if (!_scramjetReady) {
             showToast('Proxy engine failed to initialize. HTTPS may be required.', 'error');
