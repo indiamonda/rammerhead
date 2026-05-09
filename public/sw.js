@@ -59,7 +59,6 @@ function decodeProxiedUrl(requestUrl) {
     const prefix = "/~/sj/";
     if (!url.pathname.startsWith(prefix)) return null;
     const rest = url.pathname.slice(prefix.length);
-    // Frame ID is 8 chars followed by /
     const slashIdx = rest.indexOf("/");
     if (slashIdx < 1) return null;
     const encoded = rest.slice(slashIdx + 1);
@@ -73,63 +72,9 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "adblock-toggle") {
     adBlockEnabled = !!event.data.enabled;
   }
-  if (event.data && event.data.type === "__rh_navigate") {
-    const url = event.data.url;
-    // event.source is the WindowClient that sent the message
-    if (event.source && typeof event.source.navigate === "function") {
-      event.source.navigate(url).catch(() => {});
-    }
-  }
 });
 
 loadAdBlockRules();
-
-const REAL_ORIGIN = self.location.origin;
-const TOOLBAR_TAG = `<script src="/toolbar.js"><\/script>`;
-
-function makeAntiDetectTag(destUrl) {
-  const escaped = (destUrl || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  return `<script>window.__rhRealOrigin="${REAL_ORIGIN}";window.__rhTargetUrl="${escaped}";<\/script><script src="/anti-detect.js"><\/script>`;
-}
-
-function isHtmlResponse(response) {
-  const ct = response.headers.get("content-type") || "";
-  return ct.includes("text/html");
-}
-
-async function injectIntoHtml(response, destUrl) {
-  if (!isHtmlResponse(response)) return response;
-  let text = await response.text();
-
-  const antiDetectTag = makeAntiDetectTag(destUrl);
-
-  // Inject anti-detect as early as possible (before first script in head)
-  const headMatch = text.match(/<head[^>]*>/i);
-  if (headMatch) {
-    const headEnd = text.indexOf(headMatch[0]) + headMatch[0].length;
-    text = text.slice(0, headEnd) + antiDetectTag + text.slice(headEnd);
-  } else {
-    text = antiDetectTag + text;
-  }
-
-  // Inject toolbar at end of body
-  const bodyClose = text.lastIndexOf("</body>");
-  if (bodyClose !== -1) {
-    text = text.slice(0, bodyClose) + TOOLBAR_TAG + text.slice(bodyClose);
-  } else {
-    text = text + TOOLBAR_TAG;
-  }
-
-  const headers = new Headers(response.headers);
-  headers.delete("content-length");
-  headers.delete("content-security-policy");
-  headers.delete("x-frame-options");
-  return new Response(text, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: headers,
-  });
-}
 
 self.addEventListener("fetch", (event) => {
   if ($scramjetController.shouldRoute(event)) {
@@ -143,12 +88,7 @@ self.addEventListener("fetch", (event) => {
             }
           } catch (_) {}
         }
-        const response = await $scramjetController.route(event);
-        const destUrl = decodeProxiedUrl(event.request.url);
-        if (destUrl && isHtmlResponse(response) && event.request.mode === "navigate") {
-          return injectIntoHtml(response, destUrl);
-        }
-        return response;
+        return $scramjetController.route(event);
       })()
     );
   }
