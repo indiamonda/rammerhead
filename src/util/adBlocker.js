@@ -221,8 +221,8 @@ const AD_DOMAINS_SUFFIX = [
     // Social retargeting / analytics pixels (suffix-match).
     // NOTE: do NOT add `.tiktok.com`, `.pinterest.com`, or `.licdn.com` here
     // even though they host tracking subdomains — JS suffix-match would also
-    // hit `www.tiktok.com`, `pinterest.com`, `media.licdn.com`, etc. and
-    // black-hole the user's actual navigation. The specific tracking
+    // hit www.tiktok.com, pinterest.com, media.licdn.com, etc. and
+    // black-hole real page loads. The specific tracking
     // endpoints (analytics.tiktok.com, business-api.tiktok.com,
     // ct.pinterest.com, log.pinterest.com, widgets.pinterest.com,
     // snap.licdn.com, px.ads.linkedin.com, …) are already listed exactly in
@@ -309,7 +309,7 @@ const AD_PATH_RE = new RegExp([
 const YOUTUBE_PLAYER_RE = /youtube(?:-nocookie)?\.com\/youtubei\/v\d+\/player(?:\?|$)/i;
 const YOUTUBE_AD_PATH_RE = /youtube(?:-nocookie)?\.com\/(api\/stats\/ads|pagead|get_midroll_info|api\/stats\/atr|ptracking|generate_204_simple|api\/stats\/qoe)/i;
 
-const ALLOWLIST_HOST_RE = /(^|\.)(studyboard|turbowarp|scratch|mit\.edu|poki|chatgpt|openai|oaistatic|oaiusercontent|claude|anthropic|github|githubusercontent|duckduckgo|deepseek|awswaf\.com|jmail|mk48|widgetapi|statsigapi|featuregates|sentry|discord|discordapp|hcaptcha|recaptcha|gstatic|cloudflare|auth0|twimg|tiktok|tiktokcdn|byteoversea|byteimg|musical|ibyteimg|bilibili|bilivideo|hdslb|biliimg|youtube|ytimg|googlevideo|ggpht|google|googleapis|wikipedia|wikimedia|wikidata|mediawiki|reddit|redd\.it|redditstatic|redditmedia|stackoverflow|sstatic|stackexchange|askubuntu|medium|mcdn|quora|quoracdn|imgur|pinterest|pinimg|deviantart|wixmp|soundcloud|sndcdn|spotify|scdn|spotifycdn|codepen|cdpn|codepen\.dev|jsfiddle|jshell|replit|repl\.co|repl\.it|glitch|notion|notion-static|trello|trellocdn|figma|figmaassets|jupyter|mybinder|binder)(\.|$)/i;
+const ALLOWLIST_HOST_RE = /(^|\.)(studyboard|jimmyqrg\.github\.io|jimmyq-r-g\.github\.io|turbowarp|scratch|mit\.edu|poki|bloxd|chatgpt|openai|oaistatic|oaiusercontent|claude|anthropic|github|githubusercontent|duckduckgo|deepseek|awswaf\.com|jmail|mk48|widgetapi|statsigapi|featuregates|sentry|discord|discordapp|hcaptcha|recaptcha|gstatic|cloudflare|auth0|twimg|tiktok|tiktokcdn|byteoversea|byteimg|musical|ibyteimg|bilibili|bilivideo|hdslb|biliimg|youtube|ytimg|googlevideo|ggpht|google|googleapis|wikipedia|wikimedia|wikidata|mediawiki|reddit|redd\.it|redditstatic|redditmedia|stackoverflow|sstatic|stackexchange|askubuntu|medium|mcdn|quora|quoracdn|imgur|pinterest|pinimg|deviantart|wixmp|soundcloud|sndcdn|spotify|scdn|spotifycdn|codepen|cdpn|codepen\.dev|jsfiddle|jshell|replit|repl\.co|repl\.it|glitch|notion|notion-static|trello|trellocdn|figma|figmaassets|jupyter|mybinder|binder)(\.|$)/i;
 
 /** Returns true when the host is an allowlisted first-party we never block. */
 function _isAllowlisted(host) {

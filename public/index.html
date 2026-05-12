@@ -331,7 +331,7 @@
                 <div class="panel-header" onclick="togglePanel('panel-appearance')">
                     <span>Appearance</span>
                     <span class="material-icons-round">expand_more</span>
-                </div>
+                        </div>
                 <div class="panel-body">
                     <div class="toggle-row">
                         <span>Dark Mode</span>
@@ -342,14 +342,14 @@
                         <div class="wp-strip" id="wp-strip"></div>
                     </div>
                 </div>
-            </div>
+                            </div>
 
             <!-- Tab Disguise -->
             <div class="panel" id="panel-disguise">
                 <div class="panel-header" onclick="togglePanel('panel-disguise')">
                     <span>Tab Disguise</span>
                     <span class="material-icons-round">expand_more</span>
-                </div>
+                                </div>
                 <div class="panel-body">
                     <div class="field">
                         <label>Page Title</label>
@@ -360,37 +360,37 @@
                         <input type="file" id="set-favicon" accept="image/*" style="font-size:12px;color:var(--subtext)">
                     </div>
                     <button class="btn btn-primary" onclick="saveDisguise()">Save</button>
-                </div>
-            </div>
+                                </div>
+                            </div>
 
             <!-- Search Engine -->
             <div class="panel" id="panel-search">
                 <div class="panel-header" onclick="togglePanel('panel-search')">
                     <span>Search Engine</span>
                     <span class="material-icons-round">expand_more</span>
-                </div>
+                            </div>
                 <div class="panel-body">
                     <div class="pill-group" id="engine-pills"></div>
                 </div>
-            </div>
+                        </div>
 
             <!-- Privacy -->
             <div class="panel" id="panel-privacy">
                 <div class="panel-header" onclick="togglePanel('panel-privacy')">
                     <span>Privacy &amp; Data</span>
                     <span class="material-icons-round">expand_more</span>
-                </div>
+                            </div>
                 <div class="panel-body">
                     <div class="toggle-row">
                         <span>Ad Blocker</span>
                         <div class="toggle" id="toggle-adblock" onclick="toggleAdBlock()"></div>
-                    </div>
+                            </div>
                     <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
                         <button class="btn btn-outline confirm-btn" data-action="clear-history" onclick="confirmAction(this,'Clear History',clearHistory)">Clear History</button>
                         <button class="btn btn-outline confirm-btn" data-action="clear-bookmarks" onclick="confirmAction(this,'Clear Bookmarks',clearBookmarks)">Clear Bookmarks</button>
                         <button class="btn btn-outline confirm-btn" data-action="clear-all" onclick="confirmAction(this,'Clear All Data',clearAll)">Clear All Data</button>
+                        </div>
                     </div>
-                </div>
             </div>
         </section>
 
@@ -400,20 +400,20 @@
                 <div class="panel-header" onclick="togglePanel('panel-lists')">
                     <span>History &amp; Bookmarks</span>
                     <span class="material-icons-round">expand_more</span>
-                </div>
+                                    </div>
                 <div class="panel-body">
                     <div class="list-tabs">
                         <div class="list-tab active" data-tab="history" onclick="switchListTab('history')">History</div>
                         <div class="list-tab" data-tab="bookmarks" onclick="switchListTab('bookmarks')">Bookmarks</div>
-                    </div>
+                                    </div>
                     <input type="text" class="list-search" id="list-search" placeholder="Search..." oninput="renderList()">
                     <div id="list-content"></div>
-                </div>
-            </div>
+                                </div>
+                                </div>
         </section>
 
         <footer class="footer">StudyBoard Learning Platform &copy; 2026</footer>
-    </div>
+                            </div>
 
     <div id="toast-container"></div>
 
@@ -444,8 +444,8 @@
             fn();
             btn.classList.remove('confirming');
             btn.textContent = label.replace('Clear ', 'Clear ');
-            return;
-        }
+                        return;
+                    }
         btn.classList.add('confirming');
         btn.textContent = 'Are you sure?';
         setTimeout(() => {
@@ -506,6 +506,8 @@
                         'turbowarp.org': { strictRewrites: false, syncxhr: true },
                         'www.turbowarp.org': { strictRewrites: false, syncxhr: true },
                         'turbowarp.xyz': { strictRewrites: false, syncxhr: true },
+                        'www.bloxd.io': { strictRewrites: false, syncxhr: true },
+                        'bloxd.io': { strictRewrites: false, syncxhr: true },
                         'chatgpt.com': { strictRewrites: false, syncxhr: true },
                         'www.chatgpt.com': { strictRewrites: false, syncxhr: true },
                         'chat.openai.com': { strictRewrites: false, syncxhr: true },
@@ -524,7 +526,7 @@
             });
             await _scramjet.wait();
             _scramjetReady = true;
-        } catch (e) {
+                } catch (e) {
             console.error('Scramjet init failed:', e);
             if (_initAttempts <= 2) return initScramjet();
         }
@@ -553,23 +555,22 @@
         return url;
     }
 
-    /** Prefer guest / no-login entry points for ChatGPT and Gemini. */
+    /** Prefer main ChatGPT / Gemini app entry (avoids /incognito + FedCM login churn through the proxy). */
     function rewriteGuestAiUrl(url) {
         try {
             const u = new URL(url);
             const h = u.hostname.toLowerCase();
             const path = u.pathname || '/';
             if (h === 'chat.openai.com') {
-                return 'https://chatgpt.com/incognito' + (u.hash || '');
+                return 'https://chatgpt.com' + (u.search || '') + (u.hash || '');
             }
             if (h === 'chatgpt.com' || h === 'www.chatgpt.com') {
-                if (path.startsWith('/incognito')) return url;
-                if (path === '/' || path === '' || path.startsWith('/auth') || path === '/login' || path === '/chat') {
-                    return 'https://chatgpt.com/incognito' + (u.hash || '');
+                if (path === '/' || path === '' || path.startsWith('/auth') || path === '/login') {
+                    return 'https://chatgpt.com' + (u.search || '') + (u.hash || '');
                 }
             }
             if (h === 'openai.com' && (path === '/' || path === '' || path.startsWith('/chatgpt'))) {
-                return 'https://chatgpt.com/incognito' + (u.hash || '');
+                return 'https://chatgpt.com' + (u.search || '') + (u.hash || '');
             }
             if (h === 'gemini.google.com') {
                 if (path === '/' || path === '') {
@@ -672,7 +673,7 @@
                 '<img src="' + favicon + '" alt="" onerror="this.style.display=\'none\'">' +
                 '<div class="qc-title">' + (it.title.length > 20 ? it.title.slice(0,20)+'...' : it.title) + '</div>' +
                 '<div class="qc-url">' + domain + '</div></div>';
-        }).join('');
+                }).join('');
     }
     function removeQuickItem(url) {
         const bm = getBookmarks().filter(b => b.url !== url);
@@ -695,13 +696,13 @@
         let items = [];
         if (currentListTab === 'history') {
             items = getHistory().filter(h => !query || h.url.toLowerCase().includes(query));
-        } else {
+                        } else {
             items = getBookmarks().filter(b => !query || b.url.toLowerCase().includes(query) || (b.title||'').toLowerCase().includes(query));
         }
         if (items.length === 0) {
             container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--subtext);font-size:13px">Nothing here yet.</div>';
-            return;
-        }
+                    return;
+                }
         container.innerHTML = items.slice(0, 50).map(it => {
             let domain = '';
             try { domain = new URL(it.url).hostname; } catch (_) { domain = ''; }
@@ -743,7 +744,7 @@
         const newState = !el.classList.contains('on');
         el.classList.toggle('on', newState);
         localStorage.setItem('adBlockEnabled', newState ? '1' : '0');
-        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
             navigator.serviceWorker.controller.postMessage({ type: 'adblock-toggle', enabled: newState });
         }
         showToast('Ad blocker ' + (newState ? 'enabled' : 'disabled'), 'info');
@@ -753,13 +754,13 @@
     function saveDisguise() {
         const title = document.getElementById('set-title').value.trim();
         if (title) {
-            localStorage.setItem('pageTitle', title);
+                    localStorage.setItem('pageTitle', title);
             document.title = title;
             document.getElementById('page-title').textContent = title;
         }
         const fileInput = document.getElementById('set-favicon');
         if (fileInput.files.length > 0) {
-            const reader = new FileReader();
+                    const reader = new FileReader();
             reader.onload = function(e) {
                 localStorage.setItem('faviconData', e.target.result);
                 document.getElementById('favicon').href = e.target.result;
@@ -798,7 +799,7 @@
             document.body.style.backgroundSize = 'cover';
             document.body.style.backgroundPosition = 'center';
             document.body.style.backgroundAttachment = 'fixed';
-        } else {
+                } else {
             localStorage.removeItem('newTabBackground');
             document.body.style.backgroundImage = '';
         }
@@ -817,7 +818,7 @@
         const hist = getHistory();
         const bm = getBookmarks();
         const matches = [];
-        const seen = new Set();
+                    const seen = new Set();
         for (const b of bm) {
             if (matches.length >= 6) break;
             if ((b.url.toLowerCase().includes(val) || (b.title||'').toLowerCase().includes(val)) && !seen.has(b.url)) {
@@ -839,12 +840,12 @@
         sugIdx = -1;
     });
 
-    urlInput.addEventListener('keydown', (e) => {
+            urlInput.addEventListener('keydown', (e) => {
         const items = sugBox.querySelectorAll('.sug-item');
         if (e.key === 'ArrowDown') { e.preventDefault(); sugIdx = Math.min(sugIdx + 1, items.length - 1); updateSugActive(items); }
         else if (e.key === 'ArrowUp') { e.preventDefault(); sugIdx = Math.max(sugIdx - 1, -1); updateSugActive(items); }
         else if (e.key === 'Enter') {
-            e.preventDefault();
+                e.preventDefault();
             if (sugIdx >= 0 && items[sugIdx]) items[sugIdx].click();
             else if (urlInput.value.trim()) navigate(urlInput.value.trim());
             sugBox.classList.remove('open');
@@ -888,7 +889,7 @@
 
         // Pre-init Scramjet in background
         initScramjet();
-    })();
+            })();
     </script>
 </body>
 </html>
