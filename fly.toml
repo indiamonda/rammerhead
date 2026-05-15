@@ -16,6 +16,7 @@ primary_region = "sjc"
 [env]
   NODE_ENV = "production"
   PORT = "8080"
+  SINGLE_PROCESS = "1"
 
 # Persistent volume for session storage. The app writes session files to
 # /data/sessions (see src/config.js). Without this mount, session files

@@ -17,3 +17,8 @@ cache-js/*
 
 # ignore any custom configurations
 /config.js
+
+.claude/*
+.cursor/*
+.vscode/*
+activate-minimax.sh

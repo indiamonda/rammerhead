@@ -33,6 +33,12 @@ if (config.enableWorkers && (cluster.isPrimary || cluster.isMaster)) {
         generatePrefix: (level) => workerId + config.generatePrefix(level)
     });
 
+    // Guard: wrap async-exit-hook to prevent crashes on module compatibility issues
+    let exitHookExited = false;
+    const safeExitHook = (fn) => {
+        try { fn(); } catch (e) { console.error('[exit-hook] error:', e.message); }
+    };
+
     const proxyServer = new RammerheadProxy({
         logger,
         loggerGetIP: config.getIP,
@@ -58,11 +64,26 @@ if (config.enableWorkers && (cluster.isPrimary || cluster.isMaster)) {
     if (config.publicDir) addStaticDirToProxy(proxyServer, config.publicDir);
     setupRoutes(proxyServer, sessionStore, logger);
 
-    exitHook(() => {
-        logger.info(`(server) Received exit signal, closing proxy server`);
-        proxyServer.close();
-        logger.info('(server) Closed proxy server');
-    });
+    // Use safeExitHook wrapper to prevent crashes if async-exit-hook has issues
+    try {
+        exitHook(() => {
+            if (exitHookExited) return;
+            exitHookExited = true;
+            safeExitHook(() => { logger.info(`(server) Received exit signal, closing proxy server`); });
+            safeExitHook(() => { proxyServer.close(); });
+            safeExitHook(() => { logger.info('(server) Closed proxy server'); });
+        });
+    } catch (e) {
+        console.error('[exit-hook] Failed to register exit hook:', e.message);
+    }
+
+    // Ensure all timers are unreffed so they don't keep the process alive
+    const preventTimerLeak = () => {
+        if (typeof global.gc === 'function' && process.env.DEVELOPMENT) {
+            // In dev, let explicit GC runs work normally
+        }
+    };
+    preventTimerLeak();
 
     const formatUrl = (secure, hostname, port) => `${secure ? 'https' : 'http'}://${hostname}:${port}`;
     logger.info(

@@ -5,7 +5,10 @@ const RammerheadJSMemCache = require('./classes/RammerheadJSMemCache.js');
 const RammerheadJSFileCache = require('./classes/RammerheadJSFileCache.js');
 
 // Use simple cluster mode (not sticky-session-custom which has Node.js v24+ issues)
-const enableWorkers = os.cpus().length > 1 && !process.env.SINGLE_PROCESS;
+// On Fly.io, machines may have 1 shared CPU but Node.js os.cpus() returns >1.
+// Force single-process on known cloud platforms to prevent multi-worker memory fragmentation.
+// Use SINGLE_PROCESS=1 env var to override.
+const enableWorkers = !isCloudDeployment && os.cpus().length > 1 && !process.env.SINGLE_PROCESS;
 
 // Auto-detect cloud/reverse-proxy environments (Render, Fly.io, Heroku, etc.)
 const isCloudDeployment = !!(
