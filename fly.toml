@@ -10,6 +10,7 @@ app = "ulw-app"
 primary_region = "sjc"
 
 [build]
+  dockerfile = "Dockerfile"
 
 [env]
   NODE_ENV = "production"
