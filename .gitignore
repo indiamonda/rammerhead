@@ -17,3 +17,6 @@ cache-js/*
 
 # ignore any custom configurations
 /config.js
+
+.vscode/*
+.claude/*
