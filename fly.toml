@@ -12,10 +12,6 @@ primary_region = "sjc"
 [build]
   dockerfile = "Dockerfile"
 
-[mounts]
-  source = "data"
-  destination = "/data"
-
 [env]
   NODE_ENV = "production"
   PORT = "8080"
