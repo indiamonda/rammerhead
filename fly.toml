@@ -5,12 +5,9 @@ app = "ulw-app"
 
 [[vm]]
   size = "performance-1x"
-  memory_mb = 1024
+  memory_mb = 2048
 
 primary_region = "sjc"
-
-[build]
-  dockerfile = "Dockerfile"
 
 [env]
   NODE_ENV = "production"
