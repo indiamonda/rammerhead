@@ -4,6 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { hostname } from "node:os";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
+import { startDnsServer } from "./dns-server.js";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { scramjetPath } from "@mercuryworkshop/scramjet/path";
@@ -206,15 +207,19 @@ fastify.setNotFoundHandler((_req, reply) => {
   return reply.code(404).type("text/html").send("Not Found");
 });
 
+let dnsServer;
+
 fastify.server.on("listening", () => {
   const address = fastify.server.address();
   console.log("Listening on:");
   console.log(`\thttp://localhost:${address.port}`);
   console.log(`\thttp://${hostname()}:${address.port}`);
-});
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+  dnsServer = startDnsServer();
+
+  process.on("SIGINT", () => { dnsServer.close(); shutdown(); });
+  process.on("SIGTERM", () => { dnsServer.close(); shutdown(); });
+});
 
 function shutdown() {
   console.log("Shutting down...");
