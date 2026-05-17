@@ -7,7 +7,7 @@ app = "ulw-app"
   size = "performance-1x"
   memory_mb = 4096
 
-primary_region = "sjc"
+primary_region = "iad"
 
 [env]
   NODE_ENV = "production"
