@@ -9,6 +9,10 @@ app = "ulw-app"
 
 primary_region = "iad"
 
+[mounts]
+  source = "data"
+  destination = "/data"
+
 [env]
   NODE_ENV = "production"
   PORT = "8080"
