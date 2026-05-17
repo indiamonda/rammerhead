@@ -175,12 +175,12 @@
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .quick-card .qc-url { font-size: 10px; color: var(--subtext); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .quick-card .qc-remove {
-            position: absolute; top: 4px; right: 4px; width: 18px; height: 18px;
-            border-radius: 50%; background: var(--red); color: #fff; border: none;
+        .quick-card .qc-star {
+            position: absolute; top: 4px; left: 4px; width: 18px; height: 18px;
+            border-radius: 50%; background: var(--yellow); color: #fff; border: none;
             font-size: 12px; cursor: pointer; display: none; align-items: center; justify-content: center;
         }
-        .quick-card:hover .qc-remove { display: flex; }
+        .quick-card:hover .qc-star { display: flex; }
         .quick-card { position: relative; }
 
         /* Settings Panel */
@@ -247,21 +247,6 @@
         .confirm-btn { transition: all .2s; }
         .confirm-btn.confirming { background: var(--red); color: #fff; }
 
-        /* Wallpaper strip */
-        .wp-strip {
-            display: flex; gap: 8px; overflow-x: auto; padding: 8px 0;
-            scrollbar-width: thin; scrollbar-color: var(--surface2) transparent;
-        }
-        .wp-strip::-webkit-scrollbar { height: 6px; }
-        .wp-strip::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
-        .wp-thumb {
-            flex-shrink: 0; width: 80px; height: 50px; border-radius: 6px;
-            background-size: cover; background-position: center; cursor: pointer;
-            border: 2px solid transparent; transition: border-color var(--transition);
-        }
-        .wp-thumb.active { border-color: var(--blue); }
-        .wp-thumb.none-wp { background: var(--overlay); display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--subtext); }
-
         /* History/Bookmarks list */
         .list-tabs { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--surface2); }
         .list-tab {
@@ -290,6 +275,13 @@
             border: 1px solid var(--surface2); border-radius: var(--radius-sm);
             color: var(--text); font-size: 12px; outline: none; margin-bottom: 12px;
         }
+        .insert-script-textarea {
+            width: 100%; min-height: 100px; padding: 10px 14px;
+            background: var(--bg); border: 1px solid var(--surface2);
+            border-radius: var(--radius-sm); color: var(--text); font-size: 12px;
+            font-family: var(--font-family-mono); outline: none; resize: vertical; margin-bottom: 8px;
+        }
+        .insert-script-textarea:focus { border-color: var(--blue); }
 
         /* Footer */
         .footer { padding: 40px 0; text-align: center; color: var(--subtext); font-size: 11px; }
@@ -336,10 +328,6 @@
                     <div class="toggle-row">
                         <span>Dark Mode</span>
                         <div class="toggle" id="toggle-dark" onclick="toggleDarkMode()"></div>
-                    </div>
-                    <div class="field" style="margin-top:12px">
-                        <label>Wallpaper</label>
-                        <div class="wp-strip" id="wp-strip"></div>
                     </div>
                 </div>
                             </div>
@@ -391,6 +379,19 @@
                         <button class="btn btn-outline confirm-btn" data-action="clear-all" onclick="confirmAction(this,'Clear All Data',clearAll)">Clear All Data</button>
                         </div>
                     </div>
+            </div>
+
+            <!-- Insert Script -->
+            <div class="panel" id="panel-script">
+                <div class="panel-header" onclick="togglePanel('panel-script')">
+                    <span>Insert Script</span>
+                    <span class="material-icons-round">expand_more</span>
+                </div>
+                <div class="panel-body">
+                    <p style="font-size:11px;color:var(--subtext);margin-bottom:10px">Custom JavaScript injected into every page. Use with caution.</p>
+                    <textarea class="insert-script-textarea" id="insert-script" placeholder="// e.g. document.body.style.background='red';" oninput="saveInsertScript()"></textarea>
+                    <button class="btn btn-primary" onclick="saveInsertScript()">Save Script</button>
+                </div>
             </div>
         </section>
 
@@ -474,62 +475,72 @@
     let _scramjet = null;
     let _scramjetReady = false;
     let _initAttempts = 0;
+    let _initPromise = null;
 
     async function initScramjet() {
-        if (_scramjetReady) return;
-        if (_initAttempts > 2) return;
-        _initAttempts++;
-        try {
-            const sw = await registerSW();
-            if (!sw) throw new Error('SW not active');
-            const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
-            const { default: LibcurlClient } = await import('/libcurl-transport/index.mjs');
-            const transport = new LibcurlClient({ wisp: wispUrl });
-            await transport.init();
-            _scramjet = new $scramjetController.Controller({
-                serviceworker: sw,
-                transport: transport,
-                config: {
-                    prefix: '/~/sj/',
-                    scramjetPath: '/scramjet/scramjet.js',
-                    injectPath: '/controller/controller.inject.js',
-                    wasmPath: '/scramjet/scramjet.wasm',
-                    virtualWasmPath: 'scramjet.wasm.js',
-                },
-                scramjetConfig: {
-                    flags: { syncxhr: true, strictRewrites: true, captureErrors: true, cleanErrors: true, sourcemaps: true, allowInvalidJs: true, allowFailedIntercepts: true },
-                    siteFlags: {
-                        'jimmyqrg.github.io': { strictRewrites: false, syncxhr: true },
-                        'jimmyq-r-g.github.io': { strictRewrites: false, syncxhr: true },
-                        'jmail.world': { strictRewrites: false, syncxhr: true },
-                        'scratch.mit.edu': { strictRewrites: false, syncxhr: true },
-                        'turbowarp.org': { strictRewrites: false, syncxhr: true },
-                        'www.turbowarp.org': { strictRewrites: false, syncxhr: true },
-                        'turbowarp.xyz': { strictRewrites: false, syncxhr: true },
-                        'www.bloxd.io': { strictRewrites: false, syncxhr: true },
-                        'bloxd.io': { strictRewrites: false, syncxhr: true },
-                        'chatgpt.com': { strictRewrites: false, syncxhr: true },
-                        'www.chatgpt.com': { strictRewrites: false, syncxhr: true },
-                        'chat.openai.com': { strictRewrites: false, syncxhr: true },
-                        'gemini.google.com': { strictRewrites: false, syncxhr: true },
-                        'deepseek.com': { strictRewrites: false, syncxhr: true },
-                        'chat.deepseek.com': { strictRewrites: false, syncxhr: true },
-                        'discord.com': { strictRewrites: false, syncxhr: true },
-                        'discordapp.com': { strictRewrites: false, syncxhr: true },
-                        'reddit.com': { strictRewrites: false },
-                        'www.reddit.com': { strictRewrites: false },
-                        'notion.so': { strictRewrites: false, syncxhr: true },
-                        'docs.google.com': { strictRewrites: false, syncxhr: true },
-                        'replit.com': { strictRewrites: false, syncxhr: true },
+        if (_scramjetReady) return true;
+        if (_initPromise) return _initPromise;
+        if (_initAttempts > 2) return false;
+        _initPromise = (async () => {
+            _initAttempts++;
+            try {
+                const sw = await registerSW();
+                if (!sw) throw new Error('SW not active');
+                const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
+                const { default: LibcurlClient } = await import('/libcurl-transport/index.mjs');
+                const transport = new LibcurlClient({ wisp: wispUrl });
+                await transport.init();
+                _scramjet = new $scramjetController.Controller({
+                    serviceworker: sw,
+                    transport: transport,
+                    config: {
+                        prefix: '/~/sj/',
+                        scramjetPath: '/scramjet/scramjet.js',
+                        injectPath: '/controller/controller.inject.js',
+                        wasmPath: '/scramjet/scramjet.wasm',
+                        virtualWasmPath: 'scramjet.wasm.js',
                     },
-                },
-            });
-            await _scramjet.wait();
-            _scramjetReady = true;
-                } catch (e) {
-            console.error('Scramjet init failed:', e);
-            if (_initAttempts <= 2) return initScramjet();
-        }
+                    scramjetConfig: {
+                        flags: { syncxhr: true, strictRewrites: true, captureErrors: true, cleanErrors: true, sourcemaps: true, allowInvalidJs: true, allowFailedIntercepts: true },
+                        siteFlags: {
+                            'jimmyqrg.github.io': { strictRewrites: false, syncxhr: true },
+                            'jimmyq-r-g.github.io': { strictRewrites: false, syncxhr: true },
+                            'jmail.world': { strictRewrites: false, syncxhr: true },
+                            'scratch.mit.edu': { strictRewrites: false, syncxhr: true },
+                            'turbowarp.org': { strictRewrites: false, syncxhr: true },
+                            'www.turbowarp.org': { strictRewrites: false, syncxhr: true },
+                            'turbowarp.xyz': { strictRewrites: false, syncxhr: true },
+                            'www.bloxd.io': { strictRewrites: false, syncxhr: true },
+                            'bloxd.io': { strictRewrites: false, syncxhr: true },
+                            'chatgpt.com': { strictRewrites: false, syncxhr: true },
+                            'www.chatgpt.com': { strictRewrites: false, syncxhr: true },
+                            'chat.openai.com': { strictRewrites: false, syncxhr: true },
+                            'gemini.google.com': { strictRewrites: false, syncxhr: true },
+                            'deepseek.com': { strictRewrites: false, syncxhr: true },
+                            'chat.deepseek.com': { strictRewrites: false, syncxhr: true },
+                            'discord.com': { strictRewrites: false, syncxhr: true },
+                            'discordapp.com': { strictRewrites: false, syncxhr: true },
+                            'reddit.com': { strictRewrites: false },
+                            'www.reddit.com': { strictRewrites: false },
+                            'notion.so': { strictRewrites: false, syncxhr: true },
+                            'docs.google.com': { strictRewrites: false, syncxhr: true },
+                            'replit.com': { strictRewrites: false, syncxhr: true },
+                        },
+                    },
+                });
+                await _scramjet.wait();
+                _scramjetReady = true;
+                return true;
+            } catch (e) {
+                console.error('Scramjet init failed:', e);
+                _initPromise = null;
+                if (_initAttempts <= 2) {
+                    return initScramjet();
+                }
+                return false;
+            }
+        })();
+        return _initPromise;
     }
 
     function scramjetEncodeUrl(url) {
@@ -585,8 +596,8 @@
     async function navigate(input) {
         let url = normalizeUrl(input);
         url = rewriteGuestAiUrl(url);
-        await initScramjet();
-        if (!_scramjetReady) {
+        const ready = await initScramjet();
+        if (!ready || !_scramjetReady) {
             showToast('Proxy engine failed to initialize. HTTPS may be required.', 'error');
             return;
         }
@@ -651,14 +662,15 @@
         const grid = document.getElementById('quick-grid');
         const hist = getHistory();
         const bm = getBookmarks();
+        const bmUrls = new Set(bm.map(b => b.url));
         const seen = new Set();
         const items = [];
         for (const b of bm) {
-            if (!seen.has(b.url)) { seen.add(b.url); items.push({ url: b.url, title: b.title || b.url }); }
+            if (!seen.has(b.url)) { seen.add(b.url); items.push({ url: b.url, title: b.title || b.url, bookmarked: true }); }
         }
         for (const h of hist) {
             if (items.length >= 12) break;
-            if (!seen.has(h.url)) { seen.add(h.url); items.push({ url: h.url, title: h.title || h.url }); }
+            if (!seen.has(h.url)) { seen.add(h.url); items.push({ url: h.url, title: h.title || h.url, bookmarked: false }); }
         }
         if (items.length === 0) {
             grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--subtext);font-size:13px">No recent sites yet. Enter a URL above to get started.</div>';
@@ -668,18 +680,43 @@
             let domain = '';
             try { domain = new URL(it.url).hostname.replace('www.',''); } catch (_) { domain = it.url; }
             const favicon = 'https://www.google.com/s2/favicons?domain=' + domain + '&sz=64';
-            return '<div class="quick-card" onclick="navigate(\'' + it.url.replace(/'/g, "\\'") + '\')">' +
-                '<button class="qc-remove" onclick="event.stopPropagation();removeQuickItem(\'' + it.url.replace(/'/g, "\\'") + '\')">&times;</button>' +
+            const starIcon = it.bookmarked ? 'star' : 'star_border';
+            return '<div class="quick-card" onmouseenter="updateQuickCardStar(\'' + it.url.replace(/'/g, "\\'") + '\', true)" onmouseleave="updateQuickCardStar(\'' + it.url.replace(/'/g, "\\'") + '\', false)">' +
+                '<button class="qc-star" id="qc-star-' + it.url.replace(/[^a-zA-Z0-9]/g, '') + '" onclick="event.stopPropagation();toggleBookmark(\'' + it.url.replace(/'/g, "\\'") + '\',\'' + (it.title||'').replace(/'/g, "\\'") + '\')"><span class="material-icons-round" style="font-size:14px">' + starIcon + '</span></button>' +
                 '<img src="' + favicon + '" alt="" onerror="this.style.display=\'none\'">' +
                 '<div class="qc-title">' + (it.title.length > 20 ? it.title.slice(0,20)+'...' : it.title) + '</div>' +
                 '<div class="qc-url">' + domain + '</div></div>';
                 }).join('');
     }
-    function removeQuickItem(url) {
+    function updateQuickCardStar(url, show) {
+        const id = 'qc-star-' + url.replace(/[^a-zA-Z0-9]/g, '');
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.style.display = show ? 'flex' : 'none';
+        }
+    }
+    function toggleBookmark(url, title) {
+        const bm = getBookmarks();
+        if (bm.find(b => b.url === url)) {
+            removeBookmarkByUrl(url);
+        } else {
+            if (!bm.find(b => b.url === url)) {
+                bm.push({ url, title: title || url, id: Date.now().toString() });
+                saveBookmarks(bm);
+                showToast('Bookmarked!', 'success');
+            }
+        }
+        renderQuickAccess();
+    }
+    function removeBookmarkByUrl(url) {
         const bm = getBookmarks().filter(b => b.url !== url);
         saveBookmarks(bm);
+        renderList();
+    }
+    function removeQuickItem(url) {
         const hist = getHistory().filter(h => h.url !== url);
         localStorage.setItem('rh_history', JSON.stringify(hist));
+        removeBookmarkByUrl(url);
         renderQuickAccess();
     }
 
@@ -727,6 +764,25 @@
     // ========== Panel Toggle ==========
     function togglePanel(id) {
         document.getElementById(id).classList.toggle('open');
+    }
+
+    // ========== Insert Script ==========
+    function saveInsertScript() {
+        const val = document.getElementById('insert-script').value;
+        localStorage.setItem('insertScript', val);
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'update-insert-script', script: val });
+        }
+        showToast('Script saved', 'success');
+    }
+    function loadInsertScript() {
+        return localStorage.getItem('insertScript') || '';
+    }
+    function applyInsertScript() {
+        const script = loadInsertScript();
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'update-insert-script', script: script });
+        }
     }
 
     // ========== Dark Mode ==========
@@ -779,32 +835,6 @@
         container.innerHTML = Object.entries(searchEngines).map(([key, val]) =>
             '<button class="pill' + (key === current ? ' active' : '') + '" onclick="setSearchEngine(\'' + key + '\')">' + val.name + '</button>'
         ).join('');
-    }
-
-    // ========== Wallpaper Strip ==========
-    function renderWallpapers() {
-        const strip = document.getElementById('wp-strip');
-        const current = localStorage.getItem('newTabBackground') || '';
-        let html = '<div class="wp-thumb none-wp' + (!current ? ' active' : '') + '" onclick="setWallpaper(\'\')">None</div>';
-        for (let i = 1; i <= 30; i++) {
-            const url = 'https://raw.githubusercontent.com/nicepayload/w/main/' + i + '.webp';
-            html += '<div class="wp-thumb' + (current === url ? ' active' : '') + '" style="background-image:url(' + url + ')" onclick="setWallpaper(\'' + url + '\')"></div>';
-        }
-        strip.innerHTML = html;
-    }
-    function setWallpaper(url) {
-        if (url) {
-            localStorage.setItem('newTabBackground', url);
-            document.body.style.backgroundImage = 'url(' + url + ')';
-            document.body.style.backgroundSize = 'cover';
-            document.body.style.backgroundPosition = 'center';
-            document.body.style.backgroundAttachment = 'fixed';
-                } else {
-            localStorage.removeItem('newTabBackground');
-            document.body.style.backgroundImage = '';
-        }
-        renderWallpapers();
-        showToast('Wallpaper updated', 'success');
     }
 
     // ========== Suggestions ==========
@@ -872,23 +902,19 @@
         // Disguise fields
         document.getElementById('set-title').value = localStorage.getItem('pageTitle') || '';
 
+        // Insert script
+        document.getElementById('insert-script').value = loadInsertScript();
+
         // Render
         renderQuickAccess();
         renderEnginePills();
-        renderWallpapers();
         renderList();
-
-        // Apply saved wallpaper
-        const wp = localStorage.getItem('newTabBackground');
-        if (wp) {
-            document.body.style.backgroundImage = 'url(' + wp + ')';
-            document.body.style.backgroundSize = 'cover';
-            document.body.style.backgroundPosition = 'center';
-            document.body.style.backgroundAttachment = 'fixed';
-        }
 
         // Pre-init Scramjet in background
         initScramjet();
+
+        // Sync insert script to service worker
+        applyInsertScript();
             })();
     </script>
 </body>

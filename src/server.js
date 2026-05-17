@@ -38,6 +38,24 @@ const BLOCKED_DISPLAY_NAMES = new Set([
   "dick",
 ]);
 
+// Simple compression helper
+function compressResponse(res, data, encoding) {
+  const accept = (encoding || "").toLowerCase();
+  if (accept.includes("gzip")) {
+    res.setHeader("Content-Encoding", "gzip");
+    return zlib.gzipSync(data);
+  }
+  if (accept.includes("deflate")) {
+    res.setHeader("Content-Encoding", "deflate");
+    return zlib.deflateSync(data);
+  }
+  if (accept.includes("br")) {
+    res.setHeader("Content-Encoding", "br");
+    return zlib.brotliCompressSync(data);
+  }
+  return data;
+}
+
 const adBlockRulesPath = path.join(__dirname, "../public/adblock-rules.json");
 
 function generateAdBlockRules() {
@@ -117,30 +135,54 @@ const fastify = Fastify({
   },
 });
 
+fastify.register(fastifyCompress, {
+  threshold: 512,
+});
+
 fastify.register(fastifyStatic, {
   root: publicPath,
   decorateReply: true,
+  maxAge: "7d",
+  immutable: true,
 });
 
 fastify.register(fastifyStatic, {
   root: scramjetPath,
   prefix: "/scramjet/",
   decorateReply: false,
+  maxAge: "7d",
+  immutable: true,
 });
 
 fastify.register(fastifyStatic, {
   root: controllerDistPath,
   prefix: "/controller/",
   decorateReply: false,
+  maxAge: "7d",
+  immutable: true,
 });
 
 fastify.register(fastifyStatic, {
   root: libcurlTransportPath,
   prefix: "/libcurl-transport/",
   decorateReply: false,
+  maxAge: "7d",
+  immutable: true,
 });
 
 fastify.get("/health", async () => ({ status: "ok" }));
+
+fastify.get("/adblock-rules.json", async (req, reply) => {
+  try {
+    const rules = fs.readFileSync(adBlockRulesPath, "utf-8");
+    reply.header("Cache-Control", "public, max-age=86400");
+    const enc = req.headers["accept-encoding"] || "";
+    const data = compressResponse(reply.raw, rules, enc);
+    reply.type("application/json").send(data);
+  } catch (_) {
+    return reply.code(404).send("{}");
+  }
+});
 
 fastify.post("/api/check-access", async (req, reply) => {
   try {

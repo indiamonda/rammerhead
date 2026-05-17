@@ -174,6 +174,9 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "adblock-toggle") {
     adBlockEnabled = !!event.data.enabled;
   }
+  if (event.data && event.data.type === "update-insert-script") {
+    insertScript = event.data.script || null;
+  }
 });
 
 loadAdBlockRules();
@@ -223,6 +226,10 @@ async function processHtmlNavigation(response, destUrl) {
   }
   if (!text.includes('id="__rh-cosmetic-ad"')) {
     text = injectBeforeHeadClose(text, COSMETIC_STYLE);
+  }
+  if (insertScript) {
+    const scriptInject = `<script id="__rh-insert-script" data-rh="1">${insertScript}<\/script>`;
+    text = injectBeforeHeadClose(text, scriptInject);
   }
   const headers = new Headers(response.headers);
   headers.delete("content-length");
