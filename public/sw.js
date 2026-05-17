@@ -11,7 +11,9 @@ self.addEventListener("activate", (event) => {
 let adBlockEnabled = true;
 let adBlockRules = null;
 let adBlockExactSet = null;
+let adBlockSuffixSet = null;
 let adBlockPathRe = null;
+let adBlockSuffixes = null;
 
 async function loadAdBlockRules() {
   try {
@@ -20,6 +22,8 @@ async function loadAdBlockRules() {
     adBlockRules = await resp.json();
     if (adBlockRules.exactDomains)
       adBlockExactSet = new Set(adBlockRules.exactDomains);
+    if (adBlockRules.suffixDomains)
+      adBlockSuffixes = adBlockRules.suffixDomains;
     if (adBlockRules.pathReSource)
       adBlockPathRe = new RegExp(adBlockRules.pathReSource, "i");
   } catch (_) {}
@@ -43,6 +47,7 @@ function isAdBlockExempt(url) {
     const u = new URL(url);
     const h = u.hostname.toLowerCase();
     const p = u.pathname;
+    const hp = h + p;
     if (/^challenges\.cloudflare\.com$/i.test(h)) return true;
     if (p.includes("/cdn-cgi/challenge-platform/")) return true;
     if (p.includes("/cdn-cgi/speculation")) return true;
@@ -50,6 +55,14 @@ function isAdBlockExempt(url) {
     if (/(^|\.)chatgpt\.com$/i.test(h) && p.startsWith("/backend-anon/")) return true;
     if (/(^|\.)openai\.com$/i.test(h) && (p.includes("/api/auth") || p.includes("/cdn-cgi/")))
       return true;
+    // Discord CDN and auth paths
+    if (/(^|\.)(discord|discordapp)\.com$/i.test(h) && /^\/(assets|cdn\/static|login)\//.test(p))
+      return true;
+    // ChatGPT/CDN paths that get false-positive blocked
+    if (/(^|\.)(chatgpt\.com|openai\.com|oaistatic\.com|oaiusercontent\.com)$/i.test(h))
+      return true;
+    // Cloudflare parallelize for ChatGPT
+    if (/^[^/]+\.cloudflare\.com$/i.test(h) && p.includes("/cdn-cgi/")) return true;
   } catch (_) {}
   return false;
 }
@@ -79,8 +92,8 @@ function shouldBlockUrl(url) {
 
   if (adBlockExactSet && adBlockExactSet.has(host)) return true;
 
-  if (adBlockRules.suffixDomains) {
-    for (const suffix of adBlockRules.suffixDomains) {
+  if (adBlockSuffixes) {
+    for (const suffix of adBlockSuffixes) {
       if (!suffix || typeof suffix !== "string" || suffix.length > 80) continue;
       if (!suffix.startsWith(".")) continue;
       if (host.endsWith(suffix)) return true;
