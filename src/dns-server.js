@@ -12,6 +12,36 @@ const DNS_SERVERS = (process.env.DNS_SERVERS || "1.1.1.1,1.0.0.1")
   .map((s) => s.trim())
   .filter(Boolean);
 
+// DNS Cache with TTL (positive and negative)
+const DNS_CACHE = new Map();
+const DNS_CACHE_TTL = 60 * 1000; // 60 seconds positive
+const DNS_NEG_CACHE_TTL = 30 * 1000; // 30 seconds negative
+
+function cacheSet(name, ip, isNeg = false) {
+  DNS_CACHE.set(name, { ip, timestamp: Date.now(), isNeg });
+}
+
+function cacheGet(name) {
+  const entry = DNS_CACHE.get(name);
+  if (!entry) return null;
+  const age = Date.now() - entry.timestamp;
+  const maxAge = entry.isNeg ? DNS_NEG_CACHE_TTL : DNS_CACHE_TTL;
+  if (age > maxAge) {
+    DNS_CACHE.delete(name);
+    return null;
+  }
+  return entry;
+}
+
+// Reuse agent for DoH connections
+const dohUrl = new URL(DOH_SERVER);
+const dohTransport = dohUrl.protocol === "https:" ? https : http;
+const dohAgent = new dohTransport.Agent({
+  keepAlive: true,
+  maxSockets: 10,
+  timeout: 5000,
+});
+
 function parseDnsQuery(buf) {
   if (buf.length < 12) return null;
 
@@ -94,8 +124,11 @@ async function resolveDoH(name, type = "A") {
     url.searchParams.set("name", name);
     url.searchParams.set("type", type);
 
-    const transport = url.protocol === "https:" ? https : http;
-    const req = transport.request(url, { method: "GET", headers: { Accept: "application/dns-json" } }, (res) => {
+    const req = dohTransport.request(url, {
+      method: "GET",
+      headers: { Accept: "application/dns-json" },
+      agent: dohAgent,
+    }, (res) => {
       let data = "";
       res.on("data", (chunk) => (data += chunk));
       res.on("end", () => {
@@ -106,11 +139,7 @@ async function resolveDoH(name, type = "A") {
             const aaaa = json.Answer.find((a) => a.type === 28);
             const ip = a || aaaa;
             if (ip) {
-              if (ip.type === 1) {
-                resolve(ip.data);
-              } else {
-                resolve(ip.data);
-              }
+              resolve(ip.data);
             }
           }
           reject(new Error("No valid answer"));
@@ -124,6 +153,19 @@ async function resolveDoH(name, type = "A") {
     req.setTimeout(5000, () => { req.destroy(); reject(new Error("Timeout")); });
     req.end();
   });
+}
+
+// Parallel A + AAAA resolution
+async function resolveDoHParallel(name) {
+  const [aResult, aaaaResult] = await Promise.allSettled([
+    resolveDoH(name, "A"),
+    resolveDoH(name, "AAAA"),
+  ]);
+  const aIp = aResult.status === "fulfilled" ? aResult.value : null;
+  const aaaaIp = aaaaResult.status === "fulfilled" ? aaaaResult.value : null;
+  if (aIp) return aIp;
+  if (aaaaIp) return aaaaIp;
+  throw new Error("No valid answer");
 }
 
 async function resolveFallback(name) {
@@ -200,11 +242,22 @@ async function resolveFallback(name) {
 }
 
 async function resolveName(name) {
+  const cached = cacheGet(name);
+  if (cached) return cached.ip;
+
   try {
-    const ip = await resolveDoH(name);
+    const ip = await resolveDoHParallel(name);
+    cacheSet(name, ip);
     return ip;
   } catch (_) {
-    return resolveFallback(name);
+    try {
+      const ip = await resolveFallback(name);
+      cacheSet(name, ip);
+      return ip;
+    } catch (_) {
+      cacheSet(name, null, true);
+      throw _;
+    }
   }
 }
 

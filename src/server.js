@@ -2,8 +2,9 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
-import zlib from "node:zlib";
 import { hostname } from "node:os";
+import cluster from "node:cluster";
+import { availableParallelism } from "node:os";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 import { startDnsServer } from "./dns-server.js";
 import Fastify from "fastify";
@@ -12,6 +13,19 @@ import { scramjetPath } from "@mercuryworkshop/scramjet/path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicPath = path.join(__dirname, "../public");
+const CPU_COUNT = availableParallelism();
+
+// Clustering
+if (cluster.isPrimary && process.env.CLUSTER !== "false") {
+  for (let i = 0; i < CPU_COUNT; i++) {
+    cluster.fork();
+  }
+  cluster.on("exit", (worker) => {
+    console.log(`Worker ${worker.process.pid} died, restarting...`);
+    cluster.fork();
+  });
+  return;
+}
 
 function findPackageDist(pkgName) {
   const parts = pkgName.split("/");
@@ -39,24 +53,6 @@ const BLOCKED_USERNAMES = new Set([
 const BLOCKED_DISPLAY_NAMES = new Set([
   "dick",
 ]);
-
-// Simple compression helper
-function compressResponse(res, data, encoding) {
-  const accept = (encoding || "").toLowerCase();
-  if (accept.includes("gzip")) {
-    res.setHeader("Content-Encoding", "gzip");
-    return zlib.gzipSync(data);
-  }
-  if (accept.includes("deflate")) {
-    res.setHeader("Content-Encoding", "deflate");
-    return zlib.deflateSync(data);
-  }
-  if (accept.includes("br")) {
-    res.setHeader("Content-Encoding", "br");
-    return zlib.brotliCompressSync(data);
-  }
-  return data;
-}
 
 const adBlockRulesPath = path.join(__dirname, "../public/adblock-rules.json");
 
@@ -116,6 +112,11 @@ function generateAdBlockRules() {
 
 generateAdBlockRules();
 
+// In-memory cache for adblock rules
+let adBlockRulesCache = null;
+let adBlockRulesCacheTime = 0;
+const ADBLOCK_CACHE_MAX_AGE = 60 * 1000; // 60 seconds
+
 const fastify = Fastify({
   serverFactory: (handler) => {
     return createServer()
@@ -172,11 +173,13 @@ fastify.get("/health", async () => ({ status: "ok" }));
 
 fastify.get("/adblock-rules.json", async (req, reply) => {
   try {
-    const rules = fs.readFileSync(adBlockRulesPath, "utf-8");
+    const now = Date.now();
+    if (!adBlockRulesCache || now - adBlockRulesCacheTime > ADBLOCK_CACHE_MAX_AGE) {
+      adBlockRulesCache = fs.readFileSync(adBlockRulesPath, "utf-8");
+      adBlockRulesCacheTime = now;
+    }
     reply.header("Cache-Control", "public, max-age=86400");
-    const enc = req.headers["accept-encoding"] || "";
-    const data = compressResponse(reply.raw, rules, enc);
-    reply.type("application/json").send(data);
+    reply.type("application/json").send(adBlockRulesCache);
   } catch (_) {
     return reply.code(404).send("{}");
   }
