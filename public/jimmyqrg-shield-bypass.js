@@ -19,7 +19,7 @@
     CANON_ORIGIN = 'https://jimmyqrg.github.io';
   }
 
-  var ALLOWED = ['jimmyqrg.github.io', 'jimmyq-r-g.github.io', 'localhost', '127.0.0.1'];
+  var ALLOWED = ['jimmyqrg.github.io', 'jimmyq-r-g.github.io', 'indiamonda.github.io', 'localhost', '127.0.0.1'];
   function hostOk(h) {
     if (!h) return false;
     h = String(h).toLowerCase();
