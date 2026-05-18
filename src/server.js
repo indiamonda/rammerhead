@@ -24,7 +24,8 @@ if (cluster.isPrimary && process.env.CLUSTER !== "false") {
     console.log(`Worker ${worker.process.pid} died, restarting...`);
     cluster.fork();
   });
-  return;
+  // Keep primary alive — workers are separate processes
+  await new Promise(() => {});
 }
 
 function findPackageDist(pkgName) {
