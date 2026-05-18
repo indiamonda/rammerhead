@@ -35,10 +35,10 @@ primary_region = "iad"
     idle_timeout = 900
 
   [[http_service.checks]]
-    grace_period = "30s"
-    interval = "10s"
+    grace_period = "60s"
+    interval = "15s"
     method = "GET"
     path = "/health"
-    timeout = "5s"
+    timeout = "10s"
     [http_service.checks.headers]
       X-Forwarded-Proto = "https"

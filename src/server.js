@@ -7,6 +7,7 @@ import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 import { startDnsServer } from "./dns-server.js";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
+import fastifyCompress from "@fastify/compress";
 import { scramjetPath } from "@mercuryworkshop/scramjet/path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
