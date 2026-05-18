@@ -2,12 +2,12 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import zlib from "node:zlib";
 import { hostname } from "node:os";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 import { startDnsServer } from "./dns-server.js";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
-import fastifyCompress from "@fastify/compress";
 import { scramjetPath } from "@mercuryworkshop/scramjet/path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -135,10 +135,6 @@ const fastify = Fastify({
         else socket.end();
       });
   },
-});
-
-fastify.register(fastifyCompress, {
-  threshold: 512,
 });
 
 fastify.register(fastifyStatic, {
