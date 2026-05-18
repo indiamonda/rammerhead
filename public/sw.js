@@ -14,6 +14,7 @@ let adBlockExactSet = null;
 let adBlockSuffixSet = null;
 let adBlockPathRe = null;
 let adBlockSuffixes = null;
+let insertScript = null;
 
 async function loadAdBlockRules() {
   try {
@@ -63,6 +64,10 @@ function isAdBlockExempt(url) {
       return true;
     // Cloudflare parallelize for ChatGPT
     if (/^[^/]+\.cloudflare\.com$/i.test(h) && p.includes("/cdn-cgi/")) return true;
+    // Gemini Google - don't block any requests to Gemini
+    if (/(^|\.)gemini\.google\.com$/i.test(h)) return true;
+    // Allowlist all Google domains to prevent breakage
+    if (/(^|\.)(google\.com|googleapis\.com|gstatic\.com|googlevideo\.com|ytimg\.com|googlesyndication\.com|doubleclick\.net)$/i.test(h)) return true;
   } catch (_) {}
   return false;
 }
@@ -215,6 +220,9 @@ function injectAfterHeadOpen(html, inject) {
 function injectBeforeHeadClose(html, inject) {
   const i = html.lastIndexOf("</head>");
   if (i !== -1) return html.slice(0, i) + inject + html.slice(i);
+  // Also try before </head> with any variation (uppercase, etc)
+  const i2 = html.lastIndexOf("</HEAD>");
+  if (i2 !== -1) return html.slice(0, i2) + inject + html.slice(i2);
   return inject + html;
 }
 

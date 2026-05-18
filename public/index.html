@@ -180,7 +180,13 @@
             border-radius: 50%; background: var(--yellow); color: #fff; border: none;
             font-size: 12px; cursor: pointer; display: none; align-items: center; justify-content: center;
         }
+        .quick-card .qc-close {
+            position: absolute; top: 4px; right: 4px; width: 18px; height: 18px;
+            border-radius: 50%; background: #e74c3c; color: #fff; border: none;
+            font-size: 12px; cursor: pointer; display: none; align-items: center; justify-content: center;
+        }
         .quick-card:hover .qc-star { display: flex; }
+        .quick-card:hover .qc-close { display: flex; }
         .quick-card { position: relative; }
 
         /* Settings Panel */
@@ -512,9 +518,9 @@
                             'turbowarp.xyz': { strictRewrites: false, syncxhr: true },
                             'www.bloxd.io': { strictRewrites: false, syncxhr: true },
                             'bloxd.io': { strictRewrites: false, syncxhr: true },
-                            'chatgpt.com': { strictRewrites: false, syncxhr: true },
-                            'www.chatgpt.com': { strictRewrites: false, syncxhr: true },
-                            'chat.openai.com': { strictRewrites: false, syncxhr: true },
+                            'chatgpt.com': { strictRewrites: false },
+                            'www.chatgpt.com': { strictRewrites: false },
+                            'chat.openai.com': { strictRewrites: false },
                             'gemini.google.com': { strictRewrites: false, syncxhr: true },
                             'deepseek.com': { strictRewrites: false, syncxhr: true },
                             'chat.deepseek.com': { strictRewrites: false, syncxhr: true },
@@ -623,6 +629,14 @@
         renderList();
         showToast('History cleared', 'success');
     }
+    function removeFromHistory(url) {
+        const hist = getHistory();
+        const idx = hist.findIndex(h => h.url === url);
+        if (idx !== -1) hist.splice(idx, 1);
+        localStorage.setItem('rh_history', JSON.stringify(hist));
+        renderQuickGrid();
+        showToast('Removed from history', 'success');
+    }
 
     // ========== Bookmarks ==========
     function getBookmarks() {
@@ -681,19 +695,19 @@
             try { domain = new URL(it.url).hostname.replace('www.',''); } catch (_) { domain = it.url; }
             const favicon = 'https://www.google.com/s2/favicons?domain=' + domain + '&sz=64';
             const starIcon = it.bookmarked ? 'star' : 'star_border';
-            return '<div class="quick-card" onmouseenter="updateQuickCardStar(\'' + it.url.replace(/'/g, "\\'") + '\', true)" onmouseleave="updateQuickCardStar(\'' + it.url.replace(/'/g, "\\'") + '\', false)">' +
+            return '<div class="quick-card" onclick="navigate(\'' + it.url.replace(/'/g, "\\'") + '\')" onmouseenter="updateQuickCardActions(\'' + it.url.replace(/'/g, "\\'") + '\', true)" onmouseleave="updateQuickCardActions(\'' + it.url.replace(/'/g, "\\'") + '\', false)">' +
                 '<button class="qc-star" id="qc-star-' + it.url.replace(/[^a-zA-Z0-9]/g, '') + '" onclick="event.stopPropagation();toggleBookmark(\'' + it.url.replace(/'/g, "\\'") + '\',\'' + (it.title||'').replace(/'/g, "\\'") + '\')"><span class="material-icons-round" style="font-size:14px">' + starIcon + '</span></button>' +
+                '<button class="qc-close" id="qc-close-' + it.url.replace(/[^a-zA-Z0-9]/g, '') + '" onclick="event.stopPropagation();removeFromHistory(\'' + it.url.replace(/'/g, "\\'") + '\')"><span class="material-icons-round" style="font-size:14px">close</span></button>' +
                 '<img src="' + favicon + '" alt="" onerror="this.style.display=\'none\'">' +
                 '<div class="qc-title">' + (it.title.length > 20 ? it.title.slice(0,20)+'...' : it.title) + '</div>' +
                 '<div class="qc-url">' + domain + '</div></div>';
                 }).join('');
     }
-    function updateQuickCardStar(url, show) {
-        const id = 'qc-star-' + url.replace(/[^a-zA-Z0-9]/g, '');
-        const btn = document.getElementById(id);
-        if (btn) {
-            btn.style.display = show ? 'flex' : 'none';
-        }
+    function updateQuickCardActions(url, show) {
+        const starBtn = document.getElementById('qc-star-' + url.replace(/[^a-zA-Z0-9]/g, ''));
+        const closeBtn = document.getElementById('qc-close-' + url.replace(/[^a-zA-Z0-9]/g, ''));
+        if (starBtn) starBtn.style.display = show ? 'flex' : 'none';
+        if (closeBtn) closeBtn.style.display = show ? 'flex' : 'none';
     }
     function toggleBookmark(url, title) {
         const bm = getBookmarks();
