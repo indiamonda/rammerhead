@@ -464,7 +464,7 @@
         duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
         yahoo: { name: 'Yahoo', url: 'https://search.yahoo.com/search?p=' },
     };
-    function getSearchEngine() { return localStorage.getItem('searchEngine') || 'google'; }
+    function getSearchEngine() { return localStorage.getItem('searchEngine') || 'duckduckgo'; }
     function setSearchEngine(e) {
         localStorage.setItem('searchEngine', e);
         renderEnginePills();
@@ -480,7 +480,7 @@
     async function initScramjet() {
         if (_scramjetReady) return true;
         if (_initPromise) return _initPromise;
-        if (_initAttempts > 2) return false;
+        if (_initAttempts > 3) return false;
         _initPromise = (async () => {
             _initAttempts++;
             try {
