@@ -9,10 +9,10 @@ import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 import { startDnsServer } from "./dns-server.js";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
-import { scramjetPath } from "@mercuryworkshop/scramjet/path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicPath = path.join(__dirname, "../public");
+const scramjetPublicPath = path.join(publicPath, "scramjet/dist");
 const CPU_COUNT = availableParallelism();
 
 // Clustering
@@ -28,14 +28,8 @@ if (cluster.isPrimary && process.env.CLUSTER !== "false") {
   await new Promise(() => {});
 }
 
-function findPackageDist(pkgName) {
-  const parts = pkgName.split("/");
-  const pkgDir = path.join(__dirname, "..", "node_modules", ...parts);
-  return path.join(pkgDir, "dist");
-}
-
-const controllerDistPath = findPackageDist("@mercuryworkshop/scramjet-controller");
-const libcurlTransportPath = findPackageDist("@mercuryworkshop/libcurl-transport");
+const controllerDistPath = path.join(publicPath, "controller/dist");
+const libcurlTransportPath = path.join(publicPath, "libcurl-transport/dist");
 
 logging.set_level(logging.WARN);
 Object.assign(wisp.options, {
@@ -147,7 +141,7 @@ fastify.register(fastifyStatic, {
 });
 
 fastify.register(fastifyStatic, {
-  root: scramjetPath,
+  root: scramjetPublicPath,
   prefix: "/scramjet/",
   decorateReply: false,
   maxAge: "7d",
