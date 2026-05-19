@@ -623,18 +623,25 @@
         hist.unshift({ url, title: url, time: Date.now() });
         if (hist.length > 200) hist.length = 200;
         localStorage.setItem('rh_history', JSON.stringify(hist));
+        renderList();
     }
     function clearHistory() {
         localStorage.removeItem('rh_history');
         renderList();
         showToast('History cleared', 'success');
     }
+    function removeFromQuickAccess(url) {
+        const hidden = new Set(JSON.parse(localStorage.getItem('hiddenFromQuickAccess') || '[]'));
+        hidden.add(url);
+        localStorage.setItem('hiddenFromQuickAccess', JSON.stringify([...hidden]));
+        renderQuickAccess();
+    }
     function removeFromHistory(url) {
         const hist = getHistory();
         const idx = hist.findIndex(h => h.url === url);
         if (idx !== -1) hist.splice(idx, 1);
         localStorage.setItem('rh_history', JSON.stringify(hist));
-        renderQuickGrid();
+        renderList();
         showToast('Removed from history', 'success');
     }
 
@@ -676,15 +683,16 @@
         const grid = document.getElementById('quick-grid');
         const hist = getHistory();
         const bm = getBookmarks();
+        const hidden = new Set(JSON.parse(localStorage.getItem('hiddenFromQuickAccess') || '[]'));
         const bmUrls = new Set(bm.map(b => b.url));
         const seen = new Set();
         const items = [];
         for (const b of bm) {
-            if (!seen.has(b.url)) { seen.add(b.url); items.push({ url: b.url, title: b.title || b.url, bookmarked: true }); }
+            if (!seen.has(b.url) && !hidden.has(b.url)) { seen.add(b.url); items.push({ url: b.url, title: b.title || b.url, bookmarked: true }); }
         }
         for (const h of hist) {
             if (items.length >= 12) break;
-            if (!seen.has(h.url)) { seen.add(h.url); items.push({ url: h.url, title: h.title || h.url, bookmarked: false }); }
+            if (!seen.has(h.url) && !hidden.has(h.url)) { seen.add(h.url); items.push({ url: h.url, title: h.title || h.url, bookmarked: false }); }
         }
         if (items.length === 0) {
             grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--subtext);font-size:13px">No recent sites yet. Enter a URL above to get started.</div>';
@@ -697,7 +705,7 @@
             const starIcon = it.bookmarked ? 'star' : 'star_border';
             return '<div class="quick-card" onclick="navigate(\'' + it.url.replace(/'/g, "\\'") + '\')" onmouseenter="updateQuickCardActions(\'' + it.url.replace(/'/g, "\\'") + '\', true)" onmouseleave="updateQuickCardActions(\'' + it.url.replace(/'/g, "\\'") + '\', false)">' +
                 '<button class="qc-star" id="qc-star-' + it.url.replace(/[^a-zA-Z0-9]/g, '') + '" onclick="event.stopPropagation();toggleBookmark(\'' + it.url.replace(/'/g, "\\'") + '\',\'' + (it.title||'').replace(/'/g, "\\'") + '\')"><span class="material-icons-round" style="font-size:14px">' + starIcon + '</span></button>' +
-                '<button class="qc-close" id="qc-close-' + it.url.replace(/[^a-zA-Z0-9]/g, '') + '" onclick="event.stopPropagation();removeFromHistory(\'' + it.url.replace(/'/g, "\\'") + '\')"><span class="material-icons-round" style="font-size:14px">close</span></button>' +
+                '<button class="qc-close" id="qc-close-' + it.url.replace(/[^a-zA-Z0-9]/g, '') + '" onclick="event.stopPropagation();removeFromQuickAccess(\'' + it.url.replace(/'/g, "\\'") + '\')"><span class="material-icons-round" style="font-size:14px">close</span></button>' +
                 '<img src="' + favicon + '" alt="" onerror="this.style.display=\'none\'">' +
                 '<div class="qc-title">' + (it.title.length > 20 ? it.title.slice(0,20)+'...' : it.title) + '</div>' +
                 '<div class="qc-url">' + domain + '</div></div>';
@@ -721,17 +729,16 @@
             }
         }
         renderQuickAccess();
+        renderList();
     }
     function removeBookmarkByUrl(url) {
         const bm = getBookmarks().filter(b => b.url !== url);
         saveBookmarks(bm);
         renderList();
+        renderQuickAccess();
     }
     function removeQuickItem(url) {
-        const hist = getHistory().filter(h => h.url !== url);
-        localStorage.setItem('rh_history', JSON.stringify(hist));
-        removeBookmarkByUrl(url);
-        renderQuickAccess();
+        removeFromQuickAccess(url);
     }
 
     // ========== List (History/Bookmarks) Rendering ==========
