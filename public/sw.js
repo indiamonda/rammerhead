@@ -226,6 +226,15 @@ function injectBeforeHeadClose(html, inject) {
   return inject + html;
 }
 
+function injectBeforeBodyClose(html, inject) {
+  const i = html.lastIndexOf("</body>");
+  if (i !== -1) return html.slice(0, i) + inject + html.slice(i);
+  // Also try before </body> with any variation (uppercase, etc)
+  const i2 = html.lastIndexOf("</BODY>");
+  if (i2 !== -1) return html.slice(0, i2) + inject + html.slice(i2);
+  return html + inject;
+}
+
 async function processHtmlNavigation(response, destUrl) {
   if (!isHtmlResponse(response)) return response;
   let text = await response.text();
@@ -237,7 +246,7 @@ async function processHtmlNavigation(response, destUrl) {
   }
   if (insertScript) {
     const scriptInject = `<script id="__rh-insert-script" data-rh="1">${insertScript}<\/script>`;
-    text = injectBeforeHeadClose(text, scriptInject);
+    text = injectBeforeBodyClose(text, scriptInject);
   }
   const headers = new Headers(response.headers);
   headers.delete("content-length");
