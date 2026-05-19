@@ -790,13 +790,13 @@
     }
 
     // ========== Insert Script ==========
-    function saveInsertScript(showToast = false) {
+    function saveInsertScript(showMsg = false) {
         const val = document.getElementById('insert-script').value;
         localStorage.setItem('insertScript', val);
         if (navigator.serviceWorker && navigator.serviceWorker.controller) {
             navigator.serviceWorker.controller.postMessage({ type: 'update-insert-script', script: val });
         }
-        if (showToast) showToast('Script saved', 'success');
+        if (showMsg) showToast('Script saved', 'success');
     }
     function loadInsertScript() {
         return localStorage.getItem('insertScript') || '';
