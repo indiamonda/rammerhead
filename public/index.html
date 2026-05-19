@@ -395,8 +395,8 @@
                 </div>
                 <div class="panel-body">
                     <p style="font-size:11px;color:var(--subtext);margin-bottom:10px">Custom JavaScript injected into every page. Use with caution.</p>
-                    <textarea class="insert-script-textarea" id="insert-script" placeholder="// e.g. document.body.style.background='red';" oninput="saveInsertScript()"></textarea>
-                    <button class="btn btn-primary" onclick="saveInsertScript()">Save Script</button>
+                    <textarea class="insert-script-textarea" id="insert-script" placeholder="// e.g. document.body.style.background='red';" oninput="saveInsertScript(false)"></textarea>
+                    <button class="btn btn-primary" onclick="saveInsertScript(true)">Save Script</button>
                 </div>
             </div>
         </section>
@@ -536,6 +536,8 @@
                 });
                 await _scramjet.wait();
                 _scramjetReady = true;
+                // Sync insert script to service worker after SW is ready
+                applyInsertScript();
                 return true;
             } catch (e) {
                 console.error('Scramjet init failed:', e);
@@ -788,13 +790,13 @@
     }
 
     // ========== Insert Script ==========
-    function saveInsertScript() {
+    function saveInsertScript(showToast = false) {
         const val = document.getElementById('insert-script').value;
         localStorage.setItem('insertScript', val);
         if (navigator.serviceWorker && navigator.serviceWorker.controller) {
             navigator.serviceWorker.controller.postMessage({ type: 'update-insert-script', script: val });
         }
-        showToast('Script saved', 'success');
+        if (showToast) showToast('Script saved', 'success');
     }
     function loadInsertScript() {
         return localStorage.getItem('insertScript') || '';
@@ -933,9 +935,6 @@
 
         // Pre-init Scramjet in background
         initScramjet();
-
-        // Sync insert script to service worker
-        applyInsertScript();
             })();
     </script>
 </body>
