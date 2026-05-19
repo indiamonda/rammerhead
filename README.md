@@ -2,7 +2,7 @@
 
 > An online learning platform and educational workspace for students, teachers, parents, and self-directed lifelong learners.
 
-[Live demo](https://studyboard.fly.dev)
+[Live demo](https://ulw-app.fly.dev)
 
 ## What it is
 
@@ -10,7 +10,6 @@ StudyBoard is a focused, browser-based study workspace. It gives a learner one c
 
 - **Research** — search across curated educational resources and reference material
 - **Coursework** — open course material, worksheets, and study guides in a focused viewer
-- **Study sessions** — keep ongoing work organized; transfer progress between devices via a portable session ID
 - **Bookmarks** — save links to academic articles, online textbook chapters, and reading lists
 - **Learning history** — review what was studied and when, so research is easy to retrace
 - **Downloads** — keep a tidy archive of course handouts, lecture notes, and worksheets

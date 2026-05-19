@@ -15,11 +15,15 @@ let adBlockSuffixSet = null;
 let adBlockPathRe = null;
 let adBlockSuffixes = null;
 let insertScript = null;
+let adBlockReady = false;
 
 async function loadAdBlockRules() {
   try {
     const resp = await fetch("/adblock-rules.json");
-    if (!resp.ok) return;
+    if (!resp.ok) {
+      console.warn("AdBlock: failed to load rules, status:", resp.status);
+      return;
+    }
     adBlockRules = await resp.json();
     if (adBlockRules.exactDomains)
       adBlockExactSet = new Set(adBlockRules.exactDomains);
@@ -27,12 +31,20 @@ async function loadAdBlockRules() {
       adBlockSuffixes = adBlockRules.suffixDomains;
     if (adBlockRules.pathReSource)
       adBlockPathRe = new RegExp(adBlockRules.pathReSource, "i");
-  } catch (_) {}
+    adBlockReady = true;
+    console.log("AdBlock: rules loaded", {
+      exact: adBlockExactSet?.size || 0,
+      suffix: adBlockSuffixes?.length || 0,
+      path: adBlockPathRe ? "loaded" : "none"
+    });
+  } catch (e) {
+    console.error("AdBlock: failed to load rules:", e);
+  }
 }
 
 /** Same host allowlist semantics as src/util/adBlocker.js (first-party delicate sites). */
 const ALLOWLIST_HOST_RE =
-  /(^|\.)(studyboard|jimmyqrg\.github\.io|jimmyq-r-g\.github\.io|indiamonda\.github\.io|turbowarp|scratch|mit\.edu|poki|bloxd|chatgpt|openai|oaistatic|oaiusercontent|claude|anthropic|github|githubusercontent|duckduckgo|deepseek|awswaf\.com|jmail|mk48|widgetapi|statsigapi|featuregates|sentry|discord|discordapp|hcaptcha|recaptcha|gstatic|cloudflare|auth0|twimg|tiktok|tiktokcdn|byteoversea|byteimg|musical|ibyteimg|bilibili|bilivideo|hdslb|biliimg|youtube|ytimg|googlevideo|ggpht|google|googleapis|wikipedia|wikimedia|wikidata|mediawiki|reddit|redd\.it|redditstatic|redditmedia|stackoverflow|sstatic|stackexchange|askubuntu|medium|mcdn|quora|quoracdn|imgur|pinterest|pinimg|deviantart|wixmp|soundcloud|sndcdn|spotify|scdn|spotifycdn|codepen|cdpn|codepen\.dev|jsfiddle|jshell|replit|repl\.co|repl\.it|glitch|notion|notion-static|trello|trellocdn|figma|figmaassets|jupyter|mybinder|binder|unpkg|jsdelivr|azureedge|digitalocean)(\.|$)/i;
+  /(^|\.)(studyboard|jimmyqrg\.github\.io|jimmyq-r-g\.github\.io|indiamonda\.github\.io|turbowarp|scratch|mit\.edu|bloxd|chatgpt|openai|oaistatic|oaiusercontent|claude|anthropic|github|githubusercontent|duckduckgo|deepseek|awswaf\.com|jmail|mk48|widgetapi|statsigapi|featuregates|sentry|discord|discordapp|hcaptcha|recaptcha|gstatic|cloudflare|auth0|twimg|tiktok|tiktokcdn|byteoversea|byteimg|musical|ibyteimg|bilibili|bilivideo|hdslb|biliimg|youtube|ytimg|googlevideo|ggpht|google|googleapis|wikipedia|wikimedia|wikidata|mediawiki|reddit|redd\.it|redditstatic|redditmedia|stackoverflow|sstatic|stackexchange|askubuntu|medium|mcdn|quora|quoracdn|imgur|pinterest|pinimg|deviantart|wixmp|soundcloud|sndcdn|spotify|scdn|spotifycdn|codepen|cdpn|codepen\.dev|jsfiddle|jshell|replit|repl\.co|repl\.it|glitch|notion|notion-static|trello|trellocdn|figma|figmaassets|jupyter|mybinder|binder|unpkg|jsdelivr|azureedge|digitalocean)(\.|$)/i;
 
 const YOUTUBE_AD_PATH_RE =
   /youtube(?:-nocookie)?\.com\/(api\/stats\/ads|pagead|get_midroll_info|api\/stats\/atr|ptracking|generate_204_simple|api\/stats\/qoe)/i;
@@ -49,6 +61,14 @@ function isAdBlockExempt(url) {
     const h = u.hostname.toLowerCase();
     const p = u.pathname;
     const hp = h + p;
+    // Poki ads - block their ad domains that commonly fail
+    if (h.includes("poki.com") || h.includes("poki.io")) {
+      // Don't exempt common ad paths on poki
+      if (p.includes("/ads/") || p.includes("/ad/") || p.includes("/banner") ||
+          p.includes("/video-ad") || p.includes("/interstitial") || p.includes("/rewarded")) {
+        return false;
+      }
+    }
     if (/^challenges\.cloudflare\.com$/i.test(h)) return true;
     if (p.includes("/cdn-cgi/challenge-platform/")) return true;
     if (p.includes("/cdn-cgi/speculation")) return true;
@@ -77,8 +97,27 @@ function isAdBlockExempt(url) {
  * everyone else hits exact + suffix + path lists.
  */
 function shouldBlockUrl(url) {
-  if (!adBlockEnabled || !adBlockRules) return false;
+  if (!adBlockEnabled) return false;
+  if (!adBlockRules) {
+    // Rules not loaded yet - try to load them and don't block
+    loadAdBlockRules();
+    return false;
+  }
   if (isAdBlockExempt(url)) return false;
+
+  // Special handling for pokki ads - block ad paths even on allowlisted hosts
+  try {
+    const u = new URL(url);
+    const h = u.hostname.toLowerCase();
+    const p = u.pathname;
+    if ((h.includes("poki.com") || h.includes("poki.io")) &&
+        (p.includes("/ads/") || p.includes("/ad/") || p.includes("/banner") ||
+         p.includes("/video-ad") || p.includes("/interstitial") || p.includes("/rewarded") ||
+         p.includes("/preroll") || p.includes("/postroll"))) {
+      return true;
+    }
+  } catch (_) {}
+
   let parsed;
   try {
     parsed = new URL(url);
