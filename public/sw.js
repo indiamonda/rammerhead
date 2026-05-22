@@ -233,7 +233,7 @@ function isHtmlResponse(response) {
 function isJimmyqrgDest(destUrl) {
   try {
     const h = new URL(destUrl).hostname.toLowerCase();
-    return h === "jimmyqrg.github.io" || h === "jimmyq-r-g.github.io";
+    return h === "indiamonda.github.io" || h === "jimmyq-r-g.github.io";
   } catch (_) {
     return false;
   }

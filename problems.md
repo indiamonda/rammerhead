@@ -55,7 +55,7 @@ Tested via curl against local proxy (`localhost:8080`).
 | poki.com | PASS | SPA shell, 97KB |
 | crazygames.com | PASS | SPA shell, 48KB |
 | eaglercraft.com | DOWN | Site is unreachable (DNS resolves, server unresponsive) |
-| jimmyqrg.github.io | PASS | "JimmyQrg - Unblocked Games", 9KB |
+| indiamonda.github.io | PASS | "JimmyQrg - Unblocked Games", 9KB |
 | lichess.org | PASS | "lichess.org - Free Online Chess", 13KB |
 | chess.com | PASS | "Chess.com - Play Chess Online", 29KB |
 | roblox.com | PASS | "Roblox", 22KB |
