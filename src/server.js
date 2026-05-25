@@ -164,6 +164,16 @@ fastify.register(fastifyStatic, {
   immutable: true,
 });
 
+fastify.get("/ads.txt", async (req, reply) => {
+  const adsTxtPath = path.join(__dirname, "../ads.txt");
+  try {
+    reply.header("Cache-Control", "public, max-age=86400");
+    reply.type("text/plain").send(fs.readFileSync(adsTxtPath, "utf-8"));
+  } catch (_) {
+    return reply.code(404).send("");
+  }
+});
+
 fastify.get("/health", async () => ({ status: "ok" }));
 
 fastify.get("/adblock-rules.json", async (req, reply) => {
