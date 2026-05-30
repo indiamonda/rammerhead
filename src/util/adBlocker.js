@@ -302,6 +302,25 @@ const AD_PATH_RE = new RegExp([
     '/sessionreplay/', '/r/[a-zA-Z0-9]{10,}\\.js',
     // Push-notification service worker registrations used for ads
     '/sw-push\\.js', '/push[-_]notifications?\\.js',
+    // Ad script patterns (match by filename patterns)
+    '/[_a-z0-9]+-[a-z]{4,}[_]?\\.js',
+    '/ads[d_-][a-z0-9]{4,}\\.js',
+    '/adframe', '/adhandler', '/adtech',
+    // Generic popup/redirect patterns
+    '/popup\\.html?', '/popunder\\.html?',
+    '/click\\.php', '/redirect\\.php', '/out\\.php',
+    '/banner\\.jpg', '/banner\\.png', '/banner\\.gif',
+    // Common ad network paths
+    '/outbrain/', '/taboola/', '/criteo/',
+    '/amazon-adsystem/', '/rubicon/',
+    // Video ad paths
+    '/ads/vast', '/ads/vmap', '/ads/pre',
+    // Sponsored/promoted content paths
+    '/sponsored/', '/promoted/', '/ads-embed',
+    // Generic click trackers
+    '/click/', '/clk/', '/redir/',
+    // Common malvertising domains
+    '/engine', '/deliver', '/process',
 ].join('|'), 'i');
 
 // URLs whose *response body* needs rewriting (not blocking outright).
