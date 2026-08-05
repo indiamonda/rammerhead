@@ -6455,7 +6455,7 @@ var LibcurlClient = class {
       method,
       headers: headersObj,
       body,
-      redirect: "manual",
+      redirect: "follow",
       signal
     });
     return {
