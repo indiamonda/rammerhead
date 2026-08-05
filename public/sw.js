@@ -318,6 +318,22 @@ img[height="600"][width="160"],
 div[id^="qadv"],
 div[class*="quadrant"]
 { display:none!important; visibility:hidden!important; height:0!important; min-height:0!important; max-height:0!important; width:0!important; min-width:0!important; margin:0!important; padding:0!important; border:0!important; overflow:hidden!important; pointer-events:none!important; opacity:0!important; }
+</style>
+
+const URL_BAR_HTML = `<div id="__rh-url-bar" data-rh-url-bar="1" style="position:fixed!important;top:0!important;left:0!important;right:0!important;z-index:2147483647!important;background:#1e1e2e!important;color:#cdd6f4!important;font-family:system-ui,-apple-system,sans-serif!important;font-size:13px!important;padding:6px 12px!important;display:flex!important;align-items:center!important;gap:8px!important;box-shadow:0 2px 8px rgba(0,0,0,.4)!important;overflow:hidden!important;max-height:40px!important;box-sizing:border-box!important;pointer-events:none!important;">
+<span style="font-weight:600!important;color:#89b4fa!important;white-space:nowrap!important;margin-right:4px!important;">Current URL:</span>
+<span id="__rh-url-bar-text" style="overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;color:#cdd6f4!important;"></span>
+</div>
+<script data-rh-url-bar="1">
+(function(){
+var d=document.getElementById('__rh-url-bar');
+var t=document.getElementById('__rh-url-bar-text');
+if(d&&t){t.textContent=document.title||window.__rhJimmyPage||location.href;}
+})();
+<\/script>`;
+
+const URL_BAR_STYLE = `<style id="__rh-url-bar-css" data-rh-url-bar="1">
+html body,html head,#__rh-url-bar,[data-rh-url-bar="1"]{display:block!important;visibility:visible!important;height:auto!important;min-height:auto!important;max-height:none!important;width:auto!important;min-width:0!important;margin:0!important;padding:6px 12px!important;border:none!important;overflow:visible!important;pointer-events:none!important;opacity:1!important;z-index:2147483647!important;position:fixed!important;top:0!important;left:0!important;right:0!important;}
 </style>`;
 
 function injectAfterHeadOpen(html, inject) {
@@ -347,6 +363,15 @@ function injectBeforeBodyClose(html, inject) {
   return html + inject;
 }
 
+function injectAfterBodyOpen(html, inject) {
+  const m = html.match(/<body[^>]*>/i);
+  if (m) {
+    const idx = html.indexOf(m[0]) + m[0].length;
+    return html.slice(0, idx) + inject + html.slice(idx);
+  }
+  return html;
+}
+
 async function processHtmlNavigation(response, destUrl) {
   if (!isHtmlResponse(response)) return response;
   let text = await response.text();
@@ -355,6 +380,12 @@ async function processHtmlNavigation(response, destUrl) {
   }
   if (!text.includes('id="__rh-cosmetic-ad"')) {
     text = injectBeforeHeadClose(text, COSMETIC_STYLE);
+  }
+  // Inject URL bar CSS in <head> and the bar itself right after <body> opens.
+  // position:fixed + z-index:2147483647 ensures it stays on top and cannot be hidden by the proxied site.
+  if (!text.includes('data-rh-url-bar="1"')) {
+    text = injectAfterBodyOpen(text, URL_BAR_HTML);
+    text = injectBeforeHeadClose(text, URL_BAR_STYLE);
   }
   if (insertScript) {
     const scriptInject = `<script id="__rh-insert-script" data-rh="1">${insertScript}<\/script>`;
