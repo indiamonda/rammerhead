@@ -52,22 +52,31 @@ async function registerSW() {
   await navigator.serviceWorker.ready;
 
   // If we don't have a controller yet, or if a new SW is about to take over,
-  // wait for the controllerchange event
+  // wait for the controllerchange event. We wait for the event to fire AND
+  // for the controller to actually be set (not just the timeout).
   if (!navigator.serviceWorker.controller) {
     await new Promise((resolve) => {
-      navigator.serviceWorker.addEventListener("controllerchange", resolve, {
-        once: true,
-      });
-      setTimeout(resolve, 500);
+      let timedOut = false;
+      const to = setTimeout(() => { timedOut = true; resolve(); }, 5000);
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (navigator.serviceWorker.controller && !timedOut) {
+          clearTimeout(to);
+          resolve();
+        }
+      }, { once: true });
     });
   } else if (reg.waiting || reg.installing) {
     // A new SW version is pending — wait for it to take over
     await new Promise((resolve) => {
-      navigator.serviceWorker.addEventListener("controllerchange", resolve, {
-        once: true,
-      });
+      let timedOut = false;
+      const to = setTimeout(() => { timedOut = true; resolve(); }, 5000);
       nudgeWaiting();
-      setTimeout(resolve, 1000);
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (navigator.serviceWorker.controller && !timedOut) {
+          clearTimeout(to);
+          resolve();
+        }
+      }, { once: true });
     });
   }
 

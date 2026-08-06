@@ -16,7 +16,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "postinstall": "node scripts/patch-libcurl-transport.mjs"
+    "postinstall": "node --input-type=commonjs -e \"const fs=require('fs'); const path=require('path'); const f=path.join('node_modules','@mercuryworkshop','libcurl-transport','dist','index.js'); try{let c=fs.readFileSync(f,'utf8'); if(c.includes('redirect: \\\"manual\\\"')){c=c.replace(/redirect:\\s*\\\"manual\\\"/g,'redirect: \\\"follow\\\"');fs.writeFileSync(f,c);console.log('Patched: redirect manual->follow');}}catch(e){}\""
   },
   "engines": {
     "node": ">=18.0.0"
