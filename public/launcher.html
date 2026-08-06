@@ -52,9 +52,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <script>
 (function () {
     var params = new URLSearchParams(location.search);
-    // If opened via the dashboard (sw=1 param), the real destination URL is stored
-    // in sessionStorage so the browser address bar stays clean.
-    var url = params.get('sw') === '1' ? sessionStorage.getItem('__sb_launcher_url') : params.get('url');
+    // When sw=1, URL comes from the query param (browser URL bar shows only launcher URL)
+    var url = params.get('sw') === '1' ? params.get('url') : params.get('url');
     var targetEl = document.getElementById('target-url');
     var errorEl = document.getElementById('error');
     var loader = document.getElementById('loader');
@@ -62,11 +61,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     var barEl = document.getElementById('progress-bar');
     var stageEl = document.getElementById('progress-stage');
     var pctEl = document.getElementById('progress-pct');
-    // Find the callback key stored by the dashboard so we can signal success/fail
+    // Find callback key for signaling success/fail to dashboard
     var _cbKey = null;
     for (var k in sessionStorage) {
         if (k.startsWith('cb_')) { _cbKey = k; break; }
     }
+
+    // Listen for URL from dashboard via postMessage (alternative to URL param)
+    window.addEventListener('message', function (ev) {
+        if (!ev.data || typeof ev.data !== 'object') return;
+        if (ev.data.type === '__sb_nav' && ev.data.url) {
+            url = ev.data.url;
+            if (!_launchStarted) startLaunch();
+        }
+    });
 
     var progress = 0;
     var trickleTimer = null;
@@ -363,60 +371,65 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         })();
     }
 
-    if (!url) {
-        errorEl.textContent = 'Missing ?url= parameter.';
-        errorEl.style.display = 'block';
-        return;
-    }
-
-    var rawParam = params.get('raw') === 'true';
-    var normalized = normalizeUrl(url);
-    currentRealUrl = normalized;
-    targetEl.textContent = normalized;
-    document.title = normalized;
-    postToParent({ type: 'jqrg:ready', url: currentRealUrl });
-    broadcastUrl(currentRealUrl, '');
-
-    if (rawParam) {
-        loader.style.display = 'none';
-        frame.style.display = 'block';
-        document.body.style.background = '#fff';
-    } else {
-        setProgress(5, 'Setting up…');
-        startTrickle(5, 35);
-    }
-
-    frame.onload = function () {
-        if (!rawParam) {
-            showFrame();
-        }
-        onFrameLoad();
-        // Signal success to the dashboard opener (if any)
-        if (_cbKey) sessionStorage.setItem(_cbKey, 'ok');
-    };
-
-    void (async function () {
-        try {
-            if (!rawParam) await initScramjet();
-            else await initScramjet();
-            if (!_scramjetReady) throw new Error('not ready');
-            stopTrickle();
-            setProgress(50, 'Loading page…');
-            if (!rawParam) startTrickle(50, 92);
-            frame.src = scramjetEncodeUrl(normalized);
-        } catch (e) {
-            console.error(e);
-            errorEl.textContent =
-                'Could not start the StudyBoard viewer. Use HTTPS, allow the service worker, and refresh.';
+    function startLaunch() {
+        _launchStarted = true;
+        if (!url) {
+            errorEl.textContent = 'Missing URL.';
             errorEl.style.display = 'block';
-            stopTrickle();
             if (_cbKey) sessionStorage.setItem(_cbKey, 'fail');
+            return;
         }
-    })();
 
-    setTimeout(function () {
-        if (frame.style.display !== 'block') showFrame();
-    }, 20000);
+        var rawParam = params.get('raw') === 'true';
+        var normalized = normalizeUrl(url);
+        currentRealUrl = normalized;
+        targetEl.textContent = normalized;
+        document.title = normalized;
+        postToParent({ type: 'jqrg:ready', url: currentRealUrl });
+        broadcastUrl(currentRealUrl, '');
+
+        if (rawParam) {
+            loader.style.display = 'none';
+            frame.style.display = 'block';
+            document.body.style.background = '#fff';
+        } else {
+            setProgress(5, 'Setting up…');
+            startTrickle(5, 35);
+        }
+
+        frame.onload = function () {
+            if (!rawParam) {
+                showFrame();
+            }
+            onFrameLoad();
+            if (_cbKey) sessionStorage.setItem(_cbKey, 'ok');
+        };
+
+        void (async function () {
+            try {
+                if (!rawParam) await initScramjet();
+                else await initScramjet();
+                if (!_scramjetReady) throw new Error('not ready');
+                stopTrickle();
+                setProgress(50, 'Loading page…');
+                if (!rawParam) startTrickle(50, 92);
+                frame.src = scramjetEncodeUrl(normalized);
+            } catch (e) {
+                console.error(e);
+                errorEl.textContent =
+                    'Could not start the StudyBoard viewer. Use HTTPS, allow the service worker, and refresh.';
+                errorEl.style.display = 'block';
+                stopTrickle();
+                if (_cbKey) sessionStorage.setItem(_cbKey, 'fail');
+            }
+        })();
+
+        setTimeout(function () {
+            if (frame.style.display !== 'block') showFrame();
+        }, 20000);
+    }
+
+    startLaunch();
 })();
 </script>
 </body>

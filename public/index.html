@@ -498,7 +498,7 @@
     async function initScramjet() {
         if (_scramjetReady) return true;
         if (_initPromise) return _initPromise;
-        if (_initAttempts > 3) return false;
+        if (_initAttempts >= 6) return false;
         _initPromise = (async () => {
             _initAttempts++;
             try {
@@ -624,20 +624,17 @@
             showToast('Proxy engine failed to initialize. HTTPS may be required.', 'error');
             return;
         }
-        // Store destination URL so the launcher (opened instead of raw proxy URL)
-        // can display it in its controlled URL bar. This keeps the browser's address
-        // bar clean — it only shows the launcher URL, not the proxied site.
+        // Open the launcher with the destination URL as a query param.
+        // The browser URL bar shows only the launcher URL, not the proxied site.
         const launcherUrl = '/launcher.html?sw=1&url=' + encodeURIComponent(url);
-        sessionStorage.setItem('__sb_launcher_url', url);
-        // Also store a callback key so the launcher can signal success back to us
-        const cbKey = 'cb_' + Date.now();
-        sessionStorage.setItem(cbKey, 'pending');
         const win = window.open(launcherUrl, '_blank');
         if (!win) {
             showToast('Popup blocked — allow popups for this site.', 'error');
             return;
         }
-        // Poll for success signal from launcher (via sessionStorage)
+        // Poll via sessionStorage for success/fail from the launcher (shared between same-origin windows)
+        const cbKey = 'cb_' + Date.now();
+        sessionStorage.setItem(cbKey, 'pending');
         const poll = setInterval(() => {
             const status = sessionStorage.getItem(cbKey);
             if (status === 'ok') {
@@ -651,9 +648,8 @@
                 sessionStorage.removeItem(cbKey);
                 showToast('Failed to load page', 'error');
             }
-        }, 200);
-        // Timeout fallback — show success after 8s even if no signal
-        setTimeout(() => { clearInterval(poll); sessionStorage.removeItem(cbKey); }, 8000);
+        }, 300);
+        setTimeout(() => { clearInterval(poll); sessionStorage.removeItem(cbKey); }, 30000);
     }
 
     // ========== History ==========
