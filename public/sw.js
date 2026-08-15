@@ -318,7 +318,7 @@ img[height="600"][width="160"],
 div[id^="qadv"],
 div[class*="quadrant"]
 { display:none!important; visibility:hidden!important; height:0!important; min-height:0!important; max-height:0!important; width:0!important; min-width:0!important; margin:0!important; padding:0!important; border:0!important; overflow:hidden!important; pointer-events:none!important; opacity:0!important; }
-</style>
+</style>`;
 
 const URL_BAR_HTML = `<div id="__rh-url-bar" data-rh-url-bar="1" style="position:fixed!important;top:0!important;left:0!important;right:0!important;z-index:2147483647!important;background:#1e1e2e!important;color:#cdd6f4!important;font-family:system-ui,-apple-system,sans-serif!important;font-size:13px!important;padding:6px 12px!important;display:flex!important;align-items:center!important;gap:8px!important;box-shadow:0 2px 8px rgba(0,0,0,.4)!important;overflow:hidden!important;max-height:40px!important;box-sizing:border-box!important;pointer-events:none!important;">
 <span style="font-weight:600!important;color:#89b4fa!important;white-space:nowrap!important;margin-right:4px!important;">Current URL:</span>
