@@ -176,6 +176,22 @@ fastify.get("/ads.txt", async (req, reply) => {
 
 fastify.get("/health", async () => ({ status: "ok" }));
 
+// HTML entry points must never be cached immutable, otherwise UI/proxy
+// changes won't reach clients (they'd be stuck on a 7-day asset cache).
+function serveNoCacheHtml(routePath, file) {
+  fastify.get(routePath, async (req, reply) => {
+    reply.header("Cache-Control", "no-cache, no-store, must-revalidate");
+    reply.header("Pragma", "no-cache");
+    reply.header("Expires", "0");
+    reply.type("text/html").send(fs.createReadStream(path.join(publicPath, file)));
+    return reply;
+  });
+}
+serveNoCacheHtml("/", "index.html");
+serveNoCacheHtml("/index.html", "index.html");
+serveNoCacheHtml("/launcher.html", "launcher.html");
+serveNoCacheHtml("/unblocker.html", "unblocker.html");
+
 fastify.get("/adblock-rules.json", async (req, reply) => {
   try {
     const now = Date.now();

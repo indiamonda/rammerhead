@@ -495,6 +495,11 @@
     let _initAttempts = 0;
     let _initPromise = null;
 
+    // Opaque (URL-safe base64) codec so the destination URL is not readable
+    // in the proxy address bar.
+    function sjEncode(e) { return e ? btoa(encodeURIComponent(e)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : e; }
+    function sjDecode(e) { if (!e) return e; e = e.replace(/-/g, '+').replace(/_/g, '/'); while (e.length % 4) e += '='; try { return decodeURIComponent(atob(e)); } catch (_) { return e; } }
+
     async function initScramjet() {
         if (_scramjetReady) return true;
         if (_initPromise) return _initPromise;
@@ -517,6 +522,7 @@
                         injectPath: '/controller/controller.inject.js',
                         wasmPath: '/scramjet/scramjet.wasm',
                         virtualWasmPath: 'scramjet.wasm.js',
+                        codec: { encode: sjEncode, decode: sjDecode },
                     },
                     scramjetConfig: {
                         flags: { syncxhr: true, strictRewrites: true, captureErrors: true, cleanErrors: true, sourcemaps: true, allowInvalidJs: true, allowFailedIntercepts: true },
@@ -624,32 +630,15 @@
             showToast('Proxy engine failed to initialize. HTTPS may be required.', 'error');
             return;
         }
-        // Open the launcher with the destination URL as a query param.
-        // The browser URL bar shows only the launcher URL, not the proxied site.
-        const launcherUrl = '/launcher.html?sw=1&url=' + encodeURIComponent(url);
-        const win = window.open(launcherUrl, '_blank');
+        // Open the proxied site directly in a new tab (no launcher page, no iframe).
+        const proxiedUrl = scramjetEncodeUrl(url);
+        const win = window.open(proxiedUrl, '_blank');
         if (!win) {
             showToast('Popup blocked — allow popups for this site.', 'error');
             return;
         }
-        // Poll via sessionStorage for success/fail from the launcher (shared between same-origin windows)
-        const cbKey = 'cb_' + Date.now();
-        sessionStorage.setItem(cbKey, 'pending');
-        const poll = setInterval(() => {
-            const status = sessionStorage.getItem(cbKey);
-            if (status === 'ok') {
-                clearInterval(poll);
-                sessionStorage.removeItem(cbKey);
-                showToast('Page opened successfully', 'success', 2000);
-                recordVisit(url);
-                renderQuickAccess();
-            } else if (status === 'fail') {
-                clearInterval(poll);
-                sessionStorage.removeItem(cbKey);
-                showToast('Failed to load page', 'error');
-            }
-        }, 300);
-        setTimeout(() => { clearInterval(poll); sessionStorage.removeItem(cbKey); }, 30000);
+        recordVisit(url);
+        renderQuickAccess();
     }
 
     // ========== History ==========

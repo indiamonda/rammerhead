@@ -149,16 +149,29 @@ function shouldBlockUrl(url) {
   return false;
 }
 
+function sjDecode(e) {
+  if (!e) return e;
+  e = e.replace(/-/g, "+").replace(/_/g, "/");
+  while (e.length % 4) e += "=";
+  try {
+    return decodeURIComponent(atob(e));
+  } catch (_) {
+    return e;
+  }
+}
+
 function decodeProxiedUrl(requestUrl) {
   try {
     const url = new URL(requestUrl);
     const prefix = "/~/sj/";
     if (!url.pathname.startsWith(prefix)) return null;
-    const rest = url.pathname.slice(prefix.length);
-    const slashIdx = rest.indexOf("/");
+    let rest = url.pathname.slice(prefix.length);
+    let slashIdx = rest.indexOf("/");
     if (slashIdx < 1) return null;
-    const encoded = rest.slice(slashIdx + 1);
-    return decodeURIComponent(encoded);
+    rest = rest.slice(slashIdx + 1);
+    slashIdx = rest.indexOf("/");
+    if (slashIdx < 1) return null;
+    return sjDecode(rest.slice(slashIdx + 1));
   } catch (_) {
     return null;
   }
@@ -328,12 +341,17 @@ const URL_BAR_HTML = `<div id="__rh-url-bar" data-rh-url-bar="1" style="position
 (function(){
 var d=document.getElementById('__rh-url-bar');
 var t=document.getElementById('__rh-url-bar-text');
-if(d&&t){t.textContent=document.title||window.__rhJimmyPage||location.href;}
+if(!d||!t)return;
+function b64d(e){if(!e)return e;e=e.replace(/-/g,'+').replace(/_/g,'/');while(e.length%4)e+='=';try{return decodeURIComponent(atob(e))}catch(_){return e}}
+function cur(){var href=location.href;var i=href.indexOf('/~/sj/');if(i<0)return href;var rest=href.slice(i+6);var s=rest.indexOf('/');if(s<0)return href;rest=rest.slice(s+1);s=rest.indexOf('/');if(s<0)return href;var enc=rest.slice(s+1);var q=enc.indexOf('?');if(q>=0)enc=enc.slice(0,q);var h=enc.indexOf('#');if(h>=0)enc=enc.slice(0,h);return b64d(enc)||href;}
+var last='';
+function tick(){var u=cur();if(u!==last){last=u;t.textContent=u;}}
+tick();setInterval(tick,400);
 })();
 <\/script>`;
 
-const URL_BAR_STYLE = `<style id="__rh-url-bar-css" data-rh-url-bar="1">
-html body,html head,#__rh-url-bar,[data-rh-url-bar="1"]{display:block!important;visibility:visible!important;height:auto!important;min-height:auto!important;max-height:none!important;width:auto!important;min-width:0!important;margin:0!important;padding:6px 12px!important;border:none!important;overflow:visible!important;pointer-events:none!important;opacity:1!important;z-index:2147483647!important;position:fixed!important;top:0!important;left:0!important;right:0!important;}
+const URL_BAR_STYLE = `<style id="__rh-url-bar-css">
+#__rh-url-bar{display:flex!important;visibility:visible!important;height:auto!important;min-height:auto!important;max-height:none!important;width:auto!important;min-width:0!important;margin:0!important;padding:6px 12px!important;border:none!important;overflow:visible!important;pointer-events:none!important;opacity:1!important;z-index:2147483647!important;position:fixed!important;top:0!important;left:0!important;right:0!important;}
 </style>`;
 
 function injectAfterHeadOpen(html, inject) {
